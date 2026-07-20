@@ -14,6 +14,7 @@ from paperqa.agents.main import AnswerResponse
 
 from sciencerag.common.config import get_embedding_model, get_llm_model
 from sciencerag.common.trace import new_trace_id
+from sciencerag.priors.classify import classify
 from sciencerag.priors.models import Coverage, Prior, PriorsResponse, SourcePaper
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -45,13 +46,11 @@ def run_query(query: str) -> AnswerResponse:
 
 def _prior_from_context(context: Context) -> Prior:
     doc = context.text.doc
-    # NOTE (M1-12 placeholder): kind/field are not yet classified — every
-    # context becomes a generic "parameter_range" / "general_finding" entry.
-    # M1-13 replaces this with real classification into the 5 spec kinds.
+    kind, field = classify(context.context)
     return Prior(
         prior_id=f"pr_{context.id}",
-        kind="parameter_range",
-        field="general_finding",
+        kind=kind,
+        field=field,
         value={"summary": context.context},
         confidence=max(0.0, min(1.0, context.score / 10)),
         sources=[SourcePaper(doi=getattr(doc, "doi", None) or "", span=context.text.name)],

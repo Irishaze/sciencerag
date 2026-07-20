@@ -75,3 +75,6 @@ def test_priors_route_writes_audit_log_entry(tmp_path, monkeypatch):
     assert entry["trace_id"] == trace_id
     assert entry["request"]["query"] == "audit log smoke test"
     assert entry["output"]["trace_id"] == trace_id
+    # spec §3.5: which LLM/embedding built this response must be traceable.
+    assert entry["model_config"]["llm_model"]
+    assert entry["model_config"]["embedding_model"]

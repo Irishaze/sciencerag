@@ -21,6 +21,7 @@ def log_audit_entry(
     request: dict[str, Any],
     evidence: Any,
     output: dict[str, Any],
+    model_config: dict[str, Any] | None = None,
 ) -> None:
     AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     entry = {
@@ -30,6 +31,7 @@ def log_audit_entry(
         "request": request,
         "evidence": evidence,
         "output": output,
+        "model_config": model_config,
     }
     with AUDIT_LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
