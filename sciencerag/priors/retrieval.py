@@ -20,11 +20,19 @@ INDEX_DIR = REPO_ROOT / ".pqa_index"
 
 
 def build_settings() -> Settings:
+    llm = get_llm_model()
     settings = Settings(
-        llm=get_llm_model(),
+        llm=llm,
+        summary_llm=llm,
         embedding=get_embedding_model(),
         paper_directory=str(CORPUS_DIR),
     )
+    # paper-qa defaults summary_llm/agent_llm to OpenAI's gpt-4o independently
+    # of the top-level `llm` field. summary_llm=DeepSeek works fine, but
+    # agent_llm=DeepSeek gets stuck: it never emits a "complete" tool call and
+    # loops on generate_answer indefinitely (confirmed — burned $0.25+ before
+    # being killed). Leave agent_llm on its OpenAI default; only llm and
+    # summary_llm are DeepSeek.
     settings.agent.index.index_directory = str(INDEX_DIR)
     return settings
 
