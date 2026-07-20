@@ -9,6 +9,7 @@ venv/
 # Secrets / local config
 .env
 .env.*
+!.env.example
 
 # Local caches
 .pytest_cache/

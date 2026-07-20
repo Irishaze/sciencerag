@@ -1,0 +1,57 @@
+[
+  {
+    "doi": "10.1016/j.ijrefrig.2025.11.023",
+    "title": "Performance optimization in thermoelectric coolers using physical data-driven artificial neural networks",
+    "authors": ["Somaya Salamah", "Candeniz Seckin", "Süha Tuna"],
+    "year": 2026,
+    "venue": "International Journal of Refrigeration",
+    "path": "1-s2.0-S0140700725004438-main.pdf"
+  },
+  {
+    "doi": "10.1016/j.applthermaleng.2025.127903",
+    "title": "Extreme temperature control method for thermoelectric coolers combined with prediction model and fuzzy strategy",
+    "authors": [
+      "Ping Shen",
+      "Xinyang Xie",
+      "Jingyang Zhang",
+      "Zhiming Chen",
+      "Fengna Cheng",
+      "Hulin Huang"
+    ],
+    "year": 2025,
+    "venue": "Applied Thermal Engineering",
+    "path": "1-s2.0-S1359431125024950-main.pdf"
+  },
+  {
+    "doi": "10.1016/j.applthermaleng.2025.129224",
+    "title": "Accurate and efficient design and optimization of thermoelectric cooler via machine learning technologies",
+    "authors": ["Haoji Yang", "Yuxiao Zhu", "Harold M.H. Chong", "Ruomeng Huang"],
+    "year": 2026,
+    "venue": "Applied Thermal Engineering",
+    "path": "1-s2.0-S1359431125038165-main.pdf"
+  },
+  {
+    "doi": "10.47480/isibted.1194999",
+    "title": "Cooling Performance of Thermoelectric Cooler Modules: Experimental and Numerical Methods",
+    "authors": ["İlhan Kahraman", "Naim Derebaşı"],
+    "year": 2022,
+    "venue": "Isı Bilimi ve Tekniği Dergisi (Journal of Thermal Science and Technology)",
+    "path": "10.47480-isibted.1194999-2732735.pdf"
+  },
+  {
+    "doi": "10.1109/TCAD.2024.3438689",
+    "title": "Neural Network-Based Control of Forced-Convection and Thermoelectric Coolers",
+    "authors": ["Mahsa Akhsham", "Mohammad Javad Dousti", "Saeed Safari"],
+    "year": 2025,
+    "venue": "IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems",
+    "path": "Neural_Network-Based_Control_of_Forced-Convection_and_Thermoelectric_Coolers.pdf"
+  },
+  {
+    "doi": "10.1016/j.heliyon.2024.e24063",
+    "title": "Maximizing cooling/heating performance of thermoelectric modules across variable thermal loads via optimal control based on COP curves",
+    "authors": ["Nataporn Korprasertsak", "Thananchai Leephakpreeda"],
+    "year": 2024,
+    "venue": "Heliyon",
+    "path": "PIIS240584402400094X.pdf"
+  }
+]
