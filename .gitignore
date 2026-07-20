@@ -15,5 +15,8 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
+# Runtime output
+logs/
+
 # OS
 .DS_Store

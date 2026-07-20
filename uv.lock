@@ -1770,6 +1770,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "httpx" },
     { name = "pytest" },
 ]
 
@@ -1783,7 +1784,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest" }]
+dev = [
+    { name = "httpx" },
+    { name = "pytest" },
+]
 
 [[package]]
 name = "setuptools"
