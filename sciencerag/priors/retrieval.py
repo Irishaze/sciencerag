@@ -9,10 +9,12 @@ project's index doesn't mix with unrelated projects.
 
 from pathlib import Path
 
-from paperqa import Settings, ask
+from paperqa import Context, Settings, ask
 from paperqa.agents.main import AnswerResponse
 
 from sciencerag.common.config import get_embedding_model, get_llm_model
+from sciencerag.common.trace import new_trace_id
+from sciencerag.priors.models import Coverage, Prior, PriorsResponse, SourcePaper
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CORPUS_DIR = REPO_ROOT / "corpus" / "papers"
@@ -39,3 +41,30 @@ def build_settings() -> Settings:
 
 def run_query(query: str) -> AnswerResponse:
     return ask(query, settings=build_settings())
+
+
+def _prior_from_context(context: Context) -> Prior:
+    doc = context.text.doc
+    # NOTE (M1-12 placeholder): kind/field are not yet classified — every
+    # context becomes a generic "parameter_range" / "general_finding" entry.
+    # M1-13 replaces this with real classification into the 5 spec kinds.
+    return Prior(
+        prior_id=f"pr_{context.id}",
+        kind="parameter_range",
+        field="general_finding",
+        value={"summary": context.context},
+        confidence=max(0.0, min(1.0, context.score / 10)),
+        sources=[SourcePaper(doi=getattr(doc, "doi", None) or "", span=context.text.name)],
+        notes=getattr(doc, "title", None),
+    )
+
+
+def build_priors_response(query: str) -> PriorsResponse:
+    """Run a real PaperQA2 query and map its evidence contexts into priors."""
+    response = run_query(query)
+    contexts = response.session.contexts
+    return PriorsResponse(
+        priors=[_prior_from_context(context) for context in contexts],
+        coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=[]),
+        trace_id=new_trace_id(),
+    )
