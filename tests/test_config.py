@@ -8,9 +8,9 @@ def test_default_llm_model_is_deepseek(monkeypatch):
     assert config.get_llm_model() == "deepseek/deepseek-chat"
 
 
-def test_default_embedding_model_is_local_sentence_transformer(monkeypatch):
+def test_default_embedding_model_is_openai(monkeypatch):
     monkeypatch.delenv("SCIENCERAG_EMBEDDING_MODEL", raising=False)
-    assert config.get_embedding_model() == "st-all-MiniLM-L6-v2"
+    assert config.get_embedding_model() == "text-embedding-3-small"
 
 
 def test_llm_model_is_overridable_via_env(monkeypatch):
@@ -19,5 +19,5 @@ def test_llm_model_is_overridable_via_env(monkeypatch):
 
 
 def test_embedding_model_is_overridable_via_env(monkeypatch):
-    monkeypatch.setenv("SCIENCERAG_EMBEDDING_MODEL", "text-embedding-3-small")
-    assert config.get_embedding_model() == "text-embedding-3-small"
+    monkeypatch.setenv("SCIENCERAG_EMBEDDING_MODEL", "st-all-MiniLM-L6-v2")
+    assert config.get_embedding_model() == "st-all-MiniLM-L6-v2"

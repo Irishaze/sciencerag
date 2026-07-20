@@ -18,6 +18,7 @@ venv/
 
 # Runtime output
 logs/
+.pqa_index/
 
 # OS
 .DS_Store

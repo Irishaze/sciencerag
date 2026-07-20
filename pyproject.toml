@@ -10,6 +10,8 @@ dependencies = [
     "pydantic>=2",
     "jsonschema",
     "paper-qa==5.29.1",
+    "paper-qa-pypdf==5.29.1",
+    "fhlmi==0.33.1",
     "python-dotenv",
     "sentence-transformers",
 ]
