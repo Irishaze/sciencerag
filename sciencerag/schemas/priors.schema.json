@@ -1,0 +1,256 @@
+{
+  "PriorsRequest": {
+    "$defs": {
+      "TaskContext": {
+        "properties": {
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Objective"
+          },
+          "constraints": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Constraints",
+            "type": "object"
+          },
+          "materials_hint": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Materials Hint",
+            "type": "array"
+          }
+        },
+        "title": "TaskContext",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "query": {
+        "title": "Query",
+        "type": "string"
+      },
+      "task_context": {
+        "$ref": "#/$defs/TaskContext"
+      },
+      "max_priors": {
+        "default": 5,
+        "title": "Max Priors",
+        "type": "integer"
+      },
+      "allow_external": {
+        "default": false,
+        "title": "Allow External",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "title": "PriorsRequest",
+    "type": "object"
+  },
+  "PriorsResponse": {
+    "$defs": {
+      "Coverage": {
+        "properties": {
+          "internal_hits": {
+            "title": "Internal Hits",
+            "type": "integer"
+          },
+          "external_hits": {
+            "title": "External Hits",
+            "type": "integer"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "internal_hits",
+          "external_hits"
+        ],
+        "title": "Coverage",
+        "type": "object"
+      },
+      "Prior": {
+        "properties": {
+          "prior_id": {
+            "title": "Prior Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "parameter_range",
+              "material_property",
+              "scaling_relationship",
+              "candidate_config",
+              "caution"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "additionalProperties": true,
+            "title": "Value",
+            "type": "object"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "sources": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "kg_triple": "#/$defs/SourceKGTriple",
+                  "paper": "#/$defs/SourcePaper"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SourcePaper"
+                },
+                {
+                  "$ref": "#/$defs/SourceKGTriple"
+                }
+              ]
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Notes"
+          },
+          "provenance": {
+            "default": "internal",
+            "enum": [
+              "internal",
+              "external_unverified"
+            ],
+            "title": "Provenance",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prior_id",
+          "kind",
+          "field",
+          "value",
+          "confidence",
+          "sources"
+        ],
+        "title": "Prior",
+        "type": "object"
+      },
+      "SourceKGTriple": {
+        "properties": {
+          "type": {
+            "const": "kg_triple",
+            "default": "kg_triple",
+            "title": "Type",
+            "type": "string"
+          },
+          "triple_id": {
+            "title": "Triple Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "triple_id"
+        ],
+        "title": "SourceKGTriple",
+        "type": "object"
+      },
+      "SourcePaper": {
+        "properties": {
+          "type": {
+            "const": "paper",
+            "default": "paper",
+            "title": "Type",
+            "type": "string"
+          },
+          "doi": {
+            "title": "Doi",
+            "type": "string"
+          },
+          "span": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Span"
+          }
+        },
+        "required": [
+          "doi"
+        ],
+        "title": "SourcePaper",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "ok",
+        "default": "ok",
+        "title": "Status",
+        "type": "string"
+      },
+      "priors": {
+        "items": {
+          "$ref": "#/$defs/Prior"
+        },
+        "title": "Priors",
+        "type": "array"
+      },
+      "coverage": {
+        "$ref": "#/$defs/Coverage"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "priors",
+      "coverage",
+      "trace_id"
+    ],
+    "title": "PriorsResponse",
+    "type": "object"
+  }
+}
