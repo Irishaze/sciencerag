@@ -20,5 +20,10 @@ venv/
 logs/
 .pqa_index/
 
+# Large corpus additions stay local-only (the original 6 seed papers are
+# already tracked and unaffected by this rule — git doesn't retroactively
+# untrack committed files).
+corpus/papers/*.pdf
+
 # OS
 .DS_Store
