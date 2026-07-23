@@ -58,12 +58,44 @@ def _prior_from_context(context: Context) -> Prior:
     )
 
 
+CONFIDENCE_THRESHOLD = 0.5
+
+
+def _split_by_confidence(priors: list[Prior]) -> tuple[list[Prior], list[Prior]]:
+    """Split into (strong, weak) by CONFIDENCE_THRESHOLD.
+
+    Weak evidence (PaperQA2 itself scored it low-relevance) shouldn't be
+    presented as a confident "prior" — it's a coverage gap, not knowledge.
+    """
+    strong = [p for p in priors if p.confidence >= CONFIDENCE_THRESHOLD]
+    weak = [p for p in priors if p.confidence < CONFIDENCE_THRESHOLD]
+    return strong, weak
+
+
+def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
+    if total_hits == 0:
+        return ["internal corpus returned no relevant evidence for this query"]
+    if not weak_priors:
+        return []
+    papers = sorted({p.notes for p in weak_priors if p.notes})
+    papers_str = "; ".join(papers) if papers else "unknown source"
+    return [
+        f"{len(weak_priors)} evidence context(s) had low relevance "
+        f"(confidence < {CONFIDENCE_THRESHOLD}) and were excluded from priors; "
+        f"papers: {papers_str}"
+    ]
+
+
 def build_priors_response(query: str) -> PriorsResponse:
     """Run a real PaperQA2 query and map its evidence contexts into priors."""
     response = run_query(query)
     contexts = response.session.contexts
+    all_priors = [_prior_from_context(context) for context in contexts]
+    strong_priors, weak_priors = _split_by_confidence(all_priors)
+    gaps = _build_gaps(weak_priors, total_hits=len(contexts))
+
     return PriorsResponse(
-        priors=[_prior_from_context(context) for context in contexts],
-        coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=[]),
+        priors=strong_priors,
+        coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
         trace_id=new_trace_id(),
     )
