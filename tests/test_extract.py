@@ -7,10 +7,12 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from sciencerag.priors import extract as extract_mod
 from sciencerag.priors.extract import (
     EvidenceItem,
+    ExtractedPriorDraft,
     ExtractionError,
     _build_evidence_block,
     _parse_and_validate,
@@ -96,6 +98,27 @@ def test_parse_and_validate_rejects_malformed_json():
         _parse_and_validate("not json at all", _evidence_table())
 
 
+def test_parse_and_validate_rejects_invalid_kind_value():
+    """A misspelled/invented kind (e.g. "param-range" instead of
+    "parameter_range") must be rejected, not silently accepted — kind is a
+    closed set (Literal) precisely so downstream if/else branches on it
+    can't silently miss a value."""
+    raw = json.dumps(
+        {
+            "priors": [
+                {
+                    "kind": "param-range",  # not a valid kind
+                    "field": "x",
+                    "value": {},
+                    "evidence": ["E1"],
+                }
+            ]
+        }
+    )
+    with pytest.raises(ValidationError):
+        _parse_and_validate(raw, _evidence_table())
+
+
 def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
     table = _evidence_table()
     raw = json.dumps(
@@ -107,8 +130,6 @@ def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
             "evidence": ["E1", "E2"],
         }
     )
-    from sciencerag.priors.extract import ExtractedPriorDraft
-
     draft = ExtractedPriorDraft.model_validate_json(raw)
     prior = _to_prior(draft, table)
 
@@ -116,6 +137,26 @@ def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
     # base = 0.5 + 0.1*2 = 0.7; avg_relevance = (0.9+0.6)/2 = 0.75 -> 0.525
     # Python's round() uses round-half-to-even on the actual float, giving 0.52.
     assert prior.confidence == 0.52
+
+
+def test_confidence_increases_with_more_supporting_evidence():
+    """Holding relevance constant, more supporting evidence should yield a
+    strictly higher confidence — the point of the base term scaling with
+    min(n_sources, 3) in the formula."""
+    table = {
+        label: EvidenceItem(text="x", doi="10.0000/x", span="p.1", notes=None, relevance=0.8)
+        for label in ["E1", "E2", "E3"]
+    }
+
+    def _confidence_for(evidence: list[str]) -> float:
+        draft = ExtractedPriorDraft(kind="parameter_range", field="x", value={}, evidence=evidence)
+        return _to_prior(draft, table).confidence
+
+    conf_1 = _confidence_for(["E1"])
+    conf_2 = _confidence_for(["E1", "E2"])
+    conf_3 = _confidence_for(["E1", "E2", "E3"])
+
+    assert conf_1 < conf_2 < conf_3
 
 
 def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):
