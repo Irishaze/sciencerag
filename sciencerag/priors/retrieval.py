@@ -9,13 +9,13 @@ project's index doesn't mix with unrelated projects.
 
 from pathlib import Path
 
-from paperqa import Context, Settings, ask
+from paperqa import Settings, ask
 from paperqa.agents.main import AnswerResponse
 
 from sciencerag.common.config import get_embedding_model, get_llm_model
 from sciencerag.common.trace import new_trace_id
-from sciencerag.priors.classify import classify
-from sciencerag.priors.models import Coverage, Prior, PriorsResponse, SourcePaper
+from sciencerag.priors.extract import EvidenceItem, ExtractionError, extract_priors
+from sciencerag.priors.models import Coverage, Prior, PriorsResponse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CORPUS_DIR = REPO_ROOT / "corpus" / "papers"
@@ -44,18 +44,18 @@ def run_query(query: str) -> AnswerResponse:
     return ask(query, settings=build_settings())
 
 
-def _prior_from_context(context: Context) -> Prior:
-    doc = context.text.doc
-    kind, field = classify(context.context)
-    return Prior(
-        prior_id=f"pr_{context.id}",
-        kind=kind,
-        field=field,
-        value={"summary": context.context},
-        confidence=max(0.0, min(1.0, context.score / 10)),
-        sources=[SourcePaper(doi=getattr(doc, "doi", None) or "", span=context.text.name)],
-        notes=getattr(doc, "title", None),
-    )
+def _build_evidence_table(contexts) -> dict[str, EvidenceItem]:
+    table = {}
+    for i, context in enumerate(contexts):
+        doc = context.text.doc
+        table[f"E{i + 1}"] = EvidenceItem(
+            text=context.context,
+            doi=getattr(doc, "doi", None),
+            span=context.text.name,
+            notes=getattr(doc, "title", None),
+            relevance=max(0.0, min(1.0, context.score / 10)),
+        )
+    return table
 
 
 CONFIDENCE_THRESHOLD = 0.5
@@ -87,10 +87,39 @@ def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
 
 
 def build_priors_response(query: str) -> PriorsResponse:
-    """Run a real PaperQA2 query and map its evidence contexts into priors."""
+    """Run a real PaperQA2 query, then LLM-extract structured priors from
+    the evidence contexts (see extract.py). On extraction failure, return
+    an empty-but-valid response with the failure noted in gaps — never a
+    half-broken result (spec principle)."""
     response = run_query(query)
     contexts = response.session.contexts
-    all_priors = [_prior_from_context(context) for context in contexts]
+
+    if not contexts:
+        return PriorsResponse(
+            priors=[],
+            coverage=Coverage(
+                internal_hits=0,
+                external_hits=0,
+                gaps=["internal corpus returned no relevant evidence for this query"],
+            ),
+            trace_id=new_trace_id(),
+        )
+
+    evidence_table = _build_evidence_table(contexts)
+
+    try:
+        all_priors = extract_priors(query, evidence_table)
+    except ExtractionError as e:
+        return PriorsResponse(
+            priors=[],
+            coverage=Coverage(
+                internal_hits=len(contexts),
+                external_hits=0,
+                gaps=[f"LLM extraction failed schema validation after retries: {e}"],
+            ),
+            trace_id=new_trace_id(),
+        )
+
     strong_priors, weak_priors = _split_by_confidence(all_priors)
     gaps = _build_gaps(weak_priors, total_hits=len(contexts))
 
