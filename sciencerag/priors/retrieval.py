@@ -100,12 +100,17 @@ def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
         return ["internal corpus returned no relevant evidence for this query"]
     if not weak_priors:
         return []
-    papers = sorted({p.notes for p in weak_priors if p.notes})
-    papers_str = "; ".join(papers) if papers else "unknown source"
+    # NOTE: can't use p.notes here — it's the LLM's own clarifying note when
+    # the LLM provided one, and only falls back to a paper title otherwise
+    # (see extract.py's _to_prior). Using it for "which paper" would show
+    # LLM commentary instead of a source half the time. DOI is always real
+    # and never overwritten, so use that instead.
+    dois = sorted({s.doi for p in weak_priors for s in p.sources if s.doi})
+    dois_str = "; ".join(dois) if dois else "unknown source"
     return [
         f"{len(weak_priors)} low-confidence prior(s) "
         f"(confidence < {CONFIDENCE_THRESHOLD}) were excluded from priors; "
-        f"papers: {papers_str}"
+        f"source DOIs: {dois_str}"
     ]
 
 
