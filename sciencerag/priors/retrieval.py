@@ -14,7 +14,12 @@ from paperqa.agents.main import AnswerResponse
 
 from sciencerag.common.config import get_embedding_model, get_llm_model
 from sciencerag.common.trace import new_trace_id
-from sciencerag.priors.extract import EvidenceItem, ExtractionError, extract_priors
+from sciencerag.priors.extract import (
+    EvidenceItem,
+    ExtractionError,
+    PipelineTrace,
+    extract_priors,
+)
 from sciencerag.priors.models import Coverage, Prior, PriorsResponse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -86,7 +91,7 @@ def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
     ]
 
 
-def build_priors_response(query: str) -> PriorsResponse:
+def _build_priors_response(query: str, trace: PipelineTrace | None = None) -> PriorsResponse:
     """Run a real PaperQA2 query, then LLM-extract structured priors from
     the evidence contexts (see extract.py). On extraction failure, return
     an empty-but-valid response with the failure noted in gaps — never a
@@ -108,7 +113,7 @@ def build_priors_response(query: str) -> PriorsResponse:
     evidence_table = _build_evidence_table(contexts)
 
     try:
-        all_priors = extract_priors(query, evidence_table)
+        all_priors = extract_priors(query, evidence_table, trace=trace)
     except ExtractionError as e:
         return PriorsResponse(
             priors=[],
@@ -128,3 +133,17 @@ def build_priors_response(query: str) -> PriorsResponse:
         coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
         trace_id=new_trace_id(),
     )
+
+
+def build_priors_response(query: str) -> PriorsResponse:
+    return _build_priors_response(query)
+
+
+def build_priors_response_with_trace(query: str) -> tuple[PriorsResponse, PipelineTrace]:
+    """Same as build_priors_response, but also returns a PipelineTrace
+    capturing every intermediate stage — powers the demo's pipeline view
+    (GET/POST /sciencerag/priors/_debug). Not part of the spec-compliant
+    API contract."""
+    trace = PipelineTrace(query=query)
+    response = _build_priors_response(query, trace=trace)
+    return response, trace

@@ -1,8 +1,8 @@
 """FastAPI route for sciencerag.priors (spec §3.3).
 
 Backed by real PaperQA2 retrieval over corpus/papers/ (see
-sciencerag/priors/retrieval.py). Kind/field classification is still a
-placeholder pending M1-13.
+sciencerag/priors/retrieval.py) and LLM-based extraction (see
+sciencerag/priors/extract.py).
 """
 
 from fastapi import APIRouter
@@ -30,3 +30,15 @@ def get_priors(request: PriorsRequest) -> PriorsResponse:
     )
 
     return response
+
+
+@router.post("/sciencerag/priors/_debug")
+def get_priors_debug(request: PriorsRequest) -> dict:
+    """Demo/debug only — NOT part of the spec-compliant API contract.
+
+    Returns the real PriorsResponse plus a full PipelineTrace (evidence
+    snippets, prompt, raw LLM output per attempt, confidence math) so the
+    demo page can show the pipeline stages, not just the final answer.
+    """
+    response, trace = retrieval.build_priors_response_with_trace(request.query)
+    return {"response": response.model_dump(), "trace": trace.model_dump()}
