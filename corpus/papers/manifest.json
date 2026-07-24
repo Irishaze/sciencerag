@@ -1,11 +1,218 @@
 [
   {
+    "doi": "10.3390/s22218525",
+    "title": "Precision Temperature Control System with Low EMI for Applications in Analyzing Thermal Properties of Highly Sensitive Piezoelectric Sensors",
+    "authors": [
+      "Sylwester Nowocień",
+      "Radosław Sławomir Wielgus",
+      "Janusz Mroczka"
+    ],
+    "year": 2022,
+    "venue": "Sensors",
+    "path": "01_Precision_Temperature_Control_System_with_Low_EMI.pdf"
+  },
+  {
+    "doi": "10.3390/en16104082",
+    "title": "Evaluation of Efficiency for Miniscale Thermoelectric Converter under the Influence of Electrical and Thermal Resistance of Contacts",
+    "authors": [
+      "Lyudmyla Vikhor",
+      "Maxim Kotsur"
+    ],
+    "year": 2023,
+    "venue": "Energies",
+    "path": "02_Evaluation_of_Efficiency_for_Miniscale_Thermoelectric_Converter.pdf"
+  },
+  {
+    "doi": "10.3390/e17063787",
+    "title": "General Approach for Composite Thermoelectric Systems with Thermal Coupling: The Case of a Dual Thermoelectric Cooler",
+    "authors": [
+      "Cuautli Flores-Niño",
+      "Miguel Olivares-Robles",
+      "Igor Loboda"
+    ],
+    "year": 2015,
+    "venue": "Entropy",
+    "path": "03_General_Approach_for_Dual_Thermoelectric_Cooler.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-025-63174-y",
+    "title": "Miniaturized Mg3Bi2-based thermoelectric cooler for localized electronic thermal management",
+    "authors": [
+      "Chenhao Lin",
+      "Xiaojing Ma",
+      "Kun Liang",
+      "Yao Xu",
+      "Hengyu Yang",
+      "Jian Wang",
+      "Sheng Ye",
+      "Jiamin Qiu",
+      "Linlin Song",
+      "Shizhen Zhi",
+      "Jiang Chen",
+      "Peng Zhao",
+      "Sichen Duan",
+      "Zuoxu Wu",
+      "Li Yin",
+      "Longzhi Wu",
+      "Feng Jiang",
+      "Zunqian Tang",
+      "Feng Cao",
+      "Qian Zhang",
+      "Jun Mao"
+    ],
+    "year": 2025,
+    "venue": "Nature Communications",
+    "path": "04_Miniaturized Mg3Bi2-based thermoelectric cooler for localized electronic thermal management.pdf"
+  },
+  {
+    "doi": "10.1016/j.enbuild.2021.110931",
+    "title": "Cost-Performance Trade-off in thermoelectric air conditioning system with graded and constant material properties",
+    "authors": [
+      "Abhishek Saini",
+      "Sarah J. Watzman",
+      "Je-Hyeong Bahk"
+    ],
+    "year": 2021,
+    "venue": "Energy and Buildings",
+    "path": "04_arXiv-2011.02585.pdf"
+  },
+  {
+    "doi": "10.3390/photonics8030084",
+    "title": "25 Gb/s Data Transmission Using a Directly Modulated InGaAlAs DBR Laser over 14 nm Wavelength Tuning Range",
+    "authors": [
+      "Daibing Zhou",
+      "Yiming He",
+      "Dan Lu",
+      "Song Liang",
+      "Lingjuan Zhao",
+      "Wei Wang"
+    ],
+    "year": 2021,
+    "venue": "Photonics",
+    "path": "05_25 Gb_s Data Transmission Using a Directly Modulated InGaAlAs DBR Laser over 14 nm Wavelength Tuning Rang.pdf"
+  },
+  {
+    "doi": "10.3390/textiles5040069",
+    "title": "Evaluation of Resting-State Cooling Effectiveness in Wearable Body-Cooling Devices Using Thermophysiological and Psychological Responses",
+    "authors": [
+      "Hiroki Maru",
+      "Takumi Yuasa",
+      "Hiroyuki Kanai"
+    ],
+    "year": 2025,
+    "venue": "Textiles",
+    "path": "06_Evaluation of Resting-State Cooling Effectiveness in Wearable Body-Cooling Devices Using Thermophysiologi.pdf"
+  },
+  {
+    "doi": "10.1038/s41598-024-72500-1",
+    "title": "Optimizing COP by RSM and MATLAB model of mini refrigerator based on thermoelectric units driven by solar photovoltaic",
+    "authors": [
+      "Amal E. M. Elnaggar",
+      "Soliman Sharaf",
+      "Zeinab S. Abedel Rehim",
+      "M. A. El-Bayoumi",
+      "Hassan M. M. Mustafa",
+      "Helmy M. El Zoghby"
+    ],
+    "year": 2024,
+    "venue": "Scientific Reports",
+    "path": "06_s41598-024-72500-1.pdf"
+  },
+  {
+    "doi": "10.3390/app14146144",
+    "title": "Design and Optimization of Thermal Vacuum Sensor Test System Based on Thermoelectric Cooling",
+    "authors": [
+      "Xiaohang Shan",
+      "Min Zhao",
+      "Gang Li"
+    ],
+    "year": 2024,
+    "venue": "Applied Sciences",
+    "path": "07_Design and Optimization of Thermal Vacuum Sensor Test System Based on Thermoelectric Cooling.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-024-48583-9",
+    "title": "Thermoelectric active cooling for transient hot spots in microprocessors",
+    "authors": [
+      "Yihan Liu",
+      "Hao-Yuan Cheng",
+      "Jonathan A. Malen",
+      "Feng Xiong"
+    ],
+    "year": 2024,
+    "venue": "Nature Communications",
+    "path": "07_s41467-024-48583-9.pdf"
+  },
+  {
+    "doi": "10.3390/en13040841",
+    "title": "A Li-Ion Battery Thermal Management System Combining a Heat Pipe and Thermoelectric Cooler",
+    "authors": [
+      "Chuanwei Zhang",
+      "Zhan Xia",
+      "Bin Wang",
+      "Huaibin Gao",
+      "Shangrui Chen",
+      "Shouchao Zong",
+      "Kunxin Luo"
+    ],
+    "year": 2020,
+    "venue": "Energies",
+    "path": "08_A Li-Ion Battery Thermal Management System Combining a Heat Pipe and Thermoelectric Cooler.pdf"
+  },
+  {
+    "doi": "10.3390/app112110288",
+    "title": "Experimental Investigation of the Cooling Effect Generated by a Heat Sink Integrated Thermoelectric-Based U-Shaped Air-Conditioning System",
+    "authors": [
+      "Yesha Patel",
+      "Abu Raihan Mohammad Siddique",
+      "Mohammad Reza Mohaghegh",
+      "Syeda Humaira Tasnim",
+      "Shohel Mahmud"
+    ],
+    "year": 2021,
+    "venue": "Applied Sciences",
+    "path": "09_Experimental Investigation of the Cooling Effect Generated by a Heat Sink Integrated Thermoelectric-Based.pdf"
+  },
+  {
+    "doi": "10.3390/en15010145",
+    "title": "Study on Performance of the Thermoelectric Cooling Device with Novel Subchannel Finned Heat Sink",
+    "authors": [
+      "Gaoju Xia",
+      "Huadong Zhao",
+      "Jingshuang Zhang",
+      "Haonan Yang",
+      "Bo Feng",
+      "Qi Zhang",
+      "Xiaohui Song"
+    ],
+    "year": 2021,
+    "venue": "Energies",
+    "path": "09_energies-15-00145.pdf"
+  },
+  {
     "doi": "10.1016/j.ijrefrig.2025.11.023",
-    "title": "Performance optimization in thermoelectric coolers using physical data-driven artificial neural networks",
-    "authors": ["Somaya Salamah", "Candeniz Seckin", "Süha Tuna"],
+    "title": "Performance Optimization in Thermoelectric Coolers Using Physical Data-Driven Artificial Neural Networks",
+    "authors": [
+      "Somaya Salamah",
+      "Candeniz Seçki̇n",
+      "Süha Tuna"
+    ],
     "year": 2026,
     "venue": "International Journal of Refrigeration",
     "path": "1-s2.0-S0140700725004438-main.pdf"
+  },
+  {
+    "doi": "10.1016/j.apenergy.2020.115075",
+    "title": "Review of thermoelectric geometry and structure optimization for performance enhancement",
+    "authors": [
+      "Samson Shittu",
+      "Guiqiang Li",
+      "Xudong Zhao",
+      "Xiaoli Ma"
+    ],
+    "year": 2020,
+    "venue": "Applied Energy",
+    "path": "1-s2.0-S0306261920305870-main.pdf"
   },
   {
     "doi": "10.1016/j.applthermaleng.2025.127903",
@@ -25,23 +232,1312 @@
   {
     "doi": "10.1016/j.applthermaleng.2025.129224",
     "title": "Accurate and efficient design and optimization of thermoelectric cooler via machine learning technologies",
-    "authors": ["Haoji Yang", "Yuxiao Zhu", "Harold M.H. Chong", "Ruomeng Huang"],
+    "authors": [
+      "Haoji Yang",
+      "Yuxiao Zhu",
+      "Harold M.H. Chong",
+      "Ruomeng Huang"
+    ],
     "year": 2026,
     "venue": "Applied Thermal Engineering",
     "path": "1-s2.0-S1359431125038165-main.pdf"
   },
   {
     "doi": "10.47480/isibted.1194999",
-    "title": "Cooling Performance of Thermoelectric Cooler Modules: Experimental and Numerical Methods",
-    "authors": ["İlhan Kahraman", "Naim Derebaşı"],
+    "title": "TERMOELEKTRİK SOĞUTMA MODÜLLERİNİN SOĞUTMA PERFORMANSI: DENEYSEL VE SAYISAL YÖNTEMLER",
+    "authors": [
+      "İlhan Kahraman",
+      "Naim Derebaşı"
+    ],
     "year": 2022,
-    "venue": "Isı Bilimi ve Tekniği Dergisi (Journal of Thermal Science and Technology)",
+    "venue": "Isı Bilimi ve Tekniği Dergisi",
     "path": "10.47480-isibted.1194999-2732735.pdf"
   },
   {
-    "doi": "10.1109/TCAD.2024.3438689",
+    "doi": "10.3390/en15030915",
+    "title": "Development of a Performance Analysis Model for Free-Piston Stirling Power Convertor in Space Nuclear Reactor Power Systems",
+    "authors": [
+      "Huaqi Li",
+      "Xiaoyan Tian",
+      "Li Ge",
+      "Xiaoya Kang",
+      "Lei Zhu",
+      "Sen Chen",
+      "Lixin Chen",
+      "Xinbiao Jiang",
+      "Jianqiang Shan"
+    ],
+    "year": 2022,
+    "venue": "Energies",
+    "path": "10_Development of a Performance Analysis Model for Free-Piston Stirling Power Convertor in Space Nuclear Rea.pdf"
+  },
+  {
+    "doi": "10.3390/app16094435",
+    "title": "Multi-Physic Coupling Analysis and Structure Optimization of Vehicle Thermoelectric Refrigerators",
+    "authors": [
+      "Xichao Cao",
+      "Yutian Liu",
+      "Dandan Liu",
+      "Xianli Su",
+      "Xinfeng Tang"
+    ],
+    "year": 2026,
+    "venue": "Applied Sciences",
+    "path": "10_applsci-16-04435.pdf"
+  },
+  {
+    "doi": "10.3390/atmos12091198",
+    "title": "Simple Double-Layer Coating for Efficient Daytime and Nighttime Radiative Cooling",
+    "authors": [
+      "Mourad Benlattar",
+      "Issam Ibourk",
+      "Rahma Adhiri"
+    ],
+    "year": 2021,
+    "venue": "Atmosphere",
+    "path": "11_Simple Double-Layer Coating for Efficient Daytime and Nighttime Radiative Cooling.pdf"
+  },
+  {
+    "doi": "10.1103/physrevb.86.045202",
+    "title": "Improved thermoelectric cooling based on the Thomson effect",
+    "authors": [
+      "G. Jeffrey Snyder",
+      "Eric S. Toberer",
+      "Raghav Khanna",
+      "Wolfgang Seifert"
+    ],
+    "year": 2012,
+    "venue": "Physical Review B",
+    "path": "11_arXiv-1111.5300.pdf"
+  },
+  {
+    "doi": "10.3390/en12010169",
+    "title": "Extraction of Temperature-Dependent Thermoelectric Material Parameters of a Thermoelectric Cooler by the Non-Linear Least Squares Method",
+    "authors": [
+      "Shanjun Nie",
+      "Mingfu Wang",
+      "Xiaodong Gao",
+      "Jingyu Liao"
+    ],
+    "year": 2019,
+    "venue": "Energies",
+    "path": "12_Extraction of Temperature-Dependent Thermoelectric Material Parameters of a Thermoelectric Cooler by the .pdf"
+  },
+  {
+    "doi": "10.3390/e20010029",
+    "title": "Influences of the Thomson Effect on the Performance of a Thermoelectric Generator-Driven Thermoelectric Heat Pump Combined Device",
+    "authors": [
+      "Yuanli Feng",
+      "Lingen Chen",
+      "Fankai Meng",
+      "Fengrui Sun"
+    ],
+    "year": 2018,
+    "venue": "Entropy",
+    "path": "12_PMC7512227.pdf"
+  },
+  {
+    "doi": "10.3390/s151229781",
+    "title": "Optimized Design of the SGA-WZ Strapdown Airborne Gravimeter Temperature Control System",
+    "authors": [
+      "Juliang Cao",
+      "Minghao Wang",
+      "Shaokun Cai",
+      "Kaidong Zhang",
+      "Danni Cong",
+      "Meiping Wu"
+    ],
+    "year": 2015,
+    "venue": "Sensors",
+    "path": "13_Optimized Design of the SGA-WZ Strapdown Airborne Gravimeter Temperature Control System.pdf"
+  },
+  {
+    "doi": "10.3390/machines14060653",
+    "title": "Uncertainty and Sensitivity Analyses of an Annular Thermoelectric Refrigerator Based on Latin Hypercube Sampling",
+    "authors": [
+      "Jinhao Ma",
+      "Meilin Song",
+      "Xue Li",
+      "Feng Zhang"
+    ],
+    "year": 2026,
+    "venue": "Machines",
+    "path": "14_Uncertainty and Sensitivity Analyses of an Annular Thermoelectric Refrigerator Based on Latin Hypercube S.pdf"
+  },
+  {
+    "doi": "10.3390/machines10020123",
+    "title": "Experimental Study on Support Vector Machine-Based Early Detection for Sensor Faults and Operator-Based Robust Fault Tolerant Control",
+    "authors": [
+      "Mingcong Deng",
+      "Yuki Tanaka",
+      "Ximei Li"
+    ],
+    "year": 2022,
+    "venue": "Machines",
+    "path": "15_Experimental Study on Support Vector Machine-Based Early Detection for Sensor Faults and Operator-Based R.pdf"
+  },
+  {
+    "doi": "10.1016/j.heliyon.2022.e10025",
+    "title": "The simulated cooling performance of a thin-film thermoelectric cooler with coupled-thermoelements connected in parallel",
+    "authors": [
+      "Tingzhen Ming",
+      "Sen Chen",
+      "Yonggao Yan",
+      "Tingrui Gong",
+      "Jianlong Wan",
+      "Yongjia Wu"
+    ],
+    "year": 2022,
+    "venue": "Heliyon",
+    "path": "15_PMC9399165.pdf"
+  },
+  {
+    "doi": "10.3390/foods11131896",
+    "title": "Performance Evaluation of Mobile Liquid Cooled Thermoelectric Refrigeration System for Storage-Cum-Transportation of Fruits and Vegetables",
+    "authors": [
+      "Prasad Chavan",
+      "Gagandeep Kaur Sidhu",
+      "Amit K. Jaiswal"
+    ],
+    "year": 2022,
+    "venue": "Foods",
+    "path": "16_PMC9266183.pdf"
+  },
+  {
+    "doi": "10.3390/s120404648",
+    "title": "Precise Temperature Mapping of GaN-Based LEDs by Quantitative Infrared Micro-Thermography",
+    "authors": [
+      "Ki Soo Chang",
+      "Sun Choel Yang",
+      "Jae-Young Kim",
+      "Myung Ho Kook",
+      "Seon Young Ryu",
+      "Hae Young Choi",
+      "Geon Hee Kim"
+    ],
+    "year": 2012,
+    "venue": "Sensors",
+    "path": "16_Precise Temperature Mapping of GaN-Based LEDs by Quantitative Infrared Micro-Thermography.pdf"
+  },
+  {
+    "doi": "10.3390/en16093844",
+    "title": "Active Thermal Management of Electric Motors and Generators Using Thermoelectric (Peltier Effect) Technology",
+    "authors": [
+      "Stephen Lucas",
+      "Romeo Marian",
+      "Michael Lucas",
+      "Titilayo Ogunwa",
+      "Javaan Chahl"
+    ],
+    "year": 2023,
+    "venue": "Energies",
+    "path": "17_Active Thermal Management of Electric Motors and Generators Using Thermoelectric (Peltier Effect) Technol.pdf"
+  },
+  {
+    "doi": "10.1016/j.heliyon.2024.e40649",
+    "title": "A comprehensive review of thermoelectric cooling technologies for enhanced thermal management in lithium-ion battery systems",
+    "authors": [
+      "Mehwish Khan Mahek",
+      "Mohamad Ramadan",
+      "Sharul Sham bin Dol",
+      "Mohammed Ghazal",
+      "Mohammad Alkhedher"
+    ],
+    "year": 2024,
+    "venue": "Heliyon",
+    "path": "18_PMC11667599.pdf"
+  },
+  {
+    "doi": "10.3390/en18030555",
+    "title": "The Potential of a Thermoelectric Heat Dissipation System: An Analytical Study",
+    "authors": [
+      "Xuechun Li",
+      "Rujie Shi",
+      "Kang Zhu"
+    ],
+    "year": 2025,
+    "venue": "Energies",
+    "path": "18_The Potential of a Thermoelectric Heat Dissipation System_ An Analytical Study.pdf"
+  },
+  {
+    "doi": "10.3390/en15207659",
+    "title": "Research in Life Extension of Electrical Motors by Controlling the Impact of the Environment through Employing Peltier Effect",
+    "authors": [
+      "Stephen Lucas",
+      "Romeo Marian",
+      "Michael Lucas",
+      "Saiful Bari",
+      "Titilayo Ogunwa",
+      "Javaan Chahl"
+    ],
+    "year": 2022,
+    "venue": "Energies",
+    "path": "19_Research in Life Extension of Electrical Motors by Controlling the Impact of the Environment through Empl.pdf"
+  },
+  {
+    "doi": "10.48550/arXiv.2403.01614",
+    "title": "Real-time optimizing of thermoelectric coolers performance based on energy and exergy analysis Reza Jamali1, S. Aria Hosseini2, Alireza Amiri-Margavi3",
+    "authors": [],
+    "year": null,
+    "venue": "arXiv preprint",
+    "path": "19_arXiv-2403.01614.pdf"
+  },
+  {
+    "doi": "10.3390/ma17133266",
+    "title": "Optimization Design and Performance Study of Wearable Thermoelectric Device Using Phase Change Material as Heat Sink",
+    "authors": [
+      "Jiakai Xin",
+      "Guiying Xu",
+      "Tao Guo",
+      "Bohang Nan"
+    ],
+    "year": 2024,
+    "venue": "Materials",
+    "path": "20_PMC11243409.pdf"
+  },
+  {
+    "doi": "10.3390/en18236119",
+    "title": "Waste Heat Recovery in a Transcritical Carbon Dioxide Vapor Compression Cycle with Thermoelectric Generators",
+    "authors": [
+      "Álvaro Casi",
+      "David Chavarren",
+      "Patricia Aranguren",
+      "Iñaki Alzuguren",
+      "Miguel Araiz",
+      "Antonio Rodríguez"
+    ],
+    "year": 2025,
+    "venue": "Energies",
+    "path": "20_Waste Heat Recovery in a Transcritical Carbon Dioxide Vapor Compression Cycle with Thermoelectric Generat.pdf"
+  },
+  {
+    "doi": "10.1038/s41598-023-28080-7",
+    "title": "Fabrication and thermoelectric conversion of thermoelectric concrete brick with buried unileg N-type CaMnO3 thermoelectric module inside",
+    "authors": [
+      "Keerati Maneesai",
+      "Sunisar Khammahong",
+      "Pongsakorn Siripoom",
+      "Chaiwat Phrompet",
+      "Chaval Sriwong",
+      "Santi Maensiri",
+      "Chesta Ruttanapun"
+    ],
+    "year": 2023,
+    "venue": "Scientific Reports",
+    "path": "21_Fabrication and thermoelectric conversion of thermoelectric concrete brick with buried unileg N-type CaMn.pdf"
+  },
+  {
+    "doi": "10.3390/en13184691",
+    "title": "Modeling of an Integrated Thermoelectric Generation–Cooling System for Thermoelectric Cooler Waste Heat Recovery",
+    "authors": [
+      "Jia Yu",
+      "Qingshan Zhu",
+      "Li Kong",
+      "Haoqing Wang",
+      "Hongji Zhu"
+    ],
+    "year": 2020,
+    "venue": "Energies",
+    "path": "22_Modeling of an Integrated Thermoelectric Generation–Cooling System for Thermoelectric Cooler Waste Heat R.pdf"
+  },
+  {
+    "doi": "10.1103/5f71-zr8d",
+    "title": "Optimal performance of thermoelectric devices with small external irreversibility",
+    "authors": [
+      "Rajeshree Chakraborty",
+      "Ramandeep S. Johal"
+    ],
+    "year": 2025,
+    "venue": "Physical Review E",
+    "path": "22_arXiv-2501.18437.pdf"
+  },
+  {
+    "doi": "10.3390/ma18071576",
+    "title": "Performance Study of Wearable Thermoelectric Cooler with Phase-Change Composite Heat Sink",
+    "authors": [
+      "Zhanglong Xia",
+      "Wei Cao",
+      "Xiaolong Sun",
+      "Qianfeng Ding",
+      "Zheng Zhu",
+      "Wenjie Zhou",
+      "Sijia Yan",
+      "Yue Hou",
+      "Ziyu Wang"
+    ],
+    "year": 2025,
+    "venue": "Materials",
+    "path": "23_PMC11990543.pdf"
+  },
+  {
+    "doi": "10.3390/en11020279",
+    "title": "Study on a Battery Thermal Management System Based on a Thermoelectric Effect",
+    "authors": [
+      "Chuan-Wei Zhang",
+      "Ke-Jun Xu",
+      "Lin-Yang Li",
+      "Man-Zhi Yang",
+      "Huai-Bin Gao",
+      "Shang-Rui Chen"
+    ],
+    "year": 2018,
+    "venue": "Energies",
+    "path": "23_Study on a Battery Thermal Management System Based on a Thermoelectric Effect.pdf"
+  },
+  {
+    "doi": "10.3390/s19071609",
+    "title": "Battery Powered Portable Thermal Cycler for Continuous-Flow Polymerase Chain Reaction Diagnosis by Single Thermostatic Thermoelectric Cooler and Open-Loop Controller",
+    "authors": [
+      "Wu, Di",
+      "Wenming Wu"
+    ],
+    "year": 2019,
+    "venue": "Sensors (Basel, Switzerland)",
+    "path": "24_Battery Powered Portable Thermal Cycler for Continuous-Flow Polymerase Chain Reaction Diagnosis by Single.pdf"
+  },
+  {
+    "doi": "10.1093/nsr/nwae445",
+    "title": "Cooler, stronger, smaller: improving thermoelectric cooling",
+    "authors": [
+      "Nagendra Singh Chauhan",
+      "Takao Mori"
+    ],
+    "year": 2024,
+    "venue": "National Science Review",
+    "path": "24_PMC11702843.pdf"
+  },
+  {
+    "doi": "10.3390/atmos14020276",
+    "title": "Experimental and Numerical Analysis of an Atmospheric Water Harvester Using a Thermoelectric Cooler",
+    "authors": [
+      "Anwur Alenezi",
+      "Hyung-Ho Jung",
+      "Yousef Alabaiadly"
+    ],
+    "year": 2023,
+    "venue": "Atmosphere",
+    "path": "25_Experimental and Numerical Analysis of an Atmospheric Water Harvester Using a Thermoelectric Cooler.pdf"
+  },
+  {
+    "doi": "10.3390/en12142832",
+    "title": "Optimization of Two-Stage Combined Thermoelectric Devices by a Three-Dimensional Multi-Physics Model and Multi-Objective Genetic Algorithm",
+    "authors": [
+      "Meng, Jing-Hui",
+      "Wu, Hao-Chi",
+      "Wang, Tian-Hu"
+    ],
+    "year": 2019,
+    "venue": "Energies",
+    "path": "26_Optimization of Two-Stage Combined Thermoelectric Devices by a Three-Dimensional Multi-Physics Model and .pdf"
+  },
+  {
+    "doi": "10.48550/arXiv.2604.11441",
+    "title": "Optimization of cooling power of a thermoelectric refrigerator: A unified approach",
+    "authors": [
+      "Rajeshree Chakraborty",
+      "Ramandeep S. Johal"
+    ],
+    "year": null,
+    "venue": "arXiv preprint",
+    "path": "26_arXiv-2604.11441.pdf"
+  },
+  {
+    "doi": "10.3390/en13123142",
+    "title": "A Comprehensive Review of Strategies and Approaches for Enhancing the Performance of Thermoelectric Module",
+    "authors": [
+      "Song Lv",
+      "Zuoqin Qian",
+      "Dengyun Hu",
+      "Xiaoyuan Li",
+      "Wei He"
+    ],
+    "year": 2020,
+    "venue": "Energies",
+    "path": "27_A Comprehensive Review of Strategies and Approaches for Enhancing the Performance of Thermoelectric Modul.pdf"
+  },
+  {
+    "doi": "10.4316/aece.2015.02015",
+    "title": "Optimal Control of Distributed Parameter Systems with Application to Transient Thermoelectric Cooling",
+    "authors": [
+      "Maxim Kotsur"
+    ],
+    "year": 2015,
+    "venue": "Advances in Electrical and Computer Engineering",
+    "path": "27_displaypdf.php.pdf"
+  },
+  {
+    "doi": "10.3390/en16124699",
+    "title": "Evaluation of Performance and Power Consumption of a Thermoelectric Module-Based Personal Cooling System—A Case Study",
+    "authors": [
+      "Anna Dąbrowska",
+      "Monika Kobus",
+      "Łukasz Starzak",
+      "Bartosz Pękosławski"
+    ],
+    "year": 2023,
+    "venue": "Energies",
+    "path": "28_Evaluation of Performance and Power Consumption of a Thermoelectric Module-Based Personal Cooling System—.pdf"
+  },
+  {
+    "doi": "10.3390/bios14080379",
+    "title": "Implementation of Rapid Nucleic Acid Amplification Based on the Super Large Thermoelectric Cooler Rapid Temperature Rise and Fall Heating Module",
+    "authors": [
+      "Jianxin Cheng",
+      "Enjia Zhang",
+      "Rui Sun",
+      "Kaihuan Zhang",
+      "Fangzhou Zhang",
+      "Jianlong Zhao",
+      "Shilun Feng",
+      "Bo Liu"
+    ],
+    "year": 2024,
+    "venue": "Biosensors",
+    "path": "29_Implementation of Rapid Nucleic Acid Amplification Based on the Super Large Thermoelectric Cooler Rapid T.pdf"
+  },
+  {
+    "doi": "10.3390/pr7020098",
+    "title": "Improvement of Temperature Control Performance of Thermoelectric Dehumidifier Used Industry 4.0 by the SF-PI Controller",
+    "authors": [
+      "Jae-Sub Ko",
+      "Jun-Ho Huh",
+      "Jong-Chan Kim"
+    ],
+    "year": 2019,
+    "venue": "Processes",
+    "path": "29_processes-07-00098.pdf"
+  },
+  {
+    "doi": "10.3390/app5041837",
+    "title": "High Power Diode-Side-Pumped Q-Switched Nd:YAG Solid-State Laser with a Thermoelectric Cooler",
+    "authors": [
+      "Jian Dong",
+      "Xue-Sheng Liu",
+      "Chao Peng",
+      "You-Qiang Liu",
+      "Zhi-Yong Wang"
+    ],
+    "year": 2015,
+    "venue": "Applied Sciences",
+    "path": "30_High Power Diode-Side-Pumped Q-Switched Nd_YAG Solid-State Laser with a Thermoelectric Cooler.pdf"
+  },
+  {
+    "doi": "10.1039/d1ta01911b",
+    "title": "Lightweight wearable thermoelectric cooler with rationally designed flexible heatsink consisting of phase-change material/graphite/silicone elastomer",
+    "authors": [
+      "Jaeyoo Choi",
+      "Chaochao Dun",
+      "Carlos Forsythe",
+      "Madeleine P. Gordon",
+      "Jeffrey J. Urban"
+    ],
+    "year": 2021,
+    "venue": "Journal of Materials Chemistry A",
+    "path": "30_Lightweight_wearable_thermoelectric_cooler.pdf"
+  },
+  {
+    "doi": "10.1109/access.2018.2885823",
+    "title": "A Posteriori Multiobjective Self-Adaptive Multipopulation Jaya Algorithm for Optimization of Thermal Devices and Cycles",
+    "authors": [
+      "Rao, Ravipudi V."
+    ],
+    "year": 2019,
+    "venue": "IEEE Access",
+    "path": "31_08572683.pdf"
+  },
+  {
+    "doi": "10.3390/en16104052",
+    "title": "Thermo-Electro-Fluidic Simulation Study of Impact of Blower Motor Heat on Performance of Peltier Cooler for Protective Clothing",
+    "authors": [
+      "Son, Kwon Joong"
+    ],
+    "year": 2023,
+    "venue": "Energies",
+    "path": "31_Thermo-Electro-Fluidic Simulation Study of Impact of Blower Motor Heat on Performance of Peltier Cooler f.pdf"
+  },
+  {
+    "doi": "10.3390/app11178068",
+    "title": "A Comparative Analysis of Thermoelectric Modules for the Purpose of Ensuring Thermal Comfort in Protective Clothing",
+    "authors": [
+      "Anna Dąbrowska",
+      "Monika Kobus",
+      "Bartosz Pękosławski",
+      "Łukasz Starzak"
+    ],
+    "year": 2021,
+    "venue": "Applied Sciences",
+    "path": "32_A Comparative Analysis of Thermoelectric Modules for the Purpose of Ensuring Thermal Comfort in Protectiv.pdf"
+  },
+  {
+    "doi": "10.3390/su13179682",
+    "title": "Performance Improvement of Thermoelectric Air Cooler System by Using Variable-Pulse Current for Building Applications",
+    "authors": [
+      "Kashif Irshad"
+    ],
+    "year": 2021,
+    "venue": "Sustainability",
+    "path": "32_sustainability-13-09682.pdf"
+  },
+  {
+    "doi": "10.1007/s44189-025-00068-0",
+    "title": "Thermal design of a thermoelectric refrigerator operating near room temperature using artificial neural network",
+    "authors": [
+      "Hichem Ykrelef",
+      "Younes Chiba",
+      "Mounir Zirari",
+      "Ahmed Benyekhlef",
+      "Abdelali Boukaoud",
+      "Djamel Sebbar",
+      "Abdelkrim Kherkhar",
+      "Hayati Mamur"
+    ],
+    "year": 2025,
+    "venue": "International Journal of Air-Conditioning and Refrigeration",
+    "path": "33_Thermal design of a thermoelectric refrigerator operating near room temperature using artificial neural n.pdf"
+  },
+  {
+    "doi": "10.3390/s22249989",
+    "title": "High-Precision Semiconductor Laser Current Drive and Temperature Control System Design",
+    "authors": [
+      "Yitao Zhao",
+      "Zengguo Tian",
+      "Xiangyu Feng",
+      "Zhengyuan Feng",
+      "Xuguang Zhu",
+      "Yiqun Zhou"
+    ],
+    "year": 2022,
+    "venue": "Sensors (Basel, Switzerland)",
+    "path": "33_sensors-22-09989.pdf"
+  },
+  {
+    "doi": "10.3390/bios13020234",
+    "title": "Ultrafast Nucleic Acid Detection Equipment with Silicon-Based Microfluidic Chip",
+    "authors": [
+      "Jiali Zhang",
+      "Zhuo Yang",
+      "Liying Liu",
+      "Tinglu Zhang",
+      "Lilei Hu",
+      "Chunrui Hu",
+      "Hu Chen",
+      "Ruihua Ding",
+      "Bo Liu",
+      "Chang Chen"
+    ],
+    "year": 2023,
+    "venue": "Biosensors",
+    "path": "34_Ultrafast Nucleic Acid Detection Equipment with Silicon-Based Microfluidic Chip.pdf"
+  },
+  {
+    "doi": "10.3390/bios10050049",
+    "title": "Battery-Powered Portable Rotary Real-Time Fluorescent qPCR with Low Energy Consumption, Low Cost, and High Throughput",
+    "authors": [
+      "He, Limin",
+      "Benliang Sang",
+      "Wenming Wu"
+    ],
+    "year": 2020,
+    "venue": "Biosensors",
+    "path": "35_Battery-Powered Portable Rotary Real-Time Fluorescent qPCR with Low Energy Consumption, Low Cost, and Hig.pdf"
+  },
+  {
+    "doi": "10.3390/en17205031",
+    "title": "Optimizing Energy Efficiency in a Peltier-Module-Based Cooling Microunit through Selected Control Algorithms",
+    "authors": [
+      "Stanisław Lis",
+      "Jarosław Knaga",
+      "Sławomir Kurpaska",
+      "Stanisław Famielec",
+      "Piotr Łyszczarz",
+      "Marek Machaczka"
+    ],
+    "year": 2024,
+    "venue": "Energies",
+    "path": "35_energies-17-05031.pdf"
+  },
+  {
+    "doi": "10.1109/access.2024.3392734",
+    "title": "Design of a Novel PID Controller Based on Machine Learning Algorithm for a Micro-Thermoelectric Cooler of the Polymerase Chain Reaction Device",
+    "authors": [
+      "Yılmaz Seryar Arıkuşu",
+      "Nevra Bayhan"
+    ],
+    "year": 2024,
+    "venue": "IEEE Access",
+    "path": "36_10506917.pdf"
+  },
+  {
+    "doi": "10.3390/en13226070",
+    "title": "Cooling and Mechanical Performance Analysis of a Trapezoidal Thermoelectric Cooler with Variable Cross-Section",
+    "authors": [
+      "Tianbo Lu",
+      "Yuqiang Li",
+      "Jianxin Zhang",
+      "Pingfan Ning",
+      "Pingjuan Niu"
+    ],
+    "year": 2020,
+    "venue": "Energies",
+    "path": "36_Cooling and Mechanical Performance Analysis of a Trapezoidal Thermoelectric Cooler with Variable Cross-Se.pdf"
+  },
+  {
+    "doi": "10.3390/e20020118",
+    "title": "Performance of Segmented Thermoelectric Cooler Micro-Elements with Different Geometric Shapes and Temperature-Dependent Properties",
+    "authors": [
+      "Carlos Badillo-Ruiz",
+      "Miguel Olivares-Robles",
+      "Pablo Ruiz-Ortega"
+    ],
+    "year": 2018,
+    "venue": "Entropy",
+    "path": "36_Performance_of_Segmented_Thermoelectric_Cooler_Micro-Elements.pdf"
+  },
+  {
+    "doi": "10.3390/photonics11080745",
+    "title": "High-Precision Temperature Control of Laser Crystals",
+    "authors": [
+      "Xiang Zhang",
+      "Hang Xu",
+      "Liwen Feng",
+      "Zhongqi Liu",
+      "Tianyi Wang",
+      "Jinqiang Xu",
+      "Shengwen Quan",
+      "Senlin Huang"
+    ],
+    "year": 2024,
+    "venue": "Photonics",
+    "path": "37_High-Precision Temperature Control of Laser Crystals.pdf"
+  },
+  {
+    "doi": "10.1007/s43939-026-00658-8",
+    "title": "Thermal performance and COP assessment of thermoelectric coolers using gallium and paraffin waxes as phase change materials under different pulsation durations: a comparative study",
+    "authors": [
+      "Dana Alshamaileh",
+      "Mohammad Qasem"
+    ],
+    "year": 2026,
+    "venue": "Discover Materials",
+    "path": "38_Thermal performance and COP assessment of thermoelectric coolers using gallium and paraffin waxes as phas.pdf"
+  },
+  {
+    "doi": "10.48550/arXiv.2510.25925",
+    "title": "Equation Discovery, Parametric Simulation, and Optimization Using the Physics-Informed ",
+    "authors": [
+      "Windows User"
+    ],
+    "year": null,
+    "venue": "arXiv preprint",
+    "path": "38_arXiv-2510.25925.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-024-48346-6",
+    "title": "General strategy for developing thick-film micro-thermoelectric coolers from material fabrication to device integration",
+    "authors": [
+      "Xiaowen Sun",
+      "Yuedong Yan",
+      "Man Kang",
+      "Weiyun Zhao",
+      "Kaifen Yan",
+      "He Wang",
+      "Ranran Li",
+      "Shijie Zhao",
+      "Xiaoshe Hua",
+      "Boyi Wang",
+      "Weifeng Zhang",
+      "Yuan Deng"
+    ],
+    "year": 2024,
+    "venue": "Nature Communications",
+    "path": "39_General strategy for developing thick-film micro-thermoelectric coolers from material fabrication to devi.pdf"
+  },
+  {
+    "doi": "10.1002/msd2.70031",
+    "title": "Numerical Simulation of Transient Heat Conduction With Moving Heat Source Using Physics Informed Neural Networks",
+    "authors": [
+      "Anirudh Kalyan",
+      "Sundararajan Natarajan"
+    ],
+    "year": 2025,
+    "venue": "International Journal of Mechanical System Dynamics",
+    "path": "39_arXiv-2506.17726.pdf"
+  },
+  {
+    "doi": "10.3390/s21041195",
+    "title": "Two-Color Infrared Sensor on the PbTe: In p-n Junction",
+    "authors": [
+      "Jonas Gradauskas",
+      "Bohdan Dzundza",
+      "Leonid Chernyak",
+      "Zinovy Dashevsky"
+    ],
+    "year": 2021,
+    "venue": "Sensors",
+    "path": "40_Two-Color Infrared Sensor on the PbTe_ In _i_p-n__i_ Junction.pdf"
+  },
+  {
+    "doi": "10.48550/arXiv.2507.09356",
+    "title": "Physics-Informed Neural Networks for Estimating Convective Heat Transfer in Jet Impingement Cooling: A Comparison with Conjugate Heat Transfer Simulations",
+    "authors": [
+      "Arijit Hazra",
+      "Prahar Sarkar",
+      "Sourav Sarkar"
+    ],
+    "year": null,
+    "venue": "arXiv preprint",
+    "path": "40_arXiv-2507.09356.pdf"
+  },
+  {
+    "doi": "10.3390/en11030576",
+    "title": "Modeling and Experimentation of New Thermoelectric Cooler–Thermoelectric Generator Module",
+    "authors": [
+      "Khaled Teffah",
+      "Youtong Zhang",
+      "Xiao-long Mou"
+    ],
+    "year": 2018,
+    "venue": "Energies",
+    "path": "41_Modeling and Experimentation of New Thermoelectric Cooler–Thermoelectric Generator Module.pdf"
+  },
+  {
+    "doi": "10.3390/fractalfract10040238",
+    "title": "Hybrid PSO-Tuned Fractional-Order Control with Rule-Based Adaptive Supervision for Embedded Thermoelectric Temperature Regulation",
+    "authors": [
+      "Miguel F. Ferrer Pareja",
+      "Carlos Sánchez Morales",
+      "Federico León Zerpa",
+      "Alejandro Ramos Martín"
+    ],
+    "year": 2026,
+    "venue": "Fractal and Fractional",
+    "path": "41_fractalfract-10-00238.pdf"
+  },
+  {
+    "doi": "10.3390/en12203873",
+    "title": "Modelling and Analysis of Energy Harvesting in Internet of Things (IoT): Characterization of a Thermal Energy Harvesting Circuit for IoT based Applications with LTC3108",
+    "authors": [
+      "Syeda Adila Afghan",
+      "Husi Géza"
+    ],
+    "year": 2019,
+    "venue": "Energies",
+    "path": "42_Modelling and Analysis of Energy Harvesting in Internet of Things (IoT)_ Characterization of a Thermal En.pdf"
+  },
+  {
+    "doi": "10.3390/s26123869",
+    "title": "Physics-Informed Neural Network with Residual Correction Architecture for Hybrid Feedforward–Feedback Temperature Control of DFB Semiconductor Lasers",
+    "authors": [
+      "Yin, Xiongfei",
+      "Sun, Sicheng"
+    ],
+    "year": 2026,
+    "venue": "Sensors (Basel, Switzerland)",
+    "path": "42_sensors-26-03869.pdf"
+  },
+  {
+    "doi": "10.3390/app14198717",
+    "title": "Promising Approaches for Heat Utilization in Agricultural Machinery Engines",
+    "authors": [
+      "Antonina Kalinichenko",
+      "Vasyl Hruban",
+      "Dmytro Marchenko"
+    ],
+    "year": 2024,
+    "venue": "Applied Sciences",
+    "path": "43_Promising Approaches for Heat Utilization in Agricultural Machinery Engines.pdf"
+  },
+  {
+    "doi": "10.3390/en19040878",
+    "title": "The Use of PINN in Modeling of Thermoelectric Modules",
+    "authors": [
+      "Roman Kluger",
+      "Ryszard Buchalik",
+      "Iwona Nowak"
+    ],
+    "year": 2026,
+    "venue": "Energies",
+    "path": "43_energies-19-00878.pdf"
+  },
+  {
+    "doi": "10.48550/arXiv.1403.3836",
+    "title": "Thermoelectric Devices: Cooling and Power Generation",
+    "authors": [
+      "Yehea Ismail",
+      "Ahmed Al-Askalany"
+    ],
+    "year": null,
+    "venue": "arXiv preprint",
+    "path": "44_arXiv-1403.3836.pdf"
+  },
+  {
+    "doi": "10.3390/nano11030690",
+    "title": "Luminescence from Droplet-Etched GaAs Quantum Dots at and Close to Room Temperature",
+    "authors": [
+      "Leonardo Ranasinghe",
+      "Christian Heyn",
+      "Kristian Deneke",
+      "Michael Zocher",
+      "Roman Korneev",
+      "Wolfgang Hansen"
+    ],
+    "year": 2021,
+    "venue": "Nanomaterials",
+    "path": "45_Luminescence from Droplet-Etched GaAs Quantum Dots at and Close to Room Temperature.pdf"
+  },
+  {
+    "doi": "10.1038/ncomms10302",
+    "title": "Superlattice-based thin-film thermoelectric modules with high cooling fluxes",
+    "authors": [
+      "Gary Bulman",
+      "Phil Barletta",
+      "Jay Lewis",
+      "Nicholas Baldasaro",
+      "Michael Manno",
+      "Avram Bar-Cohen",
+      "Bao Yang"
+    ],
+    "year": 2016,
+    "venue": "Nature Communications",
+    "path": "45_ncomms10302.pdf"
+  },
+  {
+    "doi": "10.3390/e25111540",
+    "title": "A Model for Material Metrics in Thermoelectric Thomson Coolers",
+    "authors": [
+      "Mona Zebarjadi",
+      "Omid Akbari"
+    ],
+    "year": 2023,
+    "venue": "Entropy",
+    "path": "46_A Model for Material Metrics in Thermoelectric Thomson Coolers.pdf"
+  },
+  {
+    "doi": "10.1038/srep24123",
+    "title": "Modelling of segmented high-performance thermoelectric generators with effects of thermal radiation, electrical and thermal contact resistances",
+    "authors": [
+      "Zhongliang Ouyang",
+      "Dawen Li"
+    ],
+    "year": 2016,
+    "venue": "Scientific Reports",
+    "path": "46_srep24123.pdf"
+  },
+  {
+    "doi": "10.3390/en14133768",
+    "title": "An Investigation of Thermoelectric Generators Used as Energy Harvesters in a Water Consumption Meter Application",
+    "authors": [
+      "Zdenek Machacek",
+      "Wojciech Walendziuk",
+      "Vojtech Sotola",
+      "Zdenek Slanina",
+      "Radek Petras",
+      "Miroslav Schneider",
+      "Zdenek Masny",
+      "Adam Idzkowski",
+      "Jiri Koziorek"
+    ],
+    "year": 2021,
+    "venue": "Energies",
+    "path": "47_An Investigation of Thermoelectric Generators Used as Energy Harvesters in a Water Consumption Meter Appl.pdf"
+  },
+  {
+    "doi": "10.1002/advs.201700006",
+    "title": "High Efficiency Thin Film Superlattice Thermoelectric Cooler Modules Enabled by Low Resistivity Contacts.",
+    "authors": [],
+    "year": null,
+    "venue": "",
+    "path": "47_arXiv-1711.08481.pdf"
+  },
+  {
+    "doi": "10.3390/en17030599",
+    "title": "The Impact of Asymmetric Contact Resistance on the Operating Parameters of Thermoelectric Systems",
+    "authors": [
+      "Ryszard Buchalik",
+      "Grzegorz Nowak",
+      "Iwona Nowak"
+    ],
+    "year": 2024,
+    "venue": "Energies",
+    "path": "48_The Impact of Asymmetric Contact Resistance on the Operating Parameters of Thermoelectric Systems.pdf"
+  },
+  {
+    "doi": "10.48550/arXiv.1809.02504",
+    "title": "ESTIMATION OF THE ELECTRICAL AND THERMAL CONTACT RSISTANCES AND ",
+    "authors": [
+      "GG"
+    ],
+    "year": null,
+    "venue": "arXiv preprint",
+    "path": "48_arXiv-1809.02504.pdf"
+  },
+  {
+    "doi": "10.3390/met10020291",
+    "title": "The Elusive Thomson Effect in Thermoelectric Devices. Experimental Investigation from 363 K to 213 K on Various Peltier Modules",
+    "authors": [
+      "Giaretto, Valter",
+      "Elena Campagnoli"
+    ],
+    "year": 2020,
+    "venue": "Metals",
+    "path": "49_The Elusive Thomson Effect in Thermoelectric Devices. Experimental Investigation from 363 K to 213 K on V.pdf"
+  },
+  {
+    "doi": "10.48550/arXiv.1801.05175",
+    "title": "Maximization of the thermoelectric cooling of graded Peltier by analytical heat equation resolution",
+    "authors": [
+      "E. Thiébaut",
+      "C. Goupil",
+      "F. Pesty",
+      "Y. D'Angelo",
+      "G. Guegan",
+      "P. Lecoeur"
+    ],
+    "year": null,
+    "venue": "arXiv preprint",
+    "path": "49_arXiv-1801.05175.pdf"
+  },
+  {
+    "doi": "10.3390/app13127274",
+    "title": "Numerical Simulation on Thermoelectric Cooling of Core Power Devices in Air Conditioning",
+    "authors": [
+      "Jiang Wang",
+      "Kai Hu",
+      "Kechen Tang",
+      "Yubing Xing",
+      "Yani Xiao",
+      "Yutian Liu",
+      "Yonggao Yan",
+      "Dongwang Yang"
+    ],
+    "year": 2023,
+    "venue": "Applied Sciences",
+    "path": "50_Numerical Simulation on Thermoelectric Cooling of Core Power Devices in Air Conditioning.pdf"
+  },
+  {
+    "doi": "10.1038/s41598-026-35137-w",
+    "title": "Water recovery of drying waste using a thermoelectric cooler and PV/T assisted",
+    "authors": [
+      "Amr Elbrashy",
+      "Magda K. El-fakharany",
+      "Maher Abou Al-Sood",
+      "F. Sh. Abou-Taleb",
+      "Fadl A. Essa"
+    ],
+    "year": 2026,
+    "venue": "Scientific Reports",
+    "path": "50_Water recovery of drying waste using a thermoelectric cooler and PV_T assisted.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-022-28798-4",
+    "title": "Maximizing the performance of n-type Mg3Bi2 based materials for room-temperature power generation and thermoelectric cooling",
+    "authors": [
+      "Zihang Liu",
+      "Weihong Gao",
+      "Hironori Oshima",
+      "Kazuo Nagase",
+      "Chul-Ho Lee",
+      "Takao Mori"
+    ],
+    "year": 2022,
+    "venue": "Nature Communications",
+    "path": "51_s41467-022-28798-4.pdf"
+  },
+  {
+    "doi": "10.3390/s22051881",
+    "title": "Characterization System for Heat-Energy to Electric-Energy Conversion from Concrete by Means of a Thermoelectric Module",
+    "authors": [
+      "Luis C. Félix-Herrán",
+      "Alejandro García-Juárez",
+      "Luis Arturo García-Delgado",
+      "Pablo Said González-Aguayo",
+      "Jorge de-J. Lozoya-Santos",
+      "José R. Noriega"
+    ],
+    "year": 2022,
+    "venue": "Sensors",
+    "path": "52_Characterization System for Heat-Energy to Electric-Energy Conversion from Concrete by Means of a Thermoe.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-023-40648-5",
+    "title": "Improved figure of merit (z) at low temperatures for superior thermoelectric cooling in Mg3(Bi,Sb)2",
+    "authors": [
+      "Nan Chen",
+      "Hangtian Zhu",
+      "Guodong Li",
+      "Zhen Fan",
+      "Xiaofan Zhang",
+      "Jiawei Yang",
+      "Tianbo Lu",
+      "Qiulin Liu",
+      "Xiaowei Wu",
+      "Yuan Yao",
+      "Youguo Shi",
+      "Huaizhou Zhao"
+    ],
+    "year": 2023,
+    "venue": "Nature Communications",
+    "path": "52_s41467-023-40648-5.pdf"
+  },
+  {
+    "doi": "10.3390/en16248109",
+    "title": "The Transient Cooling Performance of a Compact Thin-Film Thermoelectric Cooler with Horizontal Structure",
+    "authors": [
+      "Tingzhen Ming",
+      "Lijun Liu",
+      "Peng Zhang",
+      "Yonggao Yan",
+      "Yongjia Wu"
+    ],
+    "year": 2023,
+    "venue": "Energies",
+    "path": "53_energies-16-08109.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-024-54017-3",
+    "title": "Oriented Bi2Te3-based films enabled high performance planar thermoelectric cooling device for hot spot elimination",
+    "authors": [
+      "Guoying Dong",
+      "Jianghe Feng",
+      "Guojuan Qiu",
+      "Yuxuan Yang",
+      "Qiyong Chen",
+      "Yang Xiong",
+      "Haijun Wu",
+      "Yifeng Ling",
+      "Lili Xi",
+      "Chen Long",
+      "Jibao Lu",
+      "Yixin Qiao",
+      "Guijuan Li",
+      "Juan Li",
+      "Ruiheng Liu",
+      "Rong Sun"
+    ],
+    "year": 2024,
+    "venue": "Nature Communications",
+    "path": "55_s41467-024-54017-3.pdf"
+  },
+  {
+    "doi": "10.1063/5.0206287",
+    "title": "Machine learning-assisted thermoelectric cooling for on-demand multi-hotspot thermal management",
+    "authors": [
+      "Jiajian Luo",
+      "Jaeho Lee"
+    ],
+    "year": 2024,
+    "venue": "Journal of Applied Physics",
+    "path": "56_arXiv-2404.13441.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-025-59698-y",
+    "title": "Nano-engineered thin-film thermoelectric materials enable practical solid-state refrigeration",
+    "authors": [
+      "Jake Ballard",
+      "Matthew Hubbard",
+      "Sung-Jin Jung",
+      "Vanessa Rojas",
+      "Richard Ung",
+      "Junwoo Suh",
+      "MinSoo Kim",
+      "Joonhyun Lee",
+      "Jonathan M. Pierce",
+      "Rama Venkatasubramanian"
+    ],
+    "year": 2025,
+    "venue": "Nature Communications",
+    "path": "57_s41467-025-59698-y.pdf"
+  },
+  {
+    "doi": "10.3390/mi16060648",
+    "title": "Validation of Experimental Cooling Performance of Multi-Stage Thin-Film Thermoelectric Devices via Numerical Simulation",
+    "authors": [
+      "Yu Ning",
+      "Longzhou Li",
+      "Ping Wei",
+      "Shaoqiu Ke",
+      "Wanting Zhu",
+      "Xiaolei Nie",
+      "Danqi He",
+      "Mingrui Liu",
+      "Wenyu Zhao"
+    ],
+    "year": 2025,
+    "venue": "Micromachines",
+    "path": "58_micromachines-16-00648.pdf"
+  },
+  {
+    "doi": "10.1038/s44435-025-00002-1",
+    "title": "High performance wearable thermoelectric coolers with 3D structural thermoelectric pillars",
+    "authors": [
+      "Jingxuan Wang",
+      "Hongkun Li",
+      "Sunmi Shin"
+    ],
+    "year": 2026,
+    "venue": "npj Thermal Science and Engineering",
+    "path": "59_s44435-025-00002-1.pdf"
+  },
+  {
+    "doi": "10.1126/sciadv.aaw0536",
+    "title": "Wearable thermoelectrics for personalized thermoregulation",
+    "authors": [
+      "Sahngki Hong",
+      "Yue Gu",
+      "Joon Kyo Seo",
+      "Joseph Wang",
+      "Ping Liu",
+      "Y. Shirley Meng",
+      "Sheng Xu",
+      "Renkun Chen"
+    ],
+    "year": 2019,
+    "venue": "Science Advances",
+    "path": "61_PMC6524982.pdf"
+  },
+  {
+    "doi": "10.3390/su132212522",
+    "title": "Sustainable Self-Cooling Framework for Cooling Computer Chip Hotspots Using Thermoelectric Modules",
+    "authors": [
+      "Hamed H. Saber",
+      "Ali E. Hajiah",
+      "Saleh A. Alshehri"
+    ],
+    "year": 2021,
+    "venue": "Sustainability",
+    "path": "64_sustainability-13-12522.pdf"
+  },
+  {
+    "doi": "10.3390/en14061620",
+    "title": "Improvement of Criteria for Assessing the Energy Efficiency of Thermoelectric Refrigerators Used in Supply Chains",
+    "authors": [
+      "Sergiy Filin",
+      "Ludmiła Filina-Dawidowicz"
+    ],
+    "year": 2021,
+    "venue": "Energies",
+    "path": "65_energies-14-01620.pdf"
+  },
+  {
+    "doi": "10.3390/ma15031115",
+    "title": "Analysis of Efficiency of Thermoelectric Personal Cooling System Based on Utility Tests",
+    "authors": [
+      "Anna Dąbrowska",
+      "Monika Kobus",
+      "Łukasz Starzak",
+      "Bartosz Pękosławski"
+    ],
+    "year": 2022,
+    "venue": "Materials",
+    "path": "66_materials-15-01115.pdf"
+  },
+  {
+    "doi": "10.3390/polym14245522",
+    "title": "Personal Cooling Garments: A Review",
+    "authors": [
+      "Song Ren",
+      "Mengyao Han",
+      "Jian Fang"
+    ],
+    "year": 2022,
+    "venue": "Polymers",
+    "path": "67_polymers-14-05522.pdf"
+  },
+  {
+    "doi": "10.1038/s41528-025-00429-0",
+    "title": "Microfluidic-enabled three-dimensional stretchable thermoelectrics",
+    "authors": [
+      "Zhenlong Huang",
+      "Tao Chen",
+      "Yan Jiang",
+      "Rui Zhou",
+      "Yizhuo Wang",
+      "Junjie Ji",
+      "Hongwei Xie",
+      "Taisong Pan",
+      "Dongpeng Fan",
+      "Linlong Liang",
+      "Longpeng Yang",
+      "Binbin Jiang",
+      "Peng Li",
+      "Min Gao",
+      "Jia Zhu",
+      "Guang Yao",
+      "Dongfeng Xue",
+      "Yuan Lin"
+    ],
+    "year": 2025,
+    "venue": "npj Flexible Electronics",
+    "path": "68_s41528-025-00429-0.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-025-59602-8",
+    "title": "Modular assembly of self-healing flexible thermoelectric devices with integrated cooling and heating capabilities",
+    "authors": [
+      "Xiaolong Sun",
+      "Yue Hou",
+      "Zheng Zhu",
+      "Bo Zhu",
+      "Qianfeng Ding",
+      "Wenjie Zhou",
+      "Sijia Yan",
+      "Zhanglong Xia",
+      "Yong Liu",
+      "Youmin Hou",
+      "Yuan Yu",
+      "Ziyu Wang"
+    ],
+    "year": 2025,
+    "venue": "Nature Communications",
+    "path": "69_s41467-025-59602-8.pdf"
+  },
+  {
+    "doi": "10.3390/en18102426",
+    "title": "Enhanced Performance of a Thermoelectric Module with Heat Pipes for Refrigeration Applications",
+    "authors": [
+      "Majed A. Alrefae"
+    ],
+    "year": 2025,
+    "venue": "Energies",
+    "path": "70_energies-18-02426.pdf"
+  },
+  {
+    "doi": "10.3390/photonics12030241",
+    "title": "Temperature Control Performance Improvement of High-Power Laser Diode with Assistance of Machine Learning",
+    "authors": [
+      "Yaohui He",
+      "Xiaoli Jin",
+      "Pixian Jin",
+      "Jing Su",
+      "Fang Li",
+      "Huadong Lu"
+    ],
+    "year": 2025,
+    "venue": "Photonics",
+    "path": "71_photonics-12-00241.pdf"
+  },
+  {
+    "doi": "10.1038/s41598-019-56672-9",
+    "title": "An Experimental Study on the Performance Evaluation and Thermodynamic Modeling of a Thermoelectric Cooler Combined with Two Heatsinks",
+    "authors": [
+      "Marzieh Siahmargoi",
+      "Nader Rahbar",
+      "Hadi Kargarsharifabad",
+      "Seyed Esmaeil Sadati",
+      "Amin Asadi"
+    ],
+    "year": 2019,
+    "venue": "Scientific Reports",
+    "path": "Marzieh_Siahmargoi2019_An_Experimental_Study_on_the_Performance_Evaluatio.pdf"
+  },
+  {
+    "doi": "10.1109/tcad.2024.3438689",
     "title": "Neural Network-Based Control of Forced-Convection and Thermoelectric Coolers",
-    "authors": ["Mahsa Akhsham", "Mohammad Javad Dousti", "Saeed Safari"],
+    "authors": [
+      "Mahsa Akhsham",
+      "Mohammad Javad Dousti",
+      "Saeed Safari"
+    ],
     "year": 2025,
     "venue": "IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems",
     "path": "Neural_Network-Based_Control_of_Forced-Convection_and_Thermoelectric_Coolers.pdf"
@@ -49,9 +1545,50 @@
   {
     "doi": "10.1016/j.heliyon.2024.e24063",
     "title": "Maximizing cooling/heating performance of thermoelectric modules across variable thermal loads via optimal control based on COP curves",
-    "authors": ["Nataporn Korprasertsak", "Thananchai Leephakpreeda"],
+    "authors": [
+      "Nataporn Korprasertsak",
+      "Thananchai Leephakpreeda"
+    ],
     "year": 2024,
     "venue": "Heliyon",
     "path": "PIIS240584402400094X.pdf"
+  },
+  {
+    "doi": "10.3390/e21030226",
+    "title": "Peltier Supercooling in Transient Thermoelectrics: Spatial Temperature Profile and Characteristic Cooling Length",
+    "authors": [
+      "Pablo Eduardo Ruiz-Ortega",
+      "Miguel Angel Olivares-Robles"
+    ],
+    "year": 2019,
+    "venue": "Entropy",
+    "path": "Pablo_Ruiz_Ortega2019_Peltier_Supercooling_in_Transient_Thermoelectrics_.pdf"
+  },
+  {
+    "doi": "10.1038/s41467-019-09707-8",
+    "title": "Ultra-high performance wearable thermoelectric coolers with less materials",
+    "authors": [
+      "Ravi Anant Kishore",
+      "Amin Nozariasbmarz",
+      "Bed Poudel",
+      "Mohan Sanghadasa",
+      "Shashank Priya"
+    ],
+    "year": 2019,
+    "venue": "Nature Communications",
+    "path": "Ravi_Anant_Kishore2019_Ultra_high_performance_wearable_thermoelectric_coo.pdf"
+  },
+  {
+    "doi": "10.1038/s43246-025-00837-9",
+    "title": "High-performance integrated thermoelectric coolers for electronics cooling",
+    "authors": [
+      "Wusheng Fan",
+      "Zan Wu",
+      "Sihui Hong",
+      "Kuang Sheng"
+    ],
+    "year": 2025,
+    "venue": "Communications Materials",
+    "path": "Wusheng_Fan2025_High_performance_integrated_thermoelectric_coolers.pdf"
   }
 ]
