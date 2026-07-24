@@ -83,7 +83,7 @@ def test_parse_and_validate_rejects_unknown_evidence_label():
                 {
                     "kind": "parameter_range",
                     "field": "x",
-                    "value": {},
+                    "value": {"typical": 42},
                     "evidence": ["E99"],
                 }
             ]
@@ -96,6 +96,35 @@ def test_parse_and_validate_rejects_unknown_evidence_label():
 def test_parse_and_validate_rejects_malformed_json():
     with pytest.raises(json.JSONDecodeError):
         _parse_and_validate("not json at all", _evidence_table())
+
+
+def test_parameter_range_without_numeric_value_is_rejected():
+    """Found via manual review: the LLM was dumping non-numeric "X affects Y"
+    statements into parameter_range instead of scaling_relationship, and
+    the resulting priors had empty {"summary": "..."} value with nothing a
+    downstream consumer could actually use as a range. Enforce it in the
+    model, not just the prompt."""
+    with pytest.raises(ValidationError, match="requires at least one numeric value"):
+        ExtractedPriorDraft(
+            kind="parameter_range", field="driving_voltage", value={"summary": "affects COP"}, evidence=["E1"]
+        )
+
+
+def test_parameter_range_with_numeric_value_is_accepted():
+    draft = ExtractedPriorDraft(
+        kind="parameter_range", field="driving_voltage", value={"typical": 2.3, "unit": "V"}, evidence=["E1"]
+    )
+    assert draft.value["typical"] == 2.3
+
+
+def test_non_parameter_range_kinds_do_not_require_numeric_value():
+    draft = ExtractedPriorDraft(
+        kind="scaling_relationship",
+        field="voltage_vs_cop",
+        value={"summary": "COP increases with voltage", "direction": "positive"},
+        evidence=["E1"],
+    )
+    assert draft.kind == "scaling_relationship"
 
 
 def test_parse_and_validate_rejects_invalid_kind_value():
@@ -149,7 +178,9 @@ def test_confidence_increases_with_more_supporting_evidence():
     }
 
     def _confidence_for(evidence: list[str]) -> float:
-        draft = ExtractedPriorDraft(kind="parameter_range", field="x", value={}, evidence=evidence)
+        # kind="caution" here since this test is about the confidence
+        # formula, not the parameter_range-must-be-numeric rule.
+        draft = ExtractedPriorDraft(kind="caution", field="x", value={}, evidence=evidence)
         return _to_prior(draft, table).confidence
 
     conf_1 = _confidence_for(["E1"])

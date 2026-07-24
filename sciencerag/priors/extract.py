@@ -19,7 +19,7 @@ import json
 from typing import Any, Literal
 
 import litellm
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from sciencerag.common.config import get_llm_model
 from sciencerag.priors.models import Prior, SourcePaper
@@ -39,20 +39,24 @@ You will be given a research question and a list of numbered evidence snippets, 
 
 For each prior, output a JSON object with exactly these fields:
 - "kind": one of "parameter_range", "material_property", "scaling_relationship", "candidate_config", "caution"
-  - parameter_range: a specific numeric operating parameter, or its optimal/typical value or range
-  - material_property: an intrinsic material property (Seebeck coefficient, resistivity, thermal conductivity, etc.)
-  - scaling_relationship: how one quantity varies as a function of another (proportional, convex, correlated, etc.)
+  - parameter_range: a SPECIFIC NUMBER — an optimal/typical value or a min/max range for an operating parameter. If you cannot put a number in `value`, it is NOT parameter_range.
+  - material_property: an intrinsic material property (Seebeck coefficient, resistivity, thermal conductivity, etc.), ideally with its numeric value
+  - scaling_relationship: how one quantity varies as a function of another, WITHOUT necessarily citing a specific number — e.g. "X increases/decreases/affects Y", "COP is a convex function of voltage". Any "X affects/influences/increases/reduces Y" statement that has no specific number belongs here, not in parameter_range.
   - candidate_config: a specific design/configuration choice or method (geometry, driving method, structure)
   - caution: a limitation, caveat, or warning about applicability
 - "field": a short snake_case slug naming what this prior is about (e.g. "seebeck_coefficient", "driving_voltage")
-- "value": a JSON object holding the actual content — use structured keys where possible (e.g. {"min": 20, "max": 200, "unit": "um"}), or {"summary": "..."} if unstructured
+- "value": a JSON object holding the actual content.
+  - For parameter_range: MUST include at least one numeric key, e.g. {"min": 20, "max": 200, "unit": "um"} or {"typical": 2.3, "unit": "V"}.
+  - For scaling_relationship: include a "direction" key with one of "positive", "negative", "convex", "unknown", plus {"summary": "..."} explaining the relationship.
+  - For other kinds: use structured keys where possible, else {"summary": "..."}.
 - "notes": optional short clarifying note, or null
 - "evidence": a list of evidence labels (e.g. ["E1", "E3"]) that support this prior — list ALL evidence snippets that support it, not just one
 
 Rules:
-- Only extract priors that are actually stated in the evidence. Do not use outside knowledge.
+- Only extract priors that are actually and explicitly stated in the evidence. Do not use outside knowledge, and do not add your own inferred direction, magnitude, or recommendation beyond what the evidence text literally says — if the evidence says a factor merely "influences" or "is relevant to" something without saying how, report only that, don't guess "increases" or "should be minimized".
 - Only reference evidence labels that appear in the input. Never invent a label.
 - Do not split one finding into near-duplicate priors across different evidence — merge them and cite all supporting evidence together instead.
+- Some evidence snippets may be a summary of a paper's reference list or acknowledgments rather than its own findings (phrases like "the references suggest...", "Reference N examines..."). Treat these as weak, secondary support only — never as the sole evidence for a prior.
 - Output ONLY a JSON object of the form {"priors": [...]}. No explanation, no markdown fences.
 """
 
@@ -69,6 +73,27 @@ class ExtractedPriorDraft(BaseModel):
     value: dict[str, Any]
     notes: str | None = None
     evidence: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _parameter_range_requires_a_number(self) -> "ExtractedPriorDraft":
+        """Don't trust the prompt alone to keep parameter_range numeric —
+        enforce it in code so a violation is a validation failure (retried),
+        not a silently-accepted empty-hearted prior. Found via manual review:
+        the LLM was dumping non-numeric "X affects Y" statements into
+        parameter_range instead of scaling_relationship."""
+        if self.kind == "parameter_range":
+            has_numeric = any(
+                isinstance(v, int | float) and not isinstance(v, bool)
+                for v in self.value.values()
+            )
+            if not has_numeric:
+                raise ValueError(
+                    f"kind='parameter_range' (field={self.field!r}) requires at least one "
+                    "numeric value (e.g. min/max/typical) in `value`; if this is a "
+                    "non-numeric 'X affects Y' statement, use kind='scaling_relationship' "
+                    "instead, with a 'direction' key in value"
+                )
+        return self
 
 
 class ExtractionOutput(BaseModel):

@@ -31,10 +31,15 @@ def test_build_gaps_empty_when_no_weak_priors():
 
 
 def test_build_gaps_notes_excluded_count_and_papers():
+    """The gaps message describes low-confidence PRIORS, not raw evidence
+    contexts — a prior may already merge multiple evidence snippets (see
+    extract.py), so "N evidence contexts" would misdescribe what actually
+    got excluded. Regression test for that exact wording bug."""
     weak = [_prior(0.2, notes="Paper A"), _prior(0.3, notes="Paper B")]
     gaps = _build_gaps(weak, total_hits=5)
     assert len(gaps) == 1
-    assert "2 evidence context" in gaps[0]
+    assert "2 low-confidence prior" in gaps[0]
+    assert "evidence context" not in gaps[0]
     assert "Paper A" in gaps[0]
     assert "Paper B" in gaps[0]
 

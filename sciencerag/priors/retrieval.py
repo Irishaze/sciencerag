@@ -49,16 +49,31 @@ def run_query(query: str) -> AnswerResponse:
     return ask(query, settings=build_settings())
 
 
+# Below this, evidence never reaches the LLM at all — found via manual
+# review that PaperQA2's summary_llm sometimes hallucinates a "finding" from
+# a paper's reference-list titles rather than its body text, and those
+# summaries can still score a moderate relevance (e.g. 0.60) that survives
+# the post-extraction CONFIDENCE_THRESHOLD filter. Cutting evidence off
+# earlier, before it can seed any prior, is more reliable than trying to
+# catch the resulting hallucination after the fact.
+MIN_EVIDENCE_RELEVANCE = 0.7
+
+
 def _build_evidence_table(contexts) -> dict[str, EvidenceItem]:
     table = {}
-    for i, context in enumerate(contexts):
+    i = 0
+    for context in contexts:
+        relevance = max(0.0, min(1.0, context.score / 10))
+        if relevance < MIN_EVIDENCE_RELEVANCE:
+            continue
         doc = context.text.doc
-        table[f"E{i + 1}"] = EvidenceItem(
+        i += 1
+        table[f"E{i}"] = EvidenceItem(
             text=context.context,
             doi=getattr(doc, "doi", None),
             span=context.text.name,
             notes=getattr(doc, "title", None),
-            relevance=max(0.0, min(1.0, context.score / 10)),
+            relevance=relevance,
         )
     return table
 
@@ -69,8 +84,11 @@ CONFIDENCE_THRESHOLD = 0.5
 def _split_by_confidence(priors: list[Prior]) -> tuple[list[Prior], list[Prior]]:
     """Split into (strong, weak) by CONFIDENCE_THRESHOLD.
 
-    Weak evidence (PaperQA2 itself scored it low-relevance) shouldn't be
-    presented as a confident "prior" — it's a coverage gap, not knowledge.
+    NOTE: `priors` here are already LLM-merged/extracted Prior objects, each
+    possibly backed by multiple evidence contexts (see extract.py's
+    confidence formula) — confidence is a derived score, not a single
+    evidence context's raw relevance. A weak prior means "this specific
+    finding is weakly supported", not "this evidence snippet was irrelevant".
     """
     strong = [p for p in priors if p.confidence >= CONFIDENCE_THRESHOLD]
     weak = [p for p in priors if p.confidence < CONFIDENCE_THRESHOLD]
@@ -85,8 +103,8 @@ def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
     papers = sorted({p.notes for p in weak_priors if p.notes})
     papers_str = "; ".join(papers) if papers else "unknown source"
     return [
-        f"{len(weak_priors)} evidence context(s) had low relevance "
-        f"(confidence < {CONFIDENCE_THRESHOLD}) and were excluded from priors; "
+        f"{len(weak_priors)} low-confidence prior(s) "
+        f"(confidence < {CONFIDENCE_THRESHOLD}) were excluded from priors; "
         f"papers: {papers_str}"
     ]
 
@@ -111,6 +129,20 @@ def _build_priors_response(query: str, trace: PipelineTrace | None = None) -> Pr
         )
 
     evidence_table = _build_evidence_table(contexts)
+
+    if not evidence_table:
+        return PriorsResponse(
+            priors=[],
+            coverage=Coverage(
+                internal_hits=len(contexts),
+                external_hits=0,
+                gaps=[
+                    f"{len(contexts)} evidence context(s) retrieved, but none met the "
+                    f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
+                ],
+            ),
+            trace_id=new_trace_id(),
+        )
 
     try:
         all_priors = extract_priors(query, evidence_table, trace=trace)

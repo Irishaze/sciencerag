@@ -25,5 +25,8 @@ logs/
 # untrack committed files).
 corpus/papers/*.pdf
 
+# Exploratory probe script output (scratch, not committed)
+scripts/_*.json
+
 # OS
 .DS_Store
