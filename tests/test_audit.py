@@ -42,7 +42,7 @@ def test_log_audit_entry_appends_one_line_per_call(tmp_path, monkeypatch):
 def test_priors_route_writes_audit_log_entry(tmp_path, monkeypatch):
     monkeypatch.setattr(audit, "AUDIT_LOG_PATH", tmp_path / "audit.jsonl")
 
-    def fake_build_priors_response(query: str) -> PriorsResponse:
+    def fake_build_priors_response(query: str, allow_external: bool = False) -> PriorsResponse:
         return PriorsResponse(
             priors=[
                 Prior(

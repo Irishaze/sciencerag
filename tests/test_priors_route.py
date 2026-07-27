@@ -24,7 +24,7 @@ RESPONSE_SCHEMA = json.loads(SCHEMA_PATH.read_text())["PriorsResponse"]
 client = TestClient(app)
 
 
-def _fake_priors_response(query: str) -> PriorsResponse:
+def _fake_priors_response(query: str, allow_external: bool = False) -> PriorsResponse:
     return PriorsResponse(
         priors=[
             Prior(
@@ -61,12 +61,32 @@ def test_priors_route_rejects_missing_query():
     assert resp.status_code == 422
 
 
+def test_priors_route_threads_allow_external_to_retrieval(monkeypatch):
+    """M1-15: allow_external must actually reach retrieval.build_priors_response
+    (not get silently dropped by the router) so it can be turned into the
+    request-acknowledgment gap note — see test_allow_external.py."""
+    received = {}
+
+    def _spy(query: str, allow_external: bool = False) -> PriorsResponse:
+        received["allow_external"] = allow_external
+        return _fake_priors_response(query, allow_external)
+
+    monkeypatch.setattr(priors_router.retrieval, "build_priors_response", _spy)
+
+    resp = client.post(
+        "/sciencerag/priors",
+        json={"query": "x", "allow_external": True},
+    )
+    assert resp.status_code == 200
+    assert received["allow_external"] is True
+
+
 def test_priors_route_returns_structured_error_on_unexpected_exception(monkeypatch):
     """If retrieval blows up (network error, litellm timeout, whatever),
     the route must still return our own typed ErrorResponse JSON — never a
     bare FastAPI default 500 (spec §8: always typed, schema-valid errors)."""
 
-    def _boom(query: str) -> PriorsResponse:
+    def _boom(query: str, allow_external: bool = False) -> PriorsResponse:
         raise RuntimeError("simulated PaperQA2/LLM failure")
 
     monkeypatch.setattr(priors_router.retrieval, "build_priors_response", _boom)

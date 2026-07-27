@@ -27,6 +27,7 @@ corpus/papers/*.pdf
 
 # Exploratory probe script output (scratch, not committed)
 scripts/_*.json
+data/
 
 # OS
 .DS_Store

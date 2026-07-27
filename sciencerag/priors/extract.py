@@ -140,6 +140,17 @@ class PipelineTrace(BaseModel):
     user_prompt: str = ""
     attempts: list[PipelineAttempt] = Field(default_factory=list)
     confidence_breakdown: list[ConfidenceBreakdown] = Field(default_factory=list)
+    # Every PaperQA2 context, converted to an EvidenceItem (text/doi/span/
+    # relevance) BEFORE MIN_EVIDENCE_RELEVANCE filtering drops any of them
+    # (see retrieval.py's _build_evidence_table) — unlike `evidence` above,
+    # which only holds the survivors. Needed to see what the threshold
+    # discards, and with what content (not just a bare score).
+    all_evidence: list[EvidenceItem] = Field(default_factory=list)
+    # Every extracted Prior BEFORE CONFIDENCE_THRESHOLD splits them into
+    # strong/weak (see retrieval.py's _split_by_confidence) — full kind/
+    # field/value/notes/sources, not just the numbers in confidence_breakdown.
+    # Needed to judge whether a low-confidence prior was correctly discarded.
+    all_priors: list[Prior] = Field(default_factory=list)
 
 
 def _build_evidence_block(evidence_table: dict[str, EvidenceItem]) -> str:

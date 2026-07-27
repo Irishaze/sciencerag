@@ -1,0 +1,66 @@
+[
+  {
+    "id": "parameter_range_leg_length",
+    "query": "What is a typical leg length or leg height used in thermoelectric cooler design?",
+    "category": "parameter_range",
+    "notes": "Captured 2026-07 real run: 6 priors incl. parameter_range, 2 distinct DOIs. min_priors set conservatively below the observed count to tolerate normal run-to-run variance.",
+    "min_priors": 3,
+    "must_have_kinds": ["parameter_range"],
+    "must_cite_real_doi": true
+  },
+  {
+    "id": "material_property_zt",
+    "query": "What is the figure of merit ZT for thermoelectric cooling materials?",
+    "category": "material_property",
+    "notes": "Captured 2026-07 real run: 14 priors incl. material_property, 3 distinct DOIs.",
+    "min_priors": 8,
+    "must_have_kinds": ["material_property"],
+    "must_cite_real_doi": true
+  },
+  {
+    "id": "scaling_relationship_fan_speed",
+    "query": "How does blower fan speed relate to COP in thermoelectric cooling systems?",
+    "category": "scaling_relationship",
+    "notes": "Captured 2026-07 real run: 5 priors incl. scaling_relationship, 4 distinct DOIs.",
+    "min_priors": 3,
+    "must_have_kinds": ["scaling_relationship"],
+    "must_cite_real_doi": true
+  },
+  {
+    "id": "candidate_config_heat_sink",
+    "query": "What heat sink designs are used to improve thermoelectric cooler performance?",
+    "category": "candidate_config",
+    "notes": "Captured 2026-07 real run: 13 priors incl. candidate_config, 3 distinct DOIs.",
+    "min_priors": 7,
+    "must_have_kinds": ["candidate_config"],
+    "must_cite_real_doi": true
+  },
+  {
+    "id": "caution_max_cop_limits",
+    "query": "What limits the maximum achievable COP in thermoelectric cooling?",
+    "category": "caution",
+    "notes": "Captured 2026-07 real run: 16 priors spanning all 5 kinds, 4 distinct DOIs. Good broad-coverage fixture.",
+    "min_priors": 9,
+    "must_have_kinds": ["caution"],
+    "must_cite_real_doi": true
+  },
+  {
+    "id": "application_battery_thermal_management",
+    "query": "How are thermoelectric coolers used in battery thermal management systems?",
+    "category": "application",
+    "notes": "Captured 2026-07 real run: 21 priors, 3 distinct DOIs. Real-world application query, not a targeted-per-kind one.",
+    "min_priors": 10,
+    "must_have_kinds": ["candidate_config"],
+    "must_cite_real_doi": true
+  },
+  {
+    "id": "edge_zero_coverage_heat_sink_interface",
+    "query": "What is the typical thermal conductance of a thermoelectric cooler heat sink interface?",
+    "category": "edge",
+    "notes": "Verified genuine zero-coverage query (confirmed twice: original 100-query probe and the 42-query rerun both returned 0 priors with 20 evidence contexts, all below MIN_EVIDENCE_RELEVANCE). Asserts the pipeline degrades gracefully — empty-but-valid response with an explanatory gap, not an error.",
+    "min_priors": 0,
+    "must_have_kinds": [],
+    "must_cite_real_doi": false,
+    "allow_zero_priors": true
+  }
+]

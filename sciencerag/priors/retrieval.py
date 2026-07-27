@@ -20,6 +20,7 @@ from sciencerag.priors.extract import (
     PipelineTrace,
     extract_priors,
 )
+from sciencerag.priors.kg import query_kg
 from sciencerag.priors.models import Coverage, Prior, PriorsResponse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -59,22 +60,27 @@ def run_query(query: str) -> AnswerResponse:
 MIN_EVIDENCE_RELEVANCE = 0.7
 
 
-def _build_evidence_table(contexts) -> dict[str, EvidenceItem]:
+def _build_evidence_table(
+    contexts, trace: PipelineTrace | None = None
+) -> dict[str, EvidenceItem]:
     table = {}
     i = 0
     for context in contexts:
         relevance = max(0.0, min(1.0, context.score / 10))
-        if relevance < MIN_EVIDENCE_RELEVANCE:
-            continue
         doc = context.text.doc
-        i += 1
-        table[f"E{i}"] = EvidenceItem(
+        item = EvidenceItem(
             text=context.context,
             doi=getattr(doc, "doi", None),
             span=context.text.name,
             notes=getattr(doc, "title", None),
             relevance=relevance,
         )
+        if trace is not None:
+            trace.all_evidence.append(item)
+        if relevance < MIN_EVIDENCE_RELEVANCE:
+            continue
+        i += 1
+        table[f"E{i}"] = item
     return table
 
 
@@ -114,73 +120,114 @@ def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
     ]
 
 
-def _build_priors_response(query: str, trace: PipelineTrace | None = None) -> PriorsResponse:
+# M1-15 / spec §9 OQ#1 ("外部检索:是否需要?用哪些 API?"): decided as an
+# explicit no-op for M1 — external retrieval (Semantic Scholar/arXiv) is
+# deferred to M6 ("外部检索回退 + 批量证据模式"). `allow_external` is a real,
+# validated request field (not silently dropped), but in M1 it can only ever
+# make the response note that it was requested-but-unavailable — it never
+# changes retrieval behavior or `external_hits` (always 0 until M6).
+def _add_external_note(response: PriorsResponse, allow_external: bool) -> PriorsResponse:
+    if allow_external:
+        response.coverage.gaps.append(
+            "allow_external=true was requested, but external retrieval "
+            "(Semantic Scholar/arXiv) is not implemented until M6 (spec §9 "
+            "OQ#1) — this response is internal-corpus-only"
+        )
+    return response
+
+
+def _build_priors_response(
+    query: str, trace: PipelineTrace | None = None, allow_external: bool = False
+) -> PriorsResponse:
     """Run a real PaperQA2 query, then LLM-extract structured priors from
     the evidence contexts (see extract.py). On extraction failure, return
     an empty-but-valid response with the failure noted in gaps — never a
     half-broken result (spec principle)."""
+    # Query priority per spec §3.2: KG first, literature second. Through
+    # M1-M4 the graph is an empty stub (see kg.py) — this always returns
+    # [], so the fall-through to PaperQA2 below is the only real path for
+    # now. Kept as an explicit call (not dead code) so M2+ only has to
+    # replace query_kg's internals, not restructure this function.
+    query_kg(query)
+
     response = run_query(query)
     contexts = response.session.contexts
 
     if not contexts:
-        return PriorsResponse(
-            priors=[],
-            coverage=Coverage(
-                internal_hits=0,
-                external_hits=0,
-                gaps=["internal corpus returned no relevant evidence for this query"],
+        return _add_external_note(
+            PriorsResponse(
+                priors=[],
+                coverage=Coverage(
+                    internal_hits=0,
+                    external_hits=0,
+                    gaps=["internal corpus returned no relevant evidence for this query"],
+                ),
+                trace_id=new_trace_id(),
             ),
-            trace_id=new_trace_id(),
+            allow_external,
         )
 
-    evidence_table = _build_evidence_table(contexts)
+    evidence_table = _build_evidence_table(contexts, trace=trace)
 
     if not evidence_table:
-        return PriorsResponse(
-            priors=[],
-            coverage=Coverage(
-                internal_hits=len(contexts),
-                external_hits=0,
-                gaps=[
-                    f"{len(contexts)} evidence context(s) retrieved, but none met the "
-                    f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
-                ],
+        return _add_external_note(
+            PriorsResponse(
+                priors=[],
+                coverage=Coverage(
+                    internal_hits=len(contexts),
+                    external_hits=0,
+                    gaps=[
+                        f"{len(contexts)} evidence context(s) retrieved, but none met the "
+                        f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
+                    ],
+                ),
+                trace_id=new_trace_id(),
             ),
-            trace_id=new_trace_id(),
+            allow_external,
         )
 
     try:
         all_priors = extract_priors(query, evidence_table, trace=trace)
+        if trace is not None:
+            trace.all_priors = all_priors
     except ExtractionError as e:
-        return PriorsResponse(
-            priors=[],
-            coverage=Coverage(
-                internal_hits=len(contexts),
-                external_hits=0,
-                gaps=[f"LLM extraction failed schema validation after retries: {e}"],
+        return _add_external_note(
+            PriorsResponse(
+                priors=[],
+                coverage=Coverage(
+                    internal_hits=len(contexts),
+                    external_hits=0,
+                    gaps=[f"LLM extraction failed schema validation after retries: {e}"],
+                ),
+                trace_id=new_trace_id(),
             ),
-            trace_id=new_trace_id(),
+            allow_external,
         )
 
     strong_priors, weak_priors = _split_by_confidence(all_priors)
     gaps = _build_gaps(weak_priors, total_hits=len(contexts))
 
-    return PriorsResponse(
-        priors=strong_priors,
-        coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
-        trace_id=new_trace_id(),
+    return _add_external_note(
+        PriorsResponse(
+            priors=strong_priors,
+            coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
+            trace_id=new_trace_id(),
+        ),
+        allow_external,
     )
 
 
-def build_priors_response(query: str) -> PriorsResponse:
-    return _build_priors_response(query)
+def build_priors_response(query: str, allow_external: bool = False) -> PriorsResponse:
+    return _build_priors_response(query, allow_external=allow_external)
 
 
-def build_priors_response_with_trace(query: str) -> tuple[PriorsResponse, PipelineTrace]:
+def build_priors_response_with_trace(
+    query: str, allow_external: bool = False
+) -> tuple[PriorsResponse, PipelineTrace]:
     """Same as build_priors_response, but also returns a PipelineTrace
     capturing every intermediate stage — powers the demo's pipeline view
     (GET/POST /sciencerag/priors/_debug). Not part of the spec-compliant
     API contract."""
     trace = PipelineTrace(query=query)
-    response = _build_priors_response(query, trace=trace)
+    response = _build_priors_response(query, trace=trace, allow_external=allow_external)
     return response, trace
