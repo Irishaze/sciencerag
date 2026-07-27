@@ -59,3 +59,25 @@ def test_priors_route_returns_schema_valid_response(monkeypatch):
 def test_priors_route_rejects_missing_query():
     resp = client.post("/sciencerag/priors", json={})
     assert resp.status_code == 422
+
+
+def test_priors_route_returns_structured_error_on_unexpected_exception(monkeypatch):
+    """If retrieval blows up (network error, litellm timeout, whatever),
+    the route must still return our own typed ErrorResponse JSON — never a
+    bare FastAPI default 500 (spec §8: always typed, schema-valid errors)."""
+
+    def _boom(query: str) -> PriorsResponse:
+        raise RuntimeError("simulated PaperQA2/LLM failure")
+
+    monkeypatch.setattr(priors_router.retrieval, "build_priors_response", _boom)
+
+    resp = client.post("/sciencerag/priors", json={"query": "will fail"})
+    assert resp.status_code == 502
+
+    body = resp.json()
+    error_schema = json.loads(SCHEMA_PATH.read_text())["ErrorResponse"]
+    jsonschema.validate(instance=body, schema=error_schema)
+    assert body["status"] == "error"
+    assert body["error"]["category"] == "retrieval_timeout"
+    assert "simulated PaperQA2/LLM failure" in body["error"]["message"]
+    assert body["trace_id"].startswith("tr_")

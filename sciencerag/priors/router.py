@@ -6,9 +6,12 @@ sciencerag/priors/extract.py).
 """
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from sciencerag.common.audit import log_audit_entry
 from sciencerag.common.config import get_embedding_model, get_llm_model
+from sciencerag.common.errors import ErrorDetail, ErrorResponse
+from sciencerag.common.trace import new_trace_id
 from sciencerag.priors import retrieval
 from sciencerag.priors.models import PriorsRequest, PriorsResponse
 
@@ -16,8 +19,28 @@ router = APIRouter()
 
 
 @router.post("/sciencerag/priors", response_model=PriorsResponse)
-def get_priors(request: PriorsRequest) -> PriorsResponse:
-    response = retrieval.build_priors_response(request.query)
+def get_priors(request: PriorsRequest) -> PriorsResponse | JSONResponse:
+    # Returning a JSONResponse directly (the error path below) bypasses
+    # response_model validation entirely — FastAPI passes Response subclasses
+    # through unchanged. response_model still applies to the normal
+    # PriorsResponse return, keeping strict validation + accurate OpenAPI docs.
+    try:
+        response = retrieval.build_priors_response(request.query)
+    except Exception as e:  # noqa: BLE001 - last-resort gate, spec §8: always
+        # return typed, schema-valid JSON on failure, never a bare 500.
+        error_response = ErrorResponse(
+            error=ErrorDetail(category="retrieval_timeout", message=str(e)),
+            trace_id=new_trace_id(),
+        )
+        log_audit_entry(
+            trace_id=error_response.trace_id,
+            endpoint="sciencerag.priors",
+            request=request.model_dump(),
+            evidence=[],
+            output=error_response.model_dump(),
+            model_config={"llm_model": get_llm_model(), "embedding_model": get_embedding_model()},
+        )
+        return JSONResponse(status_code=502, content=error_response.model_dump())
 
     log_audit_entry(
         trace_id=response.trace_id,

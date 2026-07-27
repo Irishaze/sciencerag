@@ -8,6 +8,7 @@ Run after any change to the Pydantic models in sciencerag/*/models.py:
 import json
 from pathlib import Path
 
+from sciencerag.common.errors import ErrorResponse
 from sciencerag.priors.models import PriorsRequest, PriorsResponse
 
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "sciencerag" / "schemas"
@@ -17,6 +18,9 @@ def main() -> None:
     priors_schema = {
         "PriorsRequest": PriorsRequest.model_json_schema(),
         "PriorsResponse": PriorsResponse.model_json_schema(),
+        # spec §8: every endpoint's error envelope is part of the published
+        # contract too, not just its success shape.
+        "ErrorResponse": ErrorResponse.model_json_schema(),
     }
     out_path = SCHEMAS_DIR / "priors.schema.json"
     out_path.write_text(json.dumps(priors_schema, indent=2, ensure_ascii=False) + "\n")

@@ -254,5 +254,59 @@
     ],
     "title": "PriorsResponse",
     "type": "object"
+  },
+  "ErrorResponse": {
+    "$defs": {
+      "ErrorDetail": {
+        "properties": {
+          "category": {
+            "enum": [
+              "retrieval_timeout",
+              "schema_validation_failed",
+              "insufficient_coverage",
+              "benchmark_unavailable"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          }
+        },
+        "required": [
+          "category",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "error",
+        "default": "error",
+        "title": "Status",
+        "type": "string"
+      },
+      "error": {
+        "$ref": "#/$defs/ErrorDetail"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "error",
+      "trace_id"
+    ],
+    "title": "ErrorResponse",
+    "type": "object"
   }
 }
