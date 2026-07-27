@@ -134,3 +134,38 @@ def test_valid_priors_request():
 def test_priors_request_missing_query_is_invalid():
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance={}, schema=REQUEST_SCHEMA)
+
+
+@pytest.mark.parametrize("bad_max_priors", [0, -5])
+def test_priors_request_nonpositive_max_priors_is_invalid(bad_max_priors):
+    """max_priors previously had no lower bound — 0 or a negative count
+    would pass schema validation despite being a nonsensical request."""
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            instance={"query": "x", "max_priors": bad_max_priors},
+            schema=REQUEST_SCHEMA,
+        )
+
+
+def test_priors_request_max_priors_wrong_type_is_invalid():
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            instance={"query": "x", "max_priors": "5"},
+            schema=REQUEST_SCHEMA,
+        )
+
+
+def test_priors_request_allow_external_wrong_type_is_invalid():
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            instance={"query": "x", "allow_external": "true"},
+            schema=REQUEST_SCHEMA,
+        )
+
+
+def test_priors_request_non_numeric_constraint_is_invalid():
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            instance={"query": "x", "task_context": {"constraints": {"heat_load_w": "high"}}},
+            schema=REQUEST_SCHEMA,
+        )

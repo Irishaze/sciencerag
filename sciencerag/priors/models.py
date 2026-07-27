@@ -14,7 +14,7 @@ class TaskContext(BaseModel):
 class PriorsRequest(BaseModel):
     query: str
     task_context: TaskContext = Field(default_factory=TaskContext)
-    max_priors: int = 5
+    max_priors: int = Field(default=5, ge=1)
     allow_external: bool = False
 
 
