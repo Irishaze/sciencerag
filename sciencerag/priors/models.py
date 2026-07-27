@@ -44,7 +44,7 @@ class Prior(BaseModel):
     field: str
     value: dict[str, Any]
     confidence: float = Field(ge=0, le=1)
-    sources: list[Source]
+    sources: list[Source] = Field(min_length=1)
     notes: str | None = None
     provenance: Literal["internal", "external_unverified"] = "internal"
 

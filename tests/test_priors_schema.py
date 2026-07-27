@@ -11,6 +11,7 @@ SCHEMA_PATH = (
 )
 SCHEMA = json.loads(SCHEMA_PATH.read_text())
 RESPONSE_SCHEMA = SCHEMA["PriorsResponse"]
+REQUEST_SCHEMA = SCHEMA["PriorsRequest"]
 
 # -- valid fixtures ------------------------------------------------------
 
@@ -65,13 +66,71 @@ INVALID_BAD_KIND_ENUM = {
     "trace_id": "tr_bad",
 }
 
+# Spec principle: "every scientific claim must carry a citation" — a Prior
+# with zero sources violates that even if every other field is well-formed.
+INVALID_ZERO_SOURCES = {
+    "status": "ok",
+    "priors": [
+        {
+            "prior_id": "pr_no_sources",
+            "kind": "parameter_range",
+            "field": "x",
+            "value": {"typical": 1},
+            "confidence": 0.9,
+            "sources": [],
+        }
+    ],
+    "coverage": {"internal_hits": 1, "external_hits": 0},
+    "trace_id": "tr_no_sources",
+}
+
+INVALID_CONFIDENCE_OUT_OF_RANGE = {
+    "status": "ok",
+    "priors": [
+        {
+            "prior_id": "pr_overconfident",
+            "kind": "parameter_range",
+            "field": "x",
+            "value": {"typical": 1},
+            "confidence": 1.5,
+            "sources": [{"type": "paper", "doi": "10.1/x"}],
+        }
+    ],
+    "coverage": {"internal_hits": 1, "external_hits": 0},
+    "trace_id": "tr_overconfident",
+}
+
 
 @pytest.mark.parametrize("payload", [VALID_FULL, VALID_EMPTY_PRIORS])
 def test_valid_priors_response(payload):
     jsonschema.validate(instance=payload, schema=RESPONSE_SCHEMA)
 
 
-@pytest.mark.parametrize("payload", [INVALID_MISSING_TRACE_ID, INVALID_BAD_KIND_ENUM])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        INVALID_MISSING_TRACE_ID,
+        INVALID_BAD_KIND_ENUM,
+        INVALID_ZERO_SOURCES,
+        INVALID_CONFIDENCE_OUT_OF_RANGE,
+    ],
+)
 def test_invalid_priors_response(payload):
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=payload, schema=RESPONSE_SCHEMA)
+
+
+# -- PriorsRequest schema (previously untested at the jsonschema level —
+# only exercised indirectly via FastAPI/Pydantic in test_priors_route.py) --
+
+
+def test_valid_priors_request():
+    jsonschema.validate(
+        instance={"query": "Bi2Te3 leg length vs COP"},
+        schema=REQUEST_SCHEMA,
+    )
+
+
+def test_priors_request_missing_query_is_invalid():
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(instance={}, schema=REQUEST_SCHEMA)
