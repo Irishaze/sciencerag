@@ -35,6 +35,26 @@ VALID_FULL = {
     "trace_id": "tr_test123",
 }
 
+# related_fields (spec: sync_to_claude_code.md §2) — a scaling_relationship
+# prior with null `field`, expressing a relation between two sim-contract
+# parameters instead of a single one.
+VALID_RELATED_FIELDS = {
+    "status": "ok",
+    "priors": [
+        {
+            "prior_id": "pr_2026_0731_002",
+            "kind": "scaling_relationship",
+            "field": None,
+            "related_fields": ["leg_length", "leg_width"],
+            "value": {"form": "coupled", "description": "optimal leg_length depends on leg_width"},
+            "confidence": 0.7,
+            "sources": [{"type": "paper", "doi": "10.1234/example", "span": "p.5, Eq.12"}],
+        }
+    ],
+    "coverage": {"internal_hits": 3, "external_hits": 0, "gaps": []},
+    "trace_id": "tr_related_fields",
+}
+
 VALID_EMPTY_PRIORS = {
     "status": "ok",
     "priors": [],
@@ -101,7 +121,7 @@ INVALID_CONFIDENCE_OUT_OF_RANGE = {
 }
 
 
-@pytest.mark.parametrize("payload", [VALID_FULL, VALID_EMPTY_PRIORS])
+@pytest.mark.parametrize("payload", [VALID_FULL, VALID_RELATED_FIELDS, VALID_EMPTY_PRIORS])
 def test_valid_priors_response(payload):
     jsonschema.validate(instance=payload, schema=RESPONSE_SCHEMA)
 

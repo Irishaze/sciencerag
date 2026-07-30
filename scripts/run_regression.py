@@ -40,7 +40,7 @@ def main() -> None:
         print(f"\n[{i}/{len(fixtures)}] {fixture.id}: {fixture.query}")
         t0 = time.time()
         try:
-            response = build_priors_response(fixture.query)
+            response, _filtered_material_count = build_priors_response(fixture.query)
         except Exception as e:  # noqa: BLE001 - a fixture failure shouldn't kill the whole run
             elapsed = time.time() - t0
             print(f"  -> HARD FAILURE: {type(e).__name__}: {e}")

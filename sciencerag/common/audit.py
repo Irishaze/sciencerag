@@ -23,6 +23,7 @@ def log_audit_entry(
     output: dict[str, Any],
     model_config: dict[str, Any] | None = None,
     elapsed_s: float | None = None,
+    filtered_material_count: int = 0,
 ) -> None:
     AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     entry = {
@@ -37,6 +38,11 @@ def log_audit_entry(
         # recorded for every call so latency regressions are auditable after
         # the fact, not just when a warning happens to be watched live.
         "elapsed_s": elapsed_s,
+        # spec §6.1: material is fixed (Bi2Te3, prior_target=false) — if the
+        # LLM emitted a material_property finding anyway, it's dropped
+        # before becoming a Prior (never shown in coverage.gaps, since it's
+        # not a coverage shortfall) but logged here so it stays auditable.
+        "filtered_material_count": filtered_material_count,
     }
     with AUDIT_LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")

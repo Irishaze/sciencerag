@@ -41,7 +41,15 @@ class Prior(BaseModel):
         "candidate_config",
         "caution",
     ]
-    field: str
+    # Single-parameter priors (parameter_range/caution) use `field`;
+    # relationships spanning multiple contract parameters
+    # (scaling_relationship/candidate_config) use `related_fields` instead
+    # and leave `field` null (spec: sync_to_claude_code.md §2). Both are
+    # validated against sim_params.json's geometry_free names at extraction
+    # time (see extract.py), not here — this schema stays permissive so
+    # non-pipeline callers (tests, fixtures) aren't coupled to the contract.
+    field: str | None = None
+    related_fields: list[str] = Field(default_factory=list)
     value: dict[str, Any]
     confidence: float = Field(ge=0, le=1)
     sources: list[Source] = Field(min_length=1)

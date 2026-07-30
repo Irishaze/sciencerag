@@ -43,7 +43,7 @@ def get_priors(request: PriorsRequest) -> PriorsResponse | JSONResponse:
     # PriorsResponse return, keeping strict validation + accurate OpenAPI docs.
     t0 = _now()
     try:
-        response = retrieval.build_priors_response(
+        response, filtered_material_count = retrieval.build_priors_response(
             request.query, allow_external=request.allow_external
         )
     except Exception as e:  # noqa: BLE001 - last-resort gate, spec §8: always
@@ -82,6 +82,7 @@ def get_priors(request: PriorsRequest) -> PriorsResponse | JSONResponse:
         # spec §3.5: index/embedding model version must be traceable per response.
         model_config={"llm_model": get_llm_model(), "embedding_model": get_embedding_model()},
         elapsed_s=round(elapsed_s, 1),
+        filtered_material_count=filtered_material_count,
     )
 
     return response

@@ -3,15 +3,23 @@
 Pure-function tests against constructed Prior objects — no PaperQA2/API calls.
 """
 
+from sciencerag.priors.contract import GEOMETRY_FREE_NAMES
 from sciencerag.priors.models import Prior, SourcePaper
-from sciencerag.priors.retrieval import _build_gaps, _split_by_confidence
+from sciencerag.priors.retrieval import _build_gaps, _build_geometry_gaps, _split_by_confidence
 
 
-def _prior(confidence: float, notes: str | None = None, doi: str = "10.0000/test") -> Prior:
+def _prior(
+    confidence: float,
+    notes: str | None = None,
+    doi: str = "10.0000/test",
+    field: str | None = "general_finding",
+    related_fields: list[str] | None = None,
+) -> Prior:
     return Prior(
         prior_id="pr_test",
         kind="parameter_range",
-        field="general_finding",
+        field=field,
+        related_fields=related_fields or [],
         value={"summary": "x"},
         confidence=confidence,
         sources=[SourcePaper(doi=doi, span="pages 1-2")],
@@ -61,3 +69,35 @@ def test_build_gaps_reports_zero_hits_case():
     gaps = _build_gaps([], total_hits=0)
     assert len(gaps) == 1
     assert "no relevant evidence" in gaps[0]
+
+
+# -- contract-based coverage gaps (spec: sync_to_claude_code.md §5) ---------
+
+
+def test_build_geometry_gaps_reports_all_12_when_nothing_extracted():
+    gaps = _build_geometry_gaps(all_priors=[], strong_priors=[])
+    assert len(gaps) == len(GEOMETRY_FREE_NAMES)
+    assert all("未检索到" in g for g in gaps)
+
+
+def test_build_geometry_gaps_excludes_params_covered_by_a_strong_prior():
+    strong = [_prior(0.9, field="leg_length")]
+    gaps = _build_geometry_gaps(all_priors=strong, strong_priors=strong)
+    assert not any("leg_length" in g for g in gaps)
+    assert len(gaps) == len(GEOMETRY_FREE_NAMES) - 1
+
+
+def test_build_geometry_gaps_excludes_params_covered_via_related_fields():
+    strong = [_prior(0.9, field=None, related_fields=["leg_length", "leg_width"])]
+    gaps = _build_geometry_gaps(all_priors=strong, strong_priors=strong)
+    assert not any("leg_length" in g for g in gaps)
+    assert not any("leg_width" in g for g in gaps)
+
+
+def test_build_geometry_gaps_distinguishes_low_confidence_from_uncovered():
+    weak = _prior(0.1, field="leg_length")
+    gaps = _build_geometry_gaps(all_priors=[weak], strong_priors=[])
+    leg_length_gap = next(g for g in gaps if "leg_length" in g)
+    assert "置信度不足" in leg_length_gap
+    other_gap = next(g for g in gaps if "leg_width" in g)
+    assert "未检索到" in other_gap

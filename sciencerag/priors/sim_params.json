@@ -1,0 +1,106 @@
+{
+  "$comment": "ScienceRAG priors <-> Hermes/COMSOL 仿真参数契约。先验的 field 必须取自本契约中 prior_target=true 的参数名。参数名与单位以 COMSOL 全局参数表为准,ScienceRAG 不自造命名。本版材料固定为 Bi2Te3,属性为已知常量(随温度变,存整张表),先验不涉及材料。",
+  "contract_version": "1.1.0",
+  "source": "COMSOL 全局参数表 + 材料属性来自 TEClozicxuse.mph (单级 Bi2Te3 TEC)",
+  "scope_note": "材料固定 Bi2Te3,不做材料探索。材料属性随温度变化,存 200-400K 整张表,不假设单一工况。先验目标仅为几何自由参数。",
+
+  "categories": {
+    "geometry_free": {
+      "description": "A类:自由几何参数。Hermes 主动优化/扫描,文献先验的唯一主战场。",
+      "prior_target": true
+    },
+    "material": {
+      "description": "背景常量:材料固定 Bi2Te3,属性为确定值(随温度变,不验证、按已知用)。先验不出建议,仅供仿真填充与先验对比参照。",
+      "prior_target": false
+    },
+    "operating_condition": {
+      "description": "C类:工况/边界条件。由任务 task_context 给定,先验不出建议,仅用于先验对比时对齐工况。",
+      "prior_target": false
+    },
+    "derived": {
+      "description": "D类:派生参数。由其他参数经表达式算出,先验禁止赋值。",
+      "prior_target": false
+    },
+    "numerical_setting": {
+      "description": "D类:纯数值/求解设置。与物理设计无关,文献无法贡献,契约仅登记不管。",
+      "prior_target": false
+    }
+  },
+
+  "geometry_free": [
+    {"name": "leg_length", "unit": "mm", "desc": "臂截面长", "comsol_default": "1[mm]"},
+    {"name": "leg_width",  "unit": "mm", "desc": "臂截面宽", "comsol_default": "1.2[mm]"},
+    {"name": "pitch",      "unit": "mm", "desc": "臂间距",   "comsol_default": "0.5[mm]"},
+    {"name": "d_conductor","unit": "um", "desc": "导体厚度", "comsol_default": "100[um]"},
+    {"name": "d_ceramics", "unit": "mm", "desc": "陶瓷厚度", "comsol_default": "0.3[mm]"},
+    {"name": "length",     "unit": "mm", "desc": "器件总长", "comsol_default": "8[mm]"},
+    {"name": "width",      "unit": "mm", "desc": "器件总宽", "comsol_default": "10[mm]"},
+    {"name": "height",     "unit": "mm", "desc": "器件总高", "comsol_default": "2.5[mm]"},
+    {"name": "sink_base_h","unit": "mm", "desc": "散热器底板厚度", "comsol_default": "2[mm]"},
+    {"name": "sink_fin_h", "unit": "mm", "desc": "散热鳍片高度",   "comsol_default": "8[mm]"},
+    {"name": "sink_fin_w", "unit": "mm", "desc": "散热鳍片厚度",   "comsol_default": "0.6[mm]"},
+    {"name": "sink_fin_n", "unit": "count", "desc": "鳍片数量",    "comsol_default": "8"}
+  ],
+
+  "material": {
+    "$comment": "材料固定 Bi2Te3,属性随温度变化,按已知值用不验证。p/n 型仅 Seebeck 符号相反(seebeck_abs 为绝对值,p 取正 n 取负),电阻率/热导率/Z 为 p/n 共用。数值来源 TEClozicxuse.mph。先验不涉及材料,此表仅供仿真填充与 M2 先验对比时按工况温度取值参照。",
+    "fixed_material": "Bi2Te3",
+    "property_source": "TEClozicxuse.mph",
+    "pn_rule": "seebeck: p 型 = +seebeck_abs, n 型 = -seebeck_abs; 其余属性 p/n 相同",
+    "units": {
+      "temp": "K",
+      "seebeck_abs": "uV/K",
+      "electrical_resistivity": "ohm*m",
+      "thermal_conductivity": "W/(m*K)",
+      "figure_of_merit_z": "1/K"
+    },
+    "temperature_table": [
+      {"temp_k": 200, "seebeck_abs": 168, "electrical_resistivity": 7.00e-6,  "thermal_conductivity": 2.40, "figure_of_merit_z": 1.680e-3},
+      {"temp_k": 250, "seebeck_abs": 192, "electrical_resistivity": 9.00e-6,  "thermal_conductivity": 1.90, "figure_of_merit_z": 2.156e-3},
+      {"temp_k": 300, "seebeck_abs": 210, "electrical_resistivity": 1.150e-5, "thermal_conductivity": 1.60, "figure_of_merit_z": 2.397e-3},
+      {"temp_k": 350, "seebeck_abs": 225, "electrical_resistivity": 1.400e-5, "thermal_conductivity": 1.60, "figure_of_merit_z": 2.260e-3},
+      {"temp_k": 400, "seebeck_abs": 237, "electrical_resistivity": 1.700e-5, "thermal_conductivity": 1.75, "figure_of_merit_z": 1.888e-3}
+    ]
+  },
+
+  "operating_condition": [
+    {"name": "Tamb",  "unit": "K",   "desc": "环境温度", "comsol_default": "293.15[K]"},
+    {"name": "Tref",  "unit": "K",   "desc": "热侧参考温度", "comsol_default": "293.15[K]"},
+    {"name": "v_air", "unit": "m/s", "desc": "风速", "comsol_default": "3[m/s]"},
+    {"name": "dT0",   "unit": "K",   "desc": "指定温差", "comsol_default": "50[K]"},
+    {"name": "Iset",  "unit": "A",   "desc": "设定电流", "comsol_default": "0.05[A]"},
+    {"name": "Vset",  "unit": "V",   "desc": "设定电压", "comsol_default": "0.1[V]"}
+  ],
+
+  "derived": [
+    {"name": "leg_height",     "expr": "height - 2*(d_conductor + d_ceramics)", "desc": "臂高(总高减两层)"},
+    {"name": "n_length",       "expr": "floor(...)",  "desc": "长度方向臂数"},
+    {"name": "n_width",        "expr": "floor(...)",  "desc": "宽度方向臂数"},
+    {"name": "N",              "expr": "floor(...)",  "desc": "热耦合器数量"},
+    {"name": "network_length", "expr": "(leg_length+pitch)*n_length - pitch", "desc": "臂网络长"},
+    {"name": "network_width",  "expr": "(leg_width+pitch)*n_width - pitch",   "desc": "臂网络宽"},
+    {"name": "sink_fin_pitch", "expr": "(width-sink_fin_w)/(sink_fin_n-1)",   "desc": "鳍片间距"},
+    {"name": "h_air",          "expr": "h0 + kh*Ufan", "desc": "等效对流换热系数"}
+  ],
+
+  "numerical_setting": [
+    {"name": "t_end", "desc": "瞬态结束时间"},
+    {"name": "dt",    "desc": "输出步长"},
+    {"name": "tauV",  "desc": "电压时间常数"},
+    {"name": "tauI",  "desc": "电流时间常数"},
+    {"name": "h0",    "desc": "自然对流基础换热系数(经验拟合)"},
+    {"name": "kh",    "desc": "风速增强系数(经验拟合)"},
+    {"name": "air_margin_x", "desc": "空气计算域余量"},
+    {"name": "air_margin_y", "desc": "空气计算域余量"},
+    {"name": "air_above",    "desc": "空气域高"},
+    {"name": "air_below",    "desc": "空气域高"}
+  ],
+
+  "rules": {
+    "prior_field_must_be_in_contract": "先验的 field 只能取自 geometry_free.name;不在该清单内的 field 一律拒绝。",
+    "no_prior_on_material": "材料固定 Bi2Te3、属性为确定常量(按已知用不验证),先验不对材料或其属性出建议。",
+    "no_prior_on_derived": "derived 与 numerical_setting 类参数,先验禁止赋值。",
+    "material_lookup_by_temperature": "需要材料属性时,按工况温度在 material.temperature_table 中取对应行(温度落在表点之间可插值)。",
+    "uncovered_goes_to_gaps": "geometry_free 中的参数,若本次检索无文献覆盖,不硬凑先验,改记入 coverage.gaps。"
+  }
+}

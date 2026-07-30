@@ -17,20 +17,23 @@ from sciencerag.priors.models import Coverage, Prior, PriorsResponse, SourcePape
 client = TestClient(app)
 
 
-def _fake_priors_response(query: str, allow_external: bool = False) -> PriorsResponse:
-    return PriorsResponse(
-        priors=[
-            Prior(
-                prior_id="pr_fake_0001",
-                kind="parameter_range",
-                field="general_finding",
-                value={"summary": "fake"},
-                confidence=0.8,
-                sources=[SourcePaper(doi="10.0000/fake", span="pages 1-2")],
-            )
-        ],
-        coverage=Coverage(internal_hits=1, external_hits=0, gaps=[]),
-        trace_id="tr_fake_latency_test",
+def _fake_priors_response(query: str, allow_external: bool = False) -> tuple[PriorsResponse, int]:
+    return (
+        PriorsResponse(
+            priors=[
+                Prior(
+                    prior_id="pr_fake_0001",
+                    kind="parameter_range",
+                    field="general_finding",
+                    value={"summary": "fake"},
+                    confidence=0.8,
+                    sources=[SourcePaper(doi="10.0000/fake", span="pages 1-2")],
+                )
+            ],
+            coverage=Coverage(internal_hits=1, external_hits=0, gaps=[]),
+            trace_id="tr_fake_latency_test",
+        ),
+        0,
     )
 
 

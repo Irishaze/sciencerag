@@ -41,12 +41,19 @@ def test_fixture_file_loads_and_has_5_to_10_entries():
     assert len({f.id for f in fixtures}) == len(fixtures), "fixture ids must be unique"
 
 
-def test_fixture_file_covers_all_5_kinds_across_its_must_have_kinds():
+def test_fixture_file_covers_all_producible_kinds_across_its_must_have_kinds():
+    """material_property is intentionally excluded from this check: under the
+    sim-contract sync (spec: sync_to_claude_code.md §6.1), material is fixed
+    (Bi2Te3, prior_target=false) and the extraction pipeline filters out any
+    material_property draft before it becomes a Prior — a real pipeline run
+    can never legitimately satisfy must_have_kinds=['material_property']
+    anymore. `kind` itself is still a 5-value enum (schema-level, unchanged);
+    it's specifically the *regression fixtures* that only ever need to cover
+    the 4 kinds the pipeline actually produces."""
     fixtures = load_fixtures(FIXTURES_PATH)
     covered = {k for f in fixtures for k in f.must_have_kinds}
     assert covered == {
         "parameter_range",
-        "material_property",
         "scaling_relationship",
         "candidate_config",
         "caution",
@@ -62,8 +69,8 @@ def test_check_fixture_passes_when_properties_are_met():
 
 def test_check_fixture_flags_too_few_priors():
     fixtures = load_fixtures(FIXTURES_PATH)
-    fixture = next(f for f in fixtures if f.id == "material_property_zt")
-    response = _priors_response(["material_property"])  # far below min_priors=8
+    fixture = next(f for f in fixtures if f.id == "parameter_range_conductor_thickness")
+    response = _priors_response([])  # 0 priors, below min_priors=1
     violations = check_fixture(fixture, response)
     assert any("priors" in v for v in violations)
 
@@ -78,7 +85,7 @@ def test_check_fixture_flags_missing_required_kind():
 
 def test_check_fixture_flags_missing_doi():
     fixtures = load_fixtures(FIXTURES_PATH)
-    fixture = next(f for f in fixtures if f.id == "scaling_relationship_fan_speed")
+    fixture = next(f for f in fixtures if f.id == "scaling_relationship_leg_aspect_ratio")
     response = _priors_response(
         ["scaling_relationship"] * 3, dois=["10.1/a", "", "10.2/b"]
     )

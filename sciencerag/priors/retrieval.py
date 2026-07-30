@@ -14,6 +14,7 @@ from paperqa.agents.main import AnswerResponse
 
 from sciencerag.common.config import get_embedding_model, get_llm_model
 from sciencerag.common.trace import new_trace_id
+from sciencerag.priors.contract import GEOMETRY_FREE_NAMES
 from sciencerag.priors.extract import (
     EvidenceItem,
     ExtractionError,
@@ -101,6 +102,38 @@ def _split_by_confidence(priors: list[Prior]) -> tuple[list[Prior], list[Prior]]
     return strong, weak
 
 
+def _prior_geometry_fields(prior: Prior) -> set[str]:
+    fields = set(prior.related_fields)
+    if prior.field:
+        fields.add(prior.field)
+    return fields
+
+
+def _build_geometry_gaps(all_priors: list[Prior], strong_priors: list[Prior]) -> list[str]:
+    """Use the sim contract's 12 geometry_free parameters as the yardstick
+    for coverage (spec §5): whatever this run didn't end up with a
+    confidence-surviving prior for goes into gaps, not silently dropped.
+
+    Distinguishes "extracted but too low-confidence to publish" from
+    "nothing extracted at all" where that's cheap to know (from priors we
+    already have in hand) — true evidence-relevance attribution (spec §5's
+    3-way split) needs per-parameter semantic matching over raw retrieval
+    contexts, which the spec explicitly defers past v1 ("第一版可先简化为
+    '未覆盖'").
+    """
+    covered = {f for p in strong_priors for f in _prior_geometry_fields(p)}
+    drafted = {f for p in all_priors for f in _prior_geometry_fields(p)}
+    gaps = []
+    for name in sorted(GEOMETRY_FREE_NAMES):
+        if name in covered:
+            continue
+        if name in drafted:
+            gaps.append(f"{name} 提取到先验但置信度不足")
+        else:
+            gaps.append(f"文献中未检索到 {name} 相关证据")
+    return gaps
+
+
 def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
     if total_hits == 0:
         return ["internal corpus returned no relevant evidence for this query"]
@@ -138,11 +171,19 @@ def _add_external_note(response: PriorsResponse, allow_external: bool) -> Priors
 
 def _build_priors_response(
     query: str, trace: PipelineTrace | None = None, allow_external: bool = False
-) -> PriorsResponse:
+) -> tuple[PriorsResponse, int]:
     """Run a real PaperQA2 query, then LLM-extract structured priors from
     the evidence contexts (see extract.py). On extraction failure, return
     an empty-but-valid response with the failure noted in gaps — never a
-    half-broken result (spec principle)."""
+    half-broken result (spec principle).
+
+    Returns (response, filtered_material_count) — the latter is audit-log
+    metadata, not part of the API contract (spec §6.1: material_property
+    drafts the LLM emits anyway are dropped before becoming a Prior; the
+    count is logged to logs/audit.jsonl by the caller, not coverage.gaps,
+    since it's not something missing from coverage — it's something
+    correctly excluded).
+    """
     # Query priority per spec §3.2: KG first, literature second. Through
     # M1-M4 the graph is an empty stub (see kg.py) — this always returns
     # [], so the fall-through to PaperQA2 below is the only real path for
@@ -154,70 +195,91 @@ def _build_priors_response(
     contexts = response.session.contexts
 
     if not contexts:
-        return _add_external_note(
-            PriorsResponse(
-                priors=[],
-                coverage=Coverage(
-                    internal_hits=0,
-                    external_hits=0,
-                    gaps=["internal corpus returned no relevant evidence for this query"],
+        return (
+            _add_external_note(
+                PriorsResponse(
+                    priors=[],
+                    coverage=Coverage(
+                        internal_hits=0,
+                        external_hits=0,
+                        gaps=["internal corpus returned no relevant evidence for this query"]
+                        + _build_geometry_gaps([], []),
+                    ),
+                    trace_id=new_trace_id(),
                 ),
-                trace_id=new_trace_id(),
+                allow_external,
             ),
-            allow_external,
+            0,
         )
 
     evidence_table = _build_evidence_table(contexts, trace=trace)
 
     if not evidence_table:
-        return _add_external_note(
-            PriorsResponse(
-                priors=[],
-                coverage=Coverage(
-                    internal_hits=len(contexts),
-                    external_hits=0,
-                    gaps=[
-                        f"{len(contexts)} evidence context(s) retrieved, but none met the "
-                        f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
-                    ],
+        return (
+            _add_external_note(
+                PriorsResponse(
+                    priors=[],
+                    coverage=Coverage(
+                        internal_hits=len(contexts),
+                        external_hits=0,
+                        gaps=[
+                            f"{len(contexts)} evidence context(s) retrieved, but none met the "
+                            f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
+                        ]
+                        + _build_geometry_gaps([], []),
+                    ),
+                    trace_id=new_trace_id(),
                 ),
-                trace_id=new_trace_id(),
+                allow_external,
             ),
-            allow_external,
+            0,
         )
 
     try:
-        all_priors = extract_priors(query, evidence_table, trace=trace)
+        all_priors, filtered_material_count = extract_priors(query, evidence_table, trace=trace)
         if trace is not None:
             trace.all_priors = all_priors
     except ExtractionError as e:
-        return _add_external_note(
-            PriorsResponse(
-                priors=[],
-                coverage=Coverage(
-                    internal_hits=len(contexts),
-                    external_hits=0,
-                    gaps=[f"LLM extraction failed schema validation after retries: {e}"],
+        return (
+            _add_external_note(
+                PriorsResponse(
+                    priors=[],
+                    coverage=Coverage(
+                        internal_hits=len(contexts),
+                        external_hits=0,
+                        gaps=[f"LLM extraction failed schema validation after retries: {e}"]
+                        + _build_geometry_gaps([], []),
+                    ),
+                    trace_id=new_trace_id(),
                 ),
-                trace_id=new_trace_id(),
+                allow_external,
             ),
-            allow_external,
+            0,
         )
 
     strong_priors, weak_priors = _split_by_confidence(all_priors)
     gaps = _build_gaps(weak_priors, total_hits=len(contexts))
+    gaps += _build_geometry_gaps(all_priors, strong_priors)
 
-    return _add_external_note(
-        PriorsResponse(
-            priors=strong_priors,
-            coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
-            trace_id=new_trace_id(),
+    return (
+        _add_external_note(
+            PriorsResponse(
+                priors=strong_priors,
+                coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
+                trace_id=new_trace_id(),
+            ),
+            allow_external,
         ),
-        allow_external,
+        filtered_material_count,
     )
 
 
-def build_priors_response(query: str, allow_external: bool = False) -> PriorsResponse:
+def build_priors_response(
+    query: str, allow_external: bool = False
+) -> tuple[PriorsResponse, int]:
+    """Returns (response, filtered_material_count) — see
+    _build_priors_response's docstring for why the count travels alongside
+    the response instead of inside it."""
     return _build_priors_response(query, allow_external=allow_external)
 
 
@@ -229,5 +291,7 @@ def build_priors_response_with_trace(
     (GET/POST /sciencerag/priors/_debug). Not part of the spec-compliant
     API contract."""
     trace = PipelineTrace(query=query)
-    response = _build_priors_response(query, trace=trace, allow_external=allow_external)
+    response, _filtered_material_count = _build_priors_response(
+        query, trace=trace, allow_external=allow_external
+    )
     return response, trace

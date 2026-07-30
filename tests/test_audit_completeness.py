@@ -21,26 +21,29 @@ def _read_last_entry() -> dict:
     return json.loads(lines[-1])
 
 
-def _fake_priors_response(query: str, allow_external: bool = False) -> PriorsResponse:
-    return PriorsResponse(
-        priors=[
-            Prior(
-                prior_id="pr_fake_0001",
-                kind="material_property",
-                field="seebeck_coefficient",
-                value={"typical": 200, "unit": "uV/K"},
-                confidence=0.75,
-                sources=[
-                    SourcePaper(doi="10.1111/aaa", span="p.3"),
-                    SourcePaper(doi="10.2222/bbb", span="p.5"),
-                ],
-                notes="test note",
-            )
-        ],
-        coverage=Coverage(
-            internal_hits=4, external_hits=0, gaps=["1 low-confidence prior excluded"]
+def _fake_priors_response(query: str, allow_external: bool = False) -> tuple[PriorsResponse, int]:
+    return (
+        PriorsResponse(
+            priors=[
+                Prior(
+                    prior_id="pr_fake_0001",
+                    kind="material_property",
+                    field="seebeck_coefficient",
+                    value={"typical": 200, "unit": "uV/K"},
+                    confidence=0.75,
+                    sources=[
+                        SourcePaper(doi="10.1111/aaa", span="p.3"),
+                        SourcePaper(doi="10.2222/bbb", span="p.5"),
+                    ],
+                    notes="test note",
+                )
+            ],
+            coverage=Coverage(
+                internal_hits=4, external_hits=0, gaps=["1 low-confidence prior excluded"]
+            ),
+            trace_id="tr_completeness_test",
         ),
-        trace_id="tr_completeness_test",
+        1,
     )
 
 
@@ -83,6 +86,10 @@ def test_success_entry_fully_reconstructs_request_evidence_output(tmp_path, monk
     assert entry["elapsed_s"] is not None
     assert "timestamp" in entry
     assert entry["endpoint"] == "sciencerag.priors"
+
+    # 5. Filtered material_property drafts (spec §6.1) are auditable even
+    #    though they never appear in coverage.gaps or the response body.
+    assert entry["filtered_material_count"] == 1
 
 
 def test_error_entry_still_reconstructs_request_and_trace_id(tmp_path, monkeypatch):

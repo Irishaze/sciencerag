@@ -105,8 +105,23 @@
             "type": "string"
           },
           "field": {
-            "title": "Field",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Field"
+          },
+          "related_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Related Fields",
+            "type": "array"
           },
           "value": {
             "additionalProperties": true,
@@ -166,7 +181,6 @@
         "required": [
           "prior_id",
           "kind",
-          "field",
           "value",
           "confidence",
           "sources"

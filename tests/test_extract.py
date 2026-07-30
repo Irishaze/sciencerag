@@ -56,9 +56,9 @@ def test_parse_and_validate_accepts_well_formed_json():
         {
             "priors": [
                 {
-                    "kind": "material_property",
-                    "field": "seebeck_coefficient",
-                    "value": {"typical_uV_per_K": 200},
+                    "kind": "parameter_range",
+                    "field": "leg_length",
+                    "value": {"typical": 0.06, "unit": "mm"},
                     "notes": None,
                     "evidence": ["E1"],
                 }
@@ -67,7 +67,7 @@ def test_parse_and_validate_accepts_well_formed_json():
     )
     output = _parse_and_validate(raw, _evidence_table())
     assert len(output.priors) == 1
-    assert output.priors[0].kind == "material_property"
+    assert output.priors[0].kind == "parameter_range"
 
 
 def test_parse_and_validate_strips_markdown_fences():
@@ -82,7 +82,7 @@ def test_parse_and_validate_rejects_unknown_evidence_label():
             "priors": [
                 {
                     "kind": "parameter_range",
-                    "field": "x",
+                    "field": "leg_length",
                     "value": {"typical": 42},
                     "evidence": ["E99"],
                 }
@@ -106,22 +106,33 @@ def test_parameter_range_without_numeric_value_is_rejected():
     model, not just the prompt."""
     with pytest.raises(ValidationError, match="requires at least one numeric value"):
         ExtractedPriorDraft(
-            kind="parameter_range", field="driving_voltage", value={"summary": "affects COP"}, evidence=["E1"]
+            kind="parameter_range", field="leg_length", value={"summary": "affects COP"}, evidence=["E1"]
+        )
+
+
+def test_parameter_range_requires_a_field():
+    """parameter_range names exactly one contract parameter — field=None
+    (as used by scaling_relationship/candidate_config) doesn't make sense
+    for it."""
+    with pytest.raises(ValidationError, match="requires a non-null `field`"):
+        ExtractedPriorDraft(
+            kind="parameter_range", field=None, value={"typical": 1}, evidence=["E1"]
         )
 
 
 def test_parameter_range_with_numeric_value_is_accepted():
     draft = ExtractedPriorDraft(
-        kind="parameter_range", field="driving_voltage", value={"typical": 2.3, "unit": "V"}, evidence=["E1"]
+        kind="parameter_range", field="leg_length", value={"typical": 0.06, "unit": "mm"}, evidence=["E1"]
     )
-    assert draft.value["typical"] == 2.3
+    assert draft.value["typical"] == 0.06
 
 
 def test_non_parameter_range_kinds_do_not_require_numeric_value():
     draft = ExtractedPriorDraft(
         kind="scaling_relationship",
-        field="voltage_vs_cop",
-        value={"summary": "COP increases with voltage", "direction": "positive"},
+        field=None,
+        related_fields=["leg_length", "leg_width"],
+        value={"summary": "optimal leg_length depends on leg_width", "direction": "positive"},
         evidence=["E1"],
     )
     assert draft.kind == "scaling_relationship"
@@ -137,7 +148,7 @@ def test_parse_and_validate_rejects_invalid_kind_value():
             "priors": [
                 {
                     "kind": "param-range",  # not a valid kind
-                    "field": "x",
+                    "field": "leg_length",
                     "value": {},
                     "evidence": ["E1"],
                 }
@@ -148,13 +159,59 @@ def test_parse_and_validate_rejects_invalid_kind_value():
         _parse_and_validate(raw, _evidence_table())
 
 
+# -- sim contract enforcement (spec: sync_to_claude_code.md §4) -------------
+
+
+def test_field_not_in_contract_is_rejected():
+    with pytest.raises(ValidationError, match="geometry_free names"):
+        ExtractedPriorDraft(
+            kind="parameter_range",
+            field="driving_voltage",  # an operating_condition, not geometry_free
+            value={"typical": 2.3},
+            evidence=["E1"],
+        )
+
+
+def test_related_field_not_in_contract_is_rejected():
+    with pytest.raises(ValidationError, match="geometry_free names"):
+        ExtractedPriorDraft(
+            kind="scaling_relationship",
+            field=None,
+            related_fields=["leg_length", "seebeck_coefficient"],  # 2nd is not a contract name
+            value={"summary": "x", "direction": "unknown"},
+            evidence=["E1"],
+        )
+
+
+def test_material_property_kind_is_exempt_from_contract_check():
+    """material_property is schema-valid but not a target of the contract
+    check — it's filtered out entirely downstream (extract_priors), not
+    validated against geometry_free names."""
+    draft = ExtractedPriorDraft(
+        kind="material_property",
+        field="seebeck_coefficient",
+        value={"typical_uV_per_K": 200},
+        evidence=["E1"],
+    )
+    assert draft.field == "seebeck_coefficient"
+
+
+def test_related_fields_defaults_to_empty_list():
+    """Backward compatibility (spec §2): related_fields is optional and a
+    single-parameter prior is unaffected by its addition."""
+    draft = ExtractedPriorDraft(
+        kind="caution", field="leg_length", value={"issue": "contact resistance"}, evidence=["E1"]
+    )
+    assert draft.related_fields == []
+
+
 def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
     table = _evidence_table()
     raw = json.dumps(
         {
-            "kind": "material_property",
-            "field": "seebeck_coefficient",
-            "value": {"typical_uV_per_K": 200},
+            "kind": "parameter_range",
+            "field": "leg_length",
+            "value": {"typical": 0.06, "unit": "mm"},
             "notes": None,
             "evidence": ["E1", "E2"],
         }
@@ -166,6 +223,20 @@ def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
     # base = 0.5 + 0.1*2 = 0.7; avg_relevance = (0.9+0.6)/2 = 0.75 -> 0.525
     # Python's round() uses round-half-to-even on the actual float, giving 0.52.
     assert prior.confidence == 0.52
+
+
+def test_to_prior_carries_related_fields_through():
+    table = _evidence_table()
+    draft = ExtractedPriorDraft(
+        kind="candidate_config",
+        field=None,
+        related_fields=["leg_length", "leg_width", "pitch"],
+        value={"leg_length": 0.07, "leg_width": 0.12, "pitch": 0.05, "unit": "mm"},
+        evidence=["E1"],
+    )
+    prior = _to_prior(draft, table)
+    assert prior.field is None
+    assert prior.related_fields == ["leg_length", "leg_width", "pitch"]
 
 
 def test_confidence_increases_with_more_supporting_evidence():
@@ -180,7 +251,7 @@ def test_confidence_increases_with_more_supporting_evidence():
     def _confidence_for(evidence: list[str]) -> float:
         # kind="caution" here since this test is about the confidence
         # formula, not the parameter_range-must-be-numeric rule.
-        draft = ExtractedPriorDraft(kind="caution", field="x", value={}, evidence=evidence)
+        draft = ExtractedPriorDraft(kind="caution", field="leg_length", value={}, evidence=evidence)
         return _to_prior(draft, table).confidence
 
     conf_1 = _confidence_for(["E1"])
@@ -203,7 +274,7 @@ def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):
                     "priors": [
                         {
                             "kind": "caution",
-                            "field": "note",
+                            "field": "leg_length",
                             "value": {"summary": "ok"},
                             "evidence": ["E1"],
                         }
@@ -214,10 +285,11 @@ def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):
 
     monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
 
-    priors = extract_priors("test query", _evidence_table())
+    priors, filtered_material_count = extract_priors("test query", _evidence_table())
     assert calls["n"] == 2
     assert len(priors) == 1
     assert priors[0].kind == "caution"
+    assert filtered_material_count == 0
 
 
 def test_extract_priors_raises_after_max_retries(monkeypatch):
@@ -228,3 +300,39 @@ def test_extract_priors_raises_after_max_retries(monkeypatch):
 
     with pytest.raises(ExtractionError):
         extract_priors("test query", _evidence_table())
+
+
+def test_extract_priors_filters_out_material_property_drafts(monkeypatch):
+    """Material is fixed (Bi2Te3, prior_target=false) — even if the LLM
+    ignores the prompt and emits a material_property finding anyway, it
+    must never surface as a Prior (spec §6.1: 'filtered/not adopted')."""
+
+    def fake_completion(**kwargs):
+        return _fake_llm_response(
+            json.dumps(
+                {
+                    "priors": [
+                        {
+                            "kind": "material_property",
+                            "field": "seebeck_coefficient",
+                            "value": {"typical_uV_per_K": 200},
+                            "evidence": ["E1"],
+                        },
+                        {
+                            "kind": "parameter_range",
+                            "field": "leg_length",
+                            "value": {"typical": 0.06, "unit": "mm"},
+                            "evidence": ["E1"],
+                        },
+                    ]
+                }
+            )
+        )
+
+    monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
+
+    priors, filtered_material_count = extract_priors("test query", _evidence_table())
+    assert len(priors) == 1
+    assert priors[0].kind == "parameter_range"
+    assert priors[0].field == "leg_length"
+    assert filtered_material_count == 1

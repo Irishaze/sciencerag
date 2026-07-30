@@ -16,12 +16,13 @@ calibrated probability" principle (see README's priors section).
 """
 
 import json
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 import litellm
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from sciencerag.common.config import get_llm_model
+from sciencerag.priors.contract import GEOMETRY_FREE_NAMES, GEOMETRY_FREE_PARAMS
 from sciencerag.priors.models import Prior, SourcePaper
 
 MAX_RETRIES = 3
@@ -33,22 +34,40 @@ MAX_RETRIES = 3
 # headroom without waiting forever.
 REQUEST_TIMEOUT_SECONDS = 90
 
-SYSTEM_PROMPT = """You are a scientific information extractor for a thermoelectric cooler (TEC) research assistant.
+def _format_target_params() -> str:
+    return "\n".join(
+        f"- {p['name']} (unit: {p['unit']}) — {p['desc']}" for p in GEOMETRY_FREE_PARAMS
+    )
+
+
+# Target-oriented extraction (spec: sync_to_claude_code.md §3): the LLM no
+# longer invents its own `field` slugs. It only ever names one of the sim
+# contract's 12 free geometry parameters (sciencerag/priors/sim_params.json),
+# so priors line up with the simulation side without a name/unit
+# translation step. Enforced in code too, not just the prompt — see
+# ExtractedPriorDraft's _fields_must_be_in_contract validator below.
+SYSTEM_PROMPT = f"""You are a scientific information extractor for a thermoelectric cooler (TEC) research assistant.
 
 You will be given a research question and a list of numbered evidence snippets, each already tagged with its source. Extract structured "priors" (facts/findings) from the evidence that help answer the question.
 
+TARGET PARAMETERS — this is closed, goal-directed extraction, not open-ended. The ONLY parameters a prior's "field" or "related_fields" may name are these free geometry parameters of the simulation contract (use these exact names — do not invent, translate, or rename them):
+{_format_target_params()}
+
+Do NOT extract priors about material properties (Seebeck coefficient, resistivity, thermal conductivity, ZT, etc.) — the material is fixed (Bi2Te3) and its properties are already registered in the simulation contract; priors should never propose values for it. Skip evidence that is purely about material properties.
+Do NOT extract priors about operating conditions (ambient temperature, current/voltage set points, air speed, etc.) or derived/numerical settings — these are out of scope for priors.
+
 For each prior, output a JSON object with exactly these fields:
-- "kind": one of "parameter_range", "material_property", "scaling_relationship", "candidate_config", "caution"
-  - parameter_range: a SPECIFIC NUMBER — an optimal/typical value or a min/max range for an operating parameter. If you cannot put a number in `value`, it is NOT parameter_range.
-  - material_property: an intrinsic material property (Seebeck coefficient, resistivity, thermal conductivity, etc.), ideally with its numeric value
-  - scaling_relationship: how one quantity varies as a function of another, WITHOUT necessarily citing a specific number — e.g. "X increases/decreases/affects Y", "COP is a convex function of voltage". Any "X affects/influences/increases/reduces Y" statement that has no specific number belongs here, not in parameter_range.
-  - candidate_config: a specific design/configuration choice or method (geometry, driving method, structure)
-  - caution: a limitation, caveat, or warning about applicability
-- "field": a short snake_case slug naming what this prior is about (e.g. "seebeck_coefficient", "driving_voltage")
+- "kind": one of "parameter_range", "scaling_relationship", "candidate_config", "caution"
+  - parameter_range: a SPECIFIC NUMBER for exactly ONE target parameter — an optimal/typical value or a min/max range. If you cannot put a number in `value`, it is NOT parameter_range. Requires "field" set to that one target parameter.
+  - scaling_relationship: a relationship BETWEEN target parameters (e.g. "the optimal leg_length depends on leg_width"), WITHOUT necessarily citing a specific number. Leave "field" null and list every target parameter the relationship involves in "related_fields". Only report a relationship the evidence actually states — never presume two parameters are related just because both are geometric.
+  - candidate_config: a specific, already-reported combination of several target parameter values (a full design point). Leave "field" null, list every parameter it covers in "related_fields", and give each one's value inside "value" (keyed by the exact parameter name).
+  - caution: a limitation, caveat, or warning about applicability of a target parameter — usually set "field" to that one parameter; if it spans several, use "related_fields" instead.
+- "field": null, OR the exact name of exactly one target parameter listed above (never a material/operating/derived parameter, never an invented name).
+- "related_fields": a list of exact target parameter names this prior relates to (default: empty list). Used for scaling_relationship and candidate_config; leave empty for single-parameter priors.
 - "value": a JSON object holding the actual content.
-  - For parameter_range: MUST include at least one numeric key, e.g. {"min": 20, "max": 200, "unit": "um"} or {"typical": 2.3, "unit": "V"}.
-  - For scaling_relationship: include a "direction" key with one of "positive", "negative", "convex", "unknown", plus {"summary": "..."} explaining the relationship.
-  - For other kinds: use structured keys where possible, else {"summary": "..."}.
+  - For parameter_range: MUST include at least one numeric key, e.g. {{"min": 0.02, "max": 0.2, "unit": "mm"}} or {{"typical": 0.06, "unit": "mm"}}. Match the target parameter's contract unit where the evidence allows.
+  - For scaling_relationship: include a "direction" key with one of "positive", "negative", "convex", "unknown", plus a "summary" explaining the relationship.
+  - For other kinds: use structured keys where possible, else {{"summary": "..."}}.
 - "notes": optional short clarifying note, or null
 - "evidence": a list of evidence labels (e.g. ["E1", "E3"]) that support this prior — list ALL evidence snippets that support it, not just one
 
@@ -57,7 +76,9 @@ Rules:
 - Only reference evidence labels that appear in the input. Never invent a label.
 - Do not split one finding into near-duplicate priors across different evidence — merge them and cite all supporting evidence together instead.
 - Some evidence snippets may be a summary of a paper's reference list or acknowledgments rather than its own findings (phrases like "the references suggest...", "Reference N examines..."). Treat these as weak, secondary support only — never as the sole evidence for a prior.
-- Output ONLY a JSON object of the form {"priors": [...]}. No explanation, no markdown fences.
+- Do not presuppose which target parameters are grouped or related — only report a scaling_relationship or candidate_config grouping when the evidence itself actually ties those parameters together.
+- If a target parameter has no supporting evidence, simply produce no prior for it — do not force or guess a value just to cover it.
+- Output ONLY a JSON object of the form {{"priors": [...]}}. No explanation, no markdown fences.
 """
 
 
@@ -69,7 +90,12 @@ class ExtractedPriorDraft(BaseModel):
         "candidate_config",
         "caution",
     ]
-    field: str
+    field: str | None = None
+    # New in the sim-contract sync (spec §2): relationships/configs spanning
+    # more than one parameter (scaling_relationship/candidate_config) can't
+    # be expressed with a single `field`. Optional + defaults to [] so
+    # single-parameter priors are unaffected — backward compatible.
+    related_fields: list[str] = Field(default_factory=list)
     value: dict[str, Any]
     notes: str | None = None
     evidence: list[str] = Field(min_length=1)
@@ -82,6 +108,11 @@ class ExtractedPriorDraft(BaseModel):
         the LLM was dumping non-numeric "X affects Y" statements into
         parameter_range instead of scaling_relationship."""
         if self.kind == "parameter_range":
+            if self.field is None:
+                raise ValueError(
+                    "kind='parameter_range' requires a non-null `field` naming exactly "
+                    "one contract geometry parameter"
+                )
             has_numeric = any(
                 isinstance(v, int | float) and not isinstance(v, bool)
                 for v in self.value.values()
@@ -93,6 +124,26 @@ class ExtractedPriorDraft(BaseModel):
                     "non-numeric 'X affects Y' statement, use kind='scaling_relationship' "
                     "instead, with a 'direction' key in value"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _fields_must_be_in_contract(self) -> "ExtractedPriorDraft":
+        """Hard constraint from spec §4: field/related_fields must be exact
+        sim_params.json geometry_free names — never an LLM-invented slug,
+        never a material/operating/derived parameter. material_property
+        drafts are exempt (and always silently dropped downstream in
+        extract_priors, never becoming a Prior — see spec §6.1: material is
+        fixed, prior_target=false, this kind is schema-only)."""
+        if self.kind == "material_property":
+            return self
+        names = ([self.field] if self.field is not None else []) + self.related_fields
+        unknown = [n for n in names if n not in GEOMETRY_FREE_NAMES]
+        if unknown:
+            raise ValueError(
+                f"field/related_fields must be exact sim_params.json geometry_free "
+                f"names; got unrecognized name(s) {unknown!r} "
+                f"(allowed: {sorted(GEOMETRY_FREE_NAMES)})"
+            )
         return self
 
 
@@ -119,7 +170,7 @@ class PipelineAttempt(BaseModel):
 
 
 class ConfidenceBreakdown(BaseModel):
-    prior_field: str
+    prior_field: str | None
     evidence_labels: list[str]
     base: float
     avg_relevance: float
@@ -211,11 +262,13 @@ def _to_prior(
             )
         )
 
-    prior_id = f"pr_{'_'.join(draft.evidence)}_{draft.field}"[:64]
+    id_suffix = draft.field or "_".join(draft.related_fields) or draft.kind
+    prior_id = f"pr_{'_'.join(draft.evidence)}_{id_suffix}"[:64]
     return Prior(
         prior_id=prior_id,
         kind=draft.kind,
         field=draft.field,
+        related_fields=draft.related_fields,
         value=draft.value,
         confidence=confidence,
         sources=sources,
@@ -223,11 +276,20 @@ def _to_prior(
     )
 
 
+class ExtractionResult(NamedTuple):
+    priors: list[Prior]
+    # Count of material_property drafts the LLM emitted anyway (against the
+    # prompt's instructions) and that were filtered out before becoming a
+    # Prior — surfaced so the caller can note it in coverage.gaps rather
+    # than have it vanish with no trace (spec §6.1).
+    filtered_material_count: int
+
+
 def extract_priors(
     query: str,
     evidence_table: dict[str, EvidenceItem],
     trace: PipelineTrace | None = None,
-) -> list[Prior]:
+) -> ExtractionResult:
     """Run the extraction pipeline; raises ExtractionError if the LLM never
     produces valid, grounded JSON within MAX_RETRIES attempts.
 
@@ -270,7 +332,14 @@ def extract_priors(
             output = _parse_and_validate(raw, evidence_table)
             if trace is not None:
                 trace.attempts.append(PipelineAttempt(attempt=attempt_num, raw_output=raw))
-            return [_to_prior(draft, evidence_table, trace) for draft in output.priors]
+            # Material is fixed (Bi2Te3, prior_target=false) — material_property
+            # stays a valid `kind` for schema compatibility (spec §6.1) but the
+            # pipeline never produces it: filter any the LLM emits anyway,
+            # rather than retrying or erroring over them.
+            kept = [d for d in output.priors if d.kind != "material_property"]
+            filtered_material_count = len(output.priors) - len(kept)
+            priors = [_to_prior(draft, evidence_table, trace) for draft in kept]
+            return ExtractionResult(priors, filtered_material_count)
         except (json.JSONDecodeError, ValidationError, ValueError) as e:
             last_error = e
             if trace is not None:
