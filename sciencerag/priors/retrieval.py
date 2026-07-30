@@ -28,6 +28,20 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CORPUS_DIR = REPO_ROOT / "corpus" / "papers"
 INDEX_DIR = REPO_ROOT / ".pqa_index"
 
+# Retrieval top-k (spec §3.7): was silently paper-qa's own default (10),
+# never tuned for "cover these 12 sim_params.json geometry parameters"
+# specifically. scripts/k_sweep_probe.py measured extraction-reachable
+# coverage of the 12 geometry_free params vs evidence_k on 10 targeted
+# queries: k=10 -> 9/12, k=20 -> 11/12, k=30 -> 11/12 (flat — the extra
+# evidence retrieved didn't turn into new coverage, pure wasted cost),
+# k=50 -> 12/12 (closes the last param, sink_fin_n, but at ~3x the raw
+# context volume of k=10). 20 is the elbow: real gains through 10->20,
+# zero marginal gain 20->30. Not going to 50 — the last gap is plausibly
+# just how rarely fin count specifically gets reported in the corpus, not
+# something k alone reliably fixes, and it's not worth ~3x the per-query
+# cost/latency to chase one parameter.
+EVIDENCE_K = 20
+
 
 def build_settings() -> Settings:
     llm = get_llm_model()
@@ -37,6 +51,7 @@ def build_settings() -> Settings:
         embedding=get_embedding_model(),
         paper_directory=str(CORPUS_DIR),
     )
+    settings.answer.evidence_k = EVIDENCE_K
     # paper-qa defaults summary_llm/agent_llm to OpenAI's gpt-4o independently
     # of the top-level `llm` field. summary_llm=DeepSeek works fine, but
     # agent_llm=DeepSeek gets stuck: it never emits a "complete" tool call and
