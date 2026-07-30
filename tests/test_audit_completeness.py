@@ -56,7 +56,6 @@ def test_success_entry_fully_reconstructs_request_evidence_output(tmp_path, monk
         "task_context": {
             "objective": "design a cooler",
             "constraints": {"heat_load_w": 5.0},
-            "materials_hint": ["Bi2Te3"],
         },
         "max_priors": 3,
         "allow_external": False,

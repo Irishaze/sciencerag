@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 class TaskContext(BaseModel):
     objective: str | None = None
     constraints: dict[str, float] = Field(default_factory=dict)
-    materials_hint: list[str] = Field(default_factory=list)
 
 
 class PriorsRequest(BaseModel):

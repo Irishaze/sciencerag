@@ -46,8 +46,7 @@ ScienceRAG 是一组供 Hermes 调用的服务端点(endpoint,即服务对外暴
   "query": "Bi2Te3 薄膜 TEC 中 COP 与热电臂几何的关系",
   "task_context": {
     "objective": "maximize_cop",
-    "constraints": {"heat_load_w": 5, "ambient_k": 300},
-    "materials_hint": ["Bi2Te3"]
+    "constraints": {"heat_load_w": 5, "ambient_k": 300}
   },
   "max_priors": 5,
   "allow_external": true

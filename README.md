@@ -26,7 +26,7 @@ uv sync
 ```json
 {
   "query": "What is the optimal driving voltage for a thermoelectric cooler to maximize COP?",
-  "task_context": {"objective": "...", "constraints": {"heat_load_w": 5.0}, "materials_hint": ["Bi2Te3"]},
+  "task_context": {"objective": "...", "constraints": {"heat_load_w": 5.0}},
   "max_priors": 5,
   "allow_external": false
 }
