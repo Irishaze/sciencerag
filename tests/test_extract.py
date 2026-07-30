@@ -239,12 +239,15 @@ def test_to_prior_carries_related_fields_through():
     assert prior.related_fields == ["leg_length", "leg_width", "pitch"]
 
 
-def test_confidence_increases_with_more_supporting_evidence():
-    """Holding relevance constant, more supporting evidence should yield a
-    strictly higher confidence — the point of the base term scaling with
-    min(n_sources, 3) in the formula."""
+def test_confidence_increases_with_more_supporting_papers():
+    """Holding relevance constant, more supporting DISTINCT PAPERS should
+    yield a strictly higher confidence — the point of the base term scaling
+    with min(n_papers, 3) in the formula. Each evidence item here has a
+    different DOI, so this is testing independent corroboration, not just
+    more evidence snippets (see the sibling test below for why that
+    distinction matters)."""
     table = {
-        label: EvidenceItem(text="x", doi="10.0000/x", span="p.1", notes=None, relevance=0.8)
+        label: EvidenceItem(text="x", doi=f"10.0000/{label}", span="p.1", notes=None, relevance=0.8)
         for label in ["E1", "E2", "E3"]
     }
 
@@ -259,6 +262,40 @@ def test_confidence_increases_with_more_supporting_evidence():
     conf_3 = _confidence_for(["E1", "E2", "E3"])
 
     assert conf_1 < conf_2 < conf_3
+
+
+def test_confidence_weighs_distinct_papers_more_than_same_paper_repetition():
+    """Regression test for a real bug found via manual review of a live demo
+    response: PaperQA2 often chunks one paper's one passage into several
+    overlapping evidence snippets, and citing all of them must NOT score
+    the same as citing genuinely distinct papers — a prior with 3 sources
+    that are secretly 1 paper cited 3 times isn't 3x corroborated.
+
+    But snippet count isn't thrown away either: more snippets from the same
+    paper should still nudge confidence up a little (a table AND a
+    paragraph both confirming a claim is mildly more trustworthy than
+    either alone) — just far less than a second independent paper would."""
+    same_paper_table = {
+        label: EvidenceItem(text="x", doi="10.0000/onepaper", span="p.1", notes=None, relevance=0.8)
+        for label in ["E1", "E2", "E3"]
+    }
+    distinct_paper_table = {
+        label: EvidenceItem(text="x", doi=f"10.0000/{label}", span="p.1", notes=None, relevance=0.8)
+        for label in ["E1", "E2", "E3"]
+    }
+
+    def _confidence_for(table: dict, evidence: list[str]) -> float:
+        draft = ExtractedPriorDraft(kind="caution", field="leg_length", value={}, evidence=evidence)
+        return _to_prior(draft, table).confidence
+
+    conf_one_snippet = _confidence_for(same_paper_table, ["E1"])
+    conf_same_paper_three_snippets = _confidence_for(same_paper_table, ["E1", "E2", "E3"])
+    conf_three_distinct_papers = _confidence_for(distinct_paper_table, ["E1", "E2", "E3"])
+
+    # more snippets from the same paper: a small bump, not zero
+    assert conf_one_snippet < conf_same_paper_three_snippets
+    # but nowhere near what 3 genuinely distinct papers earn for the same snippet count
+    assert conf_same_paper_three_snippets < conf_three_distinct_papers
 
 
 def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):

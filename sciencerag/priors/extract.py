@@ -11,8 +11,8 @@ extraction pipeline:
 The LLM never outputs a DOI directly (a hallucination vector) — it only
 picks which numbered evidence snippets support each prior; we look up the
 real source ourselves. Confidence is not LLM-scored; it's derived from
-evidence count + PaperQA2's own relevance score, per spec's "don't fake a
-calibrated probability" principle (see README's priors section).
+distinct-paper count + PaperQA2's own relevance score, per spec's "don't
+fake a calibrated probability" principle (see README's priors section).
 """
 
 import json
@@ -172,6 +172,8 @@ class PipelineAttempt(BaseModel):
 class ConfidenceBreakdown(BaseModel):
     prior_field: str | None
     evidence_labels: list[str]
+    n_papers: int
+    n_snippets: int
     base: float
     avg_relevance: float
     confidence: float
@@ -239,6 +241,25 @@ def _parse_and_validate(
     return output
 
 
+# Confidence formula constants (spec §3.7 — pending real-data recalibration
+# under the sim-contract-scoped pipeline; current values are placeholders
+# carried over from the pre-fix formula's base/cap, not yet re-derived).
+# Two signals, weighted unevenly on purpose:
+#   - n_papers (distinct DOIs): the dominant term. Independent papers
+#     agreeing is real corroboration.
+#   - extra_snippets (evidence items beyond one-per-paper, i.e. PaperQA2
+#     chunking the SAME paper's passage into multiple overlapping
+#     contexts): a much smaller bonus. More text from a paper you already
+#     have is weaker signal than a second paper, but it's not zero signal
+#     either — a paper repeating/elaborating a claim across a table and a
+#     paragraph is mildly more trustworthy than a single passing mention.
+CONFIDENCE_BASE = 0.5
+CONFIDENCE_PER_PAPER = 0.1
+CONFIDENCE_PAPER_CAP = 3
+CONFIDENCE_PER_EXTRA_SNIPPET = 0.02
+CONFIDENCE_EXTRA_SNIPPET_CAP = 3
+
+
 def _to_prior(
     draft: ExtractedPriorDraft,
     evidence_table: dict[str, EvidenceItem],
@@ -247,8 +268,25 @@ def _to_prior(
     items = [evidence_table[label] for label in draft.evidence]
     sources = [SourcePaper(doi=item.doi or "", span=item.span) for item in items]
 
-    base = 0.5 + 0.1 * min(len(items), 3)
-    avg_relevance = sum(item.relevance for item in items) / len(items)
+    # Distinct papers vs. total snippets: PaperQA2 often chunks one paper's
+    # one passage into several overlapping contexts, each becoming its own
+    # evidence label (E1/E2/E3...) — citing 3 snippets from the SAME paper
+    # is not 3 independent corroborating sources, it's 1 source cited 3
+    # times, and shouldn't get the same confidence boost as 3 distinct
+    # papers agreeing. A missing DOI never merges with another missing DOI
+    # (each gets its own unique fallback key) so unknown-source items can't
+    # silently absorb into someone else's citation count.
+    n_snippets = len(items)
+    distinct_papers = {item.doi if item.doi else f"_nodoi_{id(item)}" for item in items}
+    n_papers = len(distinct_papers)
+    extra_snippets = max(0, n_snippets - n_papers)
+
+    base = (
+        CONFIDENCE_BASE
+        + CONFIDENCE_PER_PAPER * min(n_papers, CONFIDENCE_PAPER_CAP)
+        + CONFIDENCE_PER_EXTRA_SNIPPET * min(extra_snippets, CONFIDENCE_EXTRA_SNIPPET_CAP)
+    )
+    avg_relevance = sum(item.relevance for item in items) / n_snippets
     confidence = round(min(1.0, base * avg_relevance), 2)
 
     if trace is not None:
@@ -256,6 +294,8 @@ def _to_prior(
             ConfidenceBreakdown(
                 prior_field=draft.field,
                 evidence_labels=draft.evidence,
+                n_papers=n_papers,
+                n_snippets=n_snippets,
                 base=round(base, 2),
                 avg_relevance=round(avg_relevance, 2),
                 confidence=confidence,
