@@ -40,7 +40,7 @@ def _format_target_params() -> str:
     )
 
 
-# Target-oriented extraction (spec: sync_to_claude_code.md §3): the LLM no
+# Target-oriented extraction (spec §3.6): the LLM no
 # longer invents its own `field` slugs. It only ever names one of the sim
 # contract's 12 free geometry parameters (sciencerag/priors/sim_params.json),
 # so priors line up with the simulation side without a name/unit
@@ -91,7 +91,7 @@ class ExtractedPriorDraft(BaseModel):
         "caution",
     ]
     field: str | None = None
-    # New in the sim-contract sync (spec §2): relationships/configs spanning
+    # New in the sim-contract sync (spec §3.6): relationships/configs spanning
     # more than one parameter (scaling_relationship/candidate_config) can't
     # be expressed with a single `field`. Optional + defaults to [] so
     # single-parameter priors are unaffected — backward compatible.
@@ -128,11 +128,11 @@ class ExtractedPriorDraft(BaseModel):
 
     @model_validator(mode="after")
     def _fields_must_be_in_contract(self) -> "ExtractedPriorDraft":
-        """Hard constraint from spec §4: field/related_fields must be exact
+        """Hard constraint from spec §3.6: field/related_fields must be exact
         sim_params.json geometry_free names — never an LLM-invented slug,
         never a material/operating/derived parameter. material_property
         drafts are exempt (and always silently dropped downstream in
-        extract_priors, never becoming a Prior — see spec §6.1: material is
+        extract_priors, never becoming a Prior — see spec §3.6: material is
         fixed, prior_target=false, this kind is schema-only)."""
         if self.kind == "material_property":
             return self
@@ -281,7 +281,7 @@ class ExtractionResult(NamedTuple):
     # Count of material_property drafts the LLM emitted anyway (against the
     # prompt's instructions) and that were filtered out before becoming a
     # Prior — surfaced so the caller can note it in coverage.gaps rather
-    # than have it vanish with no trace (spec §6.1).
+    # than have it vanish with no trace (spec §3.6).
     filtered_material_count: int
 
 
@@ -333,7 +333,7 @@ def extract_priors(
             if trace is not None:
                 trace.attempts.append(PipelineAttempt(attempt=attempt_num, raw_output=raw))
             # Material is fixed (Bi2Te3, prior_target=false) — material_property
-            # stays a valid `kind` for schema compatibility (spec §6.1) but the
+            # stays a valid `kind` for schema compatibility (spec §3.6) but the
             # pipeline never produces it: filter any the LLM emits anyway,
             # rather than retrying or erroring over them.
             kept = [d for d in output.priors if d.kind != "material_property"]

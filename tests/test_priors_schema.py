@@ -35,7 +35,7 @@ VALID_FULL = {
     "trace_id": "tr_test123",
 }
 
-# related_fields (spec: sync_to_claude_code.md §2) — a scaling_relationship
+# related_fields (spec §3.6) — a scaling_relationship
 # prior with null `field`, expressing a relation between two sim-contract
 # parameters instead of a single one.
 VALID_RELATED_FIELDS = {

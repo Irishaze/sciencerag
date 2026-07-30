@@ -38,7 +38,7 @@ def log_audit_entry(
         # recorded for every call so latency regressions are auditable after
         # the fact, not just when a warning happens to be watched live.
         "elapsed_s": elapsed_s,
-        # spec §6.1: material is fixed (Bi2Te3, prior_target=false) — if the
+        # spec §3.6: material is fixed (Bi2Te3, prior_target=false) — if the
         # LLM emitted a material_property finding anyway, it's dropped
         # before becoming a Prior (never shown in coverage.gaps, since it's
         # not a coverage shortfall) but logged here so it stays auditable.

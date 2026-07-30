@@ -1,5 +1,5 @@
 """Loader for sim_params.json — the simulation-side parameter contract
-(spec: docs/spec/sync_to_claude_code.md).
+(spec §3.6).
 
 sim_params.json is the single source of truth for which parameter names a
 Prior's `field`/`related_fields` may reference: the COMSOL simulation side

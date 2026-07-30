@@ -63,8 +63,8 @@ ScienceRAG 是一组供 Hermes 调用的服务端点(endpoint,即服务对外暴
     {
       "prior_id": "pr_2026_0713_001",
       "kind": "parameter_range",
-      "field": "leg_length_um",
-      "value": {"min": 20, "max": 200, "typical": 60},
+      "field": "leg_length",
+      "value": {"min": 0.02, "max": 0.2, "typical": 0.06, "unit": "mm"},
       "confidence": 0.82,
       "sources": [
         {"type": "paper", "doi": "10.1234/example", "span": "p.4, Fig.3"},
@@ -78,7 +78,7 @@ ScienceRAG 是一组供 Hermes 调用的服务端点(endpoint,即服务对外暴
 }
 ```
 
-`kind` 为枚举类型:`parameter_range`(参数范围)、`material_property`(材料属性)、`scaling_relationship`(标度关系)、`candidate_config`(候选配置)、`caution`(注意事项)。`gaps` 字段是刻意设计的:Hermes 需要知道文献中*未*覆盖的部分,从而在这些区域扩大仿真扫描范围,而不是盲信一个证据薄弱的先验。
+`kind` 为枚举类型:`parameter_range`(参数范围)、`material_property`(材料属性)、`scaling_relationship`(标度关系)、`candidate_config`(候选配置)、`caution`(注意事项)。`gaps` 字段是刻意设计的:Hermes 需要知道文献中*未*覆盖的部分,从而在这些区域扩大仿真扫描范围,而不是盲信一个证据薄弱的先验。`field` 与可选字段 `related_fields` 的取值均来自仿真参数契约(见 3.6);`material_property` 保留枚举值但因材料固定而实际不产出。
 
 ### 3.4 与假设排序的配合
 
@@ -94,6 +94,32 @@ ScienceRAG 是一组供 Hermes 调用的服务端点(endpoint,即服务对外暴
 4. **向量化入库**:片段经 embedding 模型转为向量,连同原文与元数据存入向量库;按 DOI 去重,重复上传只更新。
 
 约束:embedding 模型版本与向量库绑定记录;更换模型时必须全库重建,禁止新旧向量混存。入库流水线的运行记录(何时入了哪些文献、解析成功/失败)纳入审计日志。
+
+### 3.6 仿真参数契约(sim_params.json)
+
+先验的 `field` 并非自由文本:它的取值空间由一份与仿真侧(COMSOL 单级 Bi2Te3 TEC)对齐的参数契约 `sim_params.json`(`sciencerag/priors/sim_params.json`)固定,避免 Hermes 在把先验填入仿真时还要做一次名称/单位翻译——例如先验侧曾自造 `leg_length_um` 这样的命名,仿真侧实际叫 `leg_length` 且单位是 mm,人工翻译容易出错,也让先验与仿真结果按参数对比时对不上。
+
+契约把仿真参数分为五类,并各自标注 `prior_target`:
+
+- **`geometry_free`(自由几何参数,`prior_target: true`)**:Hermes 主动优化/扫描的对象,是先验唯一的目标,共 12 个——`leg_length`、`leg_width`、`pitch`、`d_conductor`、`d_ceramics`、`length`、`width`、`height`、`sink_base_h`、`sink_fin_h`、`sink_fin_w`、`sink_fin_n`,每个参数带真实仿真参数名与单位。
+- **`material`(材料,`prior_target: false`)**:材料固定为 Bi2Te3,属性(Seebeck 系数、电阻率、热导率、优值 Z)随温度变化,按 200–400K 的整张表登记为已知常量;先验不对材料出建议。
+- **`operating_condition` / `derived` / `numerical_setting`(均 `prior_target: false`)**:分别是任务给定的工况、由其他参数算出的派生量、纯数值求解设置,均与先验无关。
+
+`Prior` 模型上,单参数先验(`parameter_range`/`caution`)用 `field`;新增的可选字段 `related_fields`(默认空列表,向后兼容)供多参数先验(`scaling_relationship`/`candidate_config`)表达"一组参数"或"参数之间的关系"。两者取值都必须 ∈ 契约 `geometry_free` 的参数名集合,抽取流水线在解析 LLM 输出后强制校验,不在集合内一律拒绝——防止 LLM 自造名称,或误碰材料/工况/派生参数。抽取本身也是目标导向的:提示词把这 12 个参数名与单位直接列给 LLM 作为清单,而非任其自由命名;参数之间的关系不预设分组,只有证据里实际提到才抽成 `scaling_relationship`,文献没提就不造。
+
+`kind` 五值枚举本身不变,但 `material_property` 在当前项目实际上是"存在于枚举、但从不产出"的状态:材料固定且属性已知,先验不对它出建议;若 LLM 仍误输出材料类先验,抽取流水线会将其过滤,不进入响应,但计入审计日志(而非 `coverage.gaps`——这不是"漏检覆盖",而是"被正确排除")。
+
+`coverage.gaps` 同样以契约的 12 个几何参数为标尺:本次抽取覆盖了哪些、没覆盖哪些,没覆盖的进 `gaps` 而不是硬凑一个先验去凑数。v1 先给出"未覆盖"这一简化归因;更细的"未检索到证据 / 检索到但相关性不足 / 抽到但置信度不足"三级归因留待后续迭代。
+
+五种 `kind` 在契约体系下的填法:
+
+| kind | field | related_fields | value 要点 |
+|---|---|---|---|
+| `parameter_range` | 恰好一个契约参数名(必填) | 不填 | 至少一个数值键,如 `{"min", "max", "typical", "unit"}` |
+| `material_property` | 恒为 `null` | 不填 | 材料属性固定见契约,不由先验提供;实际不产出 |
+| `scaling_relationship` | `null` 或标主参数 | 关系涉及的参数列表(至少一个) | 含 `direction`(`positive`/`negative`/`convex`/`unknown`)与说明 |
+| `candidate_config` | 恒为 `null` | 这组配置涉及的参数列表 | 按参数名给出这组配置的每个值 |
+| `caution` | 通常填一个参数;涉及多参数时用 `related_fields` | 视情况 | 限制/注意事项说明 |
 
 ## 4. 组件 B — 验证与学习(`sciencerag.validate`)
 

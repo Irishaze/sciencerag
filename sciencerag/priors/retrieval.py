@@ -111,12 +111,12 @@ def _prior_geometry_fields(prior: Prior) -> set[str]:
 
 def _build_geometry_gaps(all_priors: list[Prior], strong_priors: list[Prior]) -> list[str]:
     """Use the sim contract's 12 geometry_free parameters as the yardstick
-    for coverage (spec §5): whatever this run didn't end up with a
+    for coverage (spec §3.6): whatever this run didn't end up with a
     confidence-surviving prior for goes into gaps, not silently dropped.
 
     Distinguishes "extracted but too low-confidence to publish" from
     "nothing extracted at all" where that's cheap to know (from priors we
-    already have in hand) — true evidence-relevance attribution (spec §5's
+    already have in hand) — true evidence-relevance attribution (spec §3.6's
     3-way split) needs per-parameter semantic matching over raw retrieval
     contexts, which the spec explicitly defers past v1 ("第一版可先简化为
     '未覆盖'").
@@ -178,7 +178,7 @@ def _build_priors_response(
     half-broken result (spec principle).
 
     Returns (response, filtered_material_count) — the latter is audit-log
-    metadata, not part of the API contract (spec §6.1: material_property
+    metadata, not part of the API contract (spec §3.6: material_property
     drafts the LLM emits anyway are dropped before becoming a Prior; the
     count is logged to logs/audit.jsonl by the caller, not coverage.gaps,
     since it's not something missing from coverage — it's something

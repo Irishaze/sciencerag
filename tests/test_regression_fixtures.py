@@ -43,7 +43,7 @@ def test_fixture_file_loads_and_has_5_to_10_entries():
 
 def test_fixture_file_covers_all_producible_kinds_across_its_must_have_kinds():
     """material_property is intentionally excluded from this check: under the
-    sim-contract sync (spec: sync_to_claude_code.md §6.1), material is fixed
+    sim-contract sync (spec §3.6), material is fixed
     (Bi2Te3, prior_target=false) and the extraction pipeline filters out any
     material_property draft before it becomes a Prior — a real pipeline run
     can never legitimately satisfy must_have_kinds=['material_property']

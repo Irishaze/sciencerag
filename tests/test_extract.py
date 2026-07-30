@@ -159,7 +159,7 @@ def test_parse_and_validate_rejects_invalid_kind_value():
         _parse_and_validate(raw, _evidence_table())
 
 
-# -- sim contract enforcement (spec: sync_to_claude_code.md §4) -------------
+# -- sim contract enforcement (spec §3.6) -------------
 
 
 def test_field_not_in_contract_is_rejected():
@@ -197,7 +197,7 @@ def test_material_property_kind_is_exempt_from_contract_check():
 
 
 def test_related_fields_defaults_to_empty_list():
-    """Backward compatibility (spec §2): related_fields is optional and a
+    """Backward compatibility (spec §3.6): related_fields is optional and a
     single-parameter prior is unaffected by its addition."""
     draft = ExtractedPriorDraft(
         kind="caution", field="leg_length", value={"issue": "contact resistance"}, evidence=["E1"]
@@ -305,7 +305,7 @@ def test_extract_priors_raises_after_max_retries(monkeypatch):
 def test_extract_priors_filters_out_material_property_drafts(monkeypatch):
     """Material is fixed (Bi2Te3, prior_target=false) — even if the LLM
     ignores the prompt and emits a material_property finding anyway, it
-    must never surface as a Prior (spec §6.1: 'filtered/not adopted')."""
+    must never surface as a Prior (spec §3.6: 'filtered/not adopted')."""
 
     def fake_completion(**kwargs):
         return _fake_llm_response(

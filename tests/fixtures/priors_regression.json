@@ -3,7 +3,7 @@
     "id": "parameter_range_leg_length",
     "query": "What is a typical leg length (leg_length) used in Bi2Te3 thermoelectric cooler design — range or optimal value?",
     "category": "parameter_range",
-    "notes": "Captured 2026-07 real run (pre sim-contract sync): 6 priors incl. parameter_range, 2 distinct DOIs. leg_length is a core sim_params.json geometry_free target, so this fixture should still hold under the contract-scoped extraction (spec: sync_to_claude_code.md) — but re-run scripts/run_regression.py to confirm before trusting the number.",
+    "notes": "Captured 2026-07 real run (pre sim-contract sync): 6 priors incl. parameter_range, 2 distinct DOIs. leg_length is a core sim_params.json geometry_free target, so this fixture should still hold under the contract-scoped extraction (spec §3.6) — but re-run scripts/run_regression.py to confirm before trusting the number.",
     "min_priors": 3,
     "must_have_kinds": ["parameter_range"],
     "must_cite_real_doi": true
@@ -12,7 +12,7 @@
     "id": "parameter_range_conductor_thickness",
     "query": "What conductor/metallization layer thickness (d_conductor) is typically used in Bi2Te3 thermoelectric leg fabrication?",
     "category": "parameter_range",
-    "notes": "PLACEHOLDER, needs a real scripts/run_regression.py run to calibrate min_priors. Replaces material_property_zt: material_property is now permanently unproducible (material is fixed Bi2Te3, prior_target=false in sim_params.json — see spec: sync_to_claude_code.md §6.1), so a ZT/material-property query can never satisfy must_have_kinds=['material_property'] anymore. d_conductor is a real sim_params.json geometry_free target.",
+    "notes": "PLACEHOLDER, needs a real scripts/run_regression.py run to calibrate min_priors. Replaces material_property_zt: material_property is now permanently unproducible (material is fixed Bi2Te3, prior_target=false in sim_params.json — see spec §3.6), so a ZT/material-property query can never satisfy must_have_kinds=['material_property'] anymore. d_conductor is a real sim_params.json geometry_free target.",
     "min_priors": 1,
     "must_have_kinds": ["parameter_range"],
     "must_cite_real_doi": true
@@ -21,7 +21,7 @@
     "id": "scaling_relationship_leg_aspect_ratio",
     "query": "How does the optimal leg length (leg_length) depend on leg width (leg_width) in Bi2Te3 thermoelectric cooler design?",
     "category": "scaling_relationship",
-    "notes": "PLACEHOLDER, needs a real scripts/run_regression.py run to calibrate min_priors. Replaces scaling_relationship_fan_speed: fan speed (v_air) is an operating_condition, out of scope for priors under the new contract (spec: sync_to_claude_code.md §3) and the prompt now explicitly tells the LLM not to extract it. leg_length-depends-on-leg_width is the spec's own worked example for scaling_relationship + related_fields.",
+    "notes": "PLACEHOLDER, needs a real scripts/run_regression.py run to calibrate min_priors. Replaces scaling_relationship_fan_speed: fan speed (v_air) is an operating_condition, out of scope for priors under the new contract (spec §3.6) and the prompt now explicitly tells the LLM not to extract it. leg_length-depends-on-leg_width is the spec's own worked example for scaling_relationship + related_fields.",
     "min_priors": 1,
     "must_have_kinds": ["scaling_relationship"],
     "must_cite_real_doi": true

@@ -87,7 +87,7 @@ def test_success_entry_fully_reconstructs_request_evidence_output(tmp_path, monk
     assert "timestamp" in entry
     assert entry["endpoint"] == "sciencerag.priors"
 
-    # 5. Filtered material_property drafts (spec §6.1) are auditable even
+    # 5. Filtered material_property drafts (spec §3.6) are auditable even
     #    though they never appear in coverage.gaps or the response body.
     assert entry["filtered_material_count"] == 1
 

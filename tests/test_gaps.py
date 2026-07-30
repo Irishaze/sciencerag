@@ -71,7 +71,7 @@ def test_build_gaps_reports_zero_hits_case():
     assert "no relevant evidence" in gaps[0]
 
 
-# -- contract-based coverage gaps (spec: sync_to_claude_code.md §5) ---------
+# -- contract-based coverage gaps (spec §3.6) ---------
 
 
 def test_build_geometry_gaps_reports_all_12_when_nothing_extracted():
