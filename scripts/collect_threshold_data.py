@@ -25,7 +25,6 @@ already-completed queries are skipped.
 import json
 import sys
 import time
-from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -33,13 +32,22 @@ from regression_probe_100 import QUERIES  # noqa: E402 - needs sys.path tweak ab
 
 from sciencerag.priors.retrieval import build_priors_response_with_trace  # noqa: E402
 
+# Fixed filename, NOT date-stamped: this is one evolving dataset collected
+# (and re-collected, on failures) over however many real sessions it takes
+# — a date-derived name meant the moment the resume run crossed a calendar
+# day boundary, `date.today()` silently pointed at a brand-new empty file,
+# resume/skip logic saw zero done_queries, and the whole 100-query batch
+# got redone from scratch (found the hard way — burned a real rerun on it).
+DEFAULT_OUT_PATH = Path("data/threshold_collection.json")
 
-def main(queries: list[tuple[str, str]] | None = None) -> None:
+
+def main(
+    queries: list[tuple[str, str]] | None = None, out_path: Path = DEFAULT_OUT_PATH
+) -> None:
     if queries is None:
         queries = QUERIES
         assert len(queries) == 100, f"expected 100 queries, got {len(queries)}"
 
-    out_path = Path(f"data/threshold_collection_{date.today().isoformat()}.json")
     out_path.parent.mkdir(exist_ok=True)
 
     results = []
