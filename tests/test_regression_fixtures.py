@@ -85,9 +85,9 @@ def test_check_fixture_flags_missing_required_kind():
 
 def test_check_fixture_flags_missing_doi():
     fixtures = load_fixtures(FIXTURES_PATH)
-    fixture = next(f for f in fixtures if f.id == "scaling_relationship_leg_aspect_ratio")
+    fixture = next(f for f in fixtures if f.id == "caution_max_cop_limits")
     response = _priors_response(
-        ["scaling_relationship"] * 3, dois=["10.1/a", "", "10.2/b"]
+        ["caution"] * 3, dois=["10.1/a", "", "10.2/b"]
     )
     violations = check_fixture(fixture, response)
     assert any("DOI" in v for v in violations)
