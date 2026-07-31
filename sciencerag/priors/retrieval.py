@@ -66,14 +66,20 @@ def run_query(query: str) -> AnswerResponse:
     return ask(query, settings=build_settings())
 
 
-# Below this, evidence never reaches the LLM at all — found via manual
-# review that PaperQA2's summary_llm sometimes hallucinates a "finding" from
-# a paper's reference-list titles rather than its body text, and those
-# summaries can still score a moderate relevance (e.g. 0.60) that survives
-# the post-extraction CONFIDENCE_THRESHOLD filter. Cutting evidence off
-# earlier, before it can seed any prior, is more reliable than trying to
-# catch the resulting hallucination after the fact.
-MIN_EVIDENCE_RELEVANCE = 0.7
+# Below this, evidence never reaches the LLM at all. Originally set to 0.7
+# from manual review that PaperQA2's summary_llm sometimes hallucinates a
+# "finding" from a paper's reference-list titles rather than its body text,
+# with those hallucinated summaries still scoring a moderate ~0.60.
+#
+# Recalibrated (spec §3.7) with a GPT-4o judge (temperature=0) on a fresh
+# 100-query probe collected under the sim-contract-scoped extraction
+# (scripts/collect_threshold_data.py + scripts/threshold_judge.py +
+# scripts/threshold_curve.py): the [0.6, 0.7) relevance bucket judged
+# 100% KEEP (n=12, no reference-list hallucination found) — 0.7 was
+# dropping a bucket of genuinely good evidence as a false gap. [0.5, 0.6)
+# judged only 58.3% KEEP (n=12) — too mixed to also fold in. Lowered to
+# 0.6, the boundary where the data stops being clean.
+MIN_EVIDENCE_RELEVANCE = 0.6
 
 
 def _build_evidence_table(
