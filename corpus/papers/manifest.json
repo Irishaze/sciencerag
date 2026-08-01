@@ -1898,5 +1898,15 @@
     "year": 2015,
     "venue": "Applied Energy",
     "path": "95_Performance_Analysis_Thermoelectric_Cooler_Corrugated_Architecture.pdf"
+  },
+  {
+    "doi": "COMSOL2008-Jaegle (no DOI assigned; COMSOL Conference 2008 Hannover proceedings paper)",
+    "title": "Multiphysics Simulation of Thermoelectric Systems - Modeling of Peltier-Cooling and Thermoelectric Generation",
+    "authors": [
+      "Martin Jaegle"
+    ],
+    "year": 2008,
+    "venue": "COMSOL Conference 2008 Hannover",
+    "path": "96_Multiphysics_Simulation_Thermoelectric_Systems_Peltier_Cooling.pdf"
   }
 ]
