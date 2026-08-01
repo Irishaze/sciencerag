@@ -22,7 +22,7 @@ VALID_FULL = {
             "prior_id": "pr_2026_0713_001",
             "kind": "parameter_range",
             "field": "leg_length_um",
-            "value": {"min": 20, "max": 200, "typical": 60},
+            "value": {"field_name": "leg_length_um", "min": 20, "max": 200, "typical": 60, "unit": "um"},
             "confidence": 0.82,
             "sources": [
                 {"type": "paper", "doi": "10.1234/example", "span": "p.4, Fig.3"},
@@ -46,7 +46,8 @@ VALID_RELATED_FIELDS = {
             "kind": "scaling_relationship",
             "field": None,
             "related_fields": ["leg_length", "leg_width"],
-            "value": {"form": "coupled", "description": "optimal leg_length depends on leg_width"},
+            "value": {"x": "leg_length", "y": "leg_width", "direction": "positive"},
+            "notes": "optimal leg_length depends on leg_width",
             "confidence": 0.7,
             "sources": [{"type": "paper", "doi": "10.1234/example", "span": "p.5, Eq.12"}],
         }
@@ -95,7 +96,7 @@ INVALID_ZERO_SOURCES = {
             "prior_id": "pr_no_sources",
             "kind": "parameter_range",
             "field": "x",
-            "value": {"typical": 1},
+            "value": {"field_name": "x", "typical": 1, "unit": "mm"},
             "confidence": 0.9,
             "sources": [],
         }
@@ -111,7 +112,7 @@ INVALID_CONFIDENCE_OUT_OF_RANGE = {
             "prior_id": "pr_overconfident",
             "kind": "parameter_range",
             "field": "x",
-            "value": {"typical": 1},
+            "value": {"field_name": "x", "typical": 1, "unit": "mm"},
             "confidence": 1.5,
             "sources": [{"type": "paper", "doi": "10.1/x"}],
         }

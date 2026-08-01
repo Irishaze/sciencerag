@@ -41,7 +41,7 @@ uv sync
 | 字段 | 说明 |
 |---|---|
 | `kind` | 五选一:`parameter_range`(数值范围)、`material_property`(材料属性)、`scaling_relationship`(标度关系,不一定带数字)、`candidate_config`(候选设计/配置)、`caution`(限制或警告) |
-| `value` | 结构化内容,具体字段随 `kind` 变化(比如 `parameter_range` 至少带一个数值键) |
+| `value` | 每个 `kind` 有专属固定 schema,不是自由 dict——没有 `summary` 兜底键,抽不出结构化内容就不产出。比如 `parameter_range` 要求 `field_name`(须等于外层 `field`)+ `unit` + 至少一个 `min`/`max`/`typical`;`scaling_relationship` 要求 `x`/`y`(须恰好等于 `related_fields` 的两个参数名)+ `direction`。完整的五套子 schema 见 [docs/spec/sciencerag_spec_zh.md](docs/spec/sciencerag_spec_zh.md) §3.6 |
 | `confidence` | **一个启发式分数,不是校准过的概率**——公式是 `(来源数量相关的基数) * (证据平均相关性)`,用来做"值不值得展示"的排序和过滤,不能解读成"这个结论有 X% 概率正确"。下游消费时应该按相对高低排序使用,不要做校准意义上的数值解读。 |
 | `sources` | 每条 prior 至少一个来源(schema 强制 `min_length=1`,不允许无引用的结论)——要么是 `{"type": "paper", "doi": ..., "span": ...}`,要么是 `{"type": "kg_triple", "triple_id": ...}` |
 

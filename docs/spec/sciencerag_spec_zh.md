@@ -63,7 +63,7 @@ ScienceRAG 是一组供 Hermes 调用的服务端点(endpoint,即服务对外暴
       "prior_id": "pr_2026_0713_001",
       "kind": "parameter_range",
       "field": "leg_length",
-      "value": {"min": 0.02, "max": 0.2, "typical": 0.06, "unit": "mm"},
+      "value": {"field_name": "leg_length", "min": 0.02, "max": 0.2, "typical": 0.06, "unit": "mm"},
       "confidence": 0.82,
       "sources": [
         {"type": "paper", "doi": "10.1234/example", "span": "p.4, Fig.3"},
@@ -114,11 +114,13 @@ ScienceRAG 是一组供 Hermes 调用的服务端点(endpoint,即服务对外暴
 
 | kind | field | related_fields | value 要点 |
 |---|---|---|---|
-| `parameter_range` | 恰好一个契约参数名(必填) | 不填 | 至少一个数值键,如 `{"min", "max", "typical", "unit"}` |
+| `parameter_range` | 恰好一个契约参数名(必填) | 不填 | `field_name`(必填,须与上面的 `field` 完全一致)、`unit`(必填)、`min`/`max`/`typical` 至少一个、可选 `conditions` |
 | `material_property` | 恒为 `null` | 不填 | 材料属性固定见契约,不由先验提供;实际不产出 |
-| `scaling_relationship` | `null` 或标主参数 | 关系涉及的参数列表(至少一个) | 含 `direction`(`positive`/`negative`/`convex`/`unknown`)与说明 |
-| `candidate_config` | 恒为 `null` | 这组配置涉及的参数列表 | 按参数名给出这组配置的每个值 |
-| `caution` | 通常填一个参数;涉及多参数时用 `related_fields` | 视情况 | 限制/注意事项说明 |
+| `scaling_relationship` | `null` | 关系涉及的两个参数(恰好两个) | `x`/`y`(必填,须恰好等于 `related_fields` 的两个参数名)、`direction`(必填,`positive`/`negative`/`convex`/`concave`/`non_monotonic`/`unknown`)、可选 `functional_form`/`validity_range` |
+| `candidate_config` | 恒为 `null` | 这组配置涉及的参数列表(至少两个) | `parameters`(必填,键须恰好等于 `related_fields`,值为每个参数在这组配置里的取值)、可选 `reported_performance`/`context` |
+| `caution` | 通常填一个参数;涉及多参数时用 `related_fields` | 视情况 | `statement`(必填,限制/注意事项本身)、可选 `applicability_scope`(成立的条件) |
+
+`value` 不是自由 dict——每个 `kind` 对应一个专属 Pydantic 模型(`sciencerag/priors/models.py`),字段固定,不接受 `summary` 这类自由文本兜底键;抽取不出结构化内容宁可不产出这条先验,也不允许拿一句话糊弄过去。`value` 内部命名参数的字段(`field_name`/`x`,`y`/`parameters` 的键)必须与外层 `field`/`related_fields` 完全一致,由 `Prior` 自身的校验强制保证——两边分别来自 LLM 的同一次输出,理论上不该打架,但没有校验就没法排除 LLM 自相矛盾的可能。
 
 ### 3.7 阈值调优方法论(检索 k / 证据相关性 / 先验置信度)
 

@@ -55,6 +55,80 @@
   },
   "PriorsResponse": {
     "$defs": {
+      "CandidateConfigValue": {
+        "properties": {
+          "parameters": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Parameters",
+            "type": "object"
+          },
+          "reported_performance": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Reported Performance",
+            "type": "object"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Context"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "CandidateConfigValue",
+        "type": "object"
+      },
+      "CautionValue": {
+        "properties": {
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "applicability_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Applicability Scope"
+          }
+        },
+        "required": [
+          "statement"
+        ],
+        "title": "CautionValue",
+        "type": "object"
+      },
       "Coverage": {
         "properties": {
           "internal_hits": {
@@ -78,6 +152,153 @@
           "external_hits"
         ],
         "title": "Coverage",
+        "type": "object"
+      },
+      "MaterialPropertyValue": {
+        "properties": {
+          "material": {
+            "title": "Material",
+            "type": "string"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Form"
+          },
+          "property_name": {
+            "title": "Property Name",
+            "type": "string"
+          },
+          "magnitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Magnitude"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unit"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "method": {
+            "default": "unknown",
+            "enum": [
+              "measured",
+              "computed",
+              "cited",
+              "unknown"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "material",
+          "property_name"
+        ],
+        "title": "MaterialPropertyValue",
+        "type": "object"
+      },
+      "ParameterRangeValue": {
+        "properties": {
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max"
+          },
+          "typical": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Typical"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Conditions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "field_name",
+          "unit"
+        ],
+        "title": "ParameterRangeValue",
         "type": "object"
       },
       "Prior": {
@@ -117,9 +338,24 @@
             "type": "array"
           },
           "value": {
-            "additionalProperties": true,
-            "title": "Value",
-            "type": "object"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ParameterRangeValue"
+              },
+              {
+                "$ref": "#/$defs/MaterialPropertyValue"
+              },
+              {
+                "$ref": "#/$defs/ScalingRelationshipValue"
+              },
+              {
+                "$ref": "#/$defs/CandidateConfigValue"
+              },
+              {
+                "$ref": "#/$defs/CautionValue"
+              }
+            ],
+            "title": "Value"
           },
           "confidence": {
             "maximum": 1,
@@ -179,6 +415,61 @@
           "sources"
         ],
         "title": "Prior",
+        "type": "object"
+      },
+      "ScalingRelationshipValue": {
+        "properties": {
+          "x": {
+            "title": "X",
+            "type": "string"
+          },
+          "y": {
+            "title": "Y",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "positive",
+              "negative",
+              "convex",
+              "concave",
+              "non_monotonic",
+              "unknown"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "functional_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Functional Form"
+          },
+          "validity_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Validity Range"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "direction"
+        ],
+        "title": "ScalingRelationshipValue",
         "type": "object"
       },
       "SourceKGTriple": {
