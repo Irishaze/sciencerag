@@ -1829,5 +1829,22 @@
     "year": 2019,
     "venue": "Journal of Applied Physics",
     "path": "90_Impact_of_Thermoelectric_Leg_Geometries_on_Thermal_Resistance_Power_Output.pdf"
+  },
+  {
+    "doi": "10.1063/5.0088129",
+    "title": "Thermoelectric coolers for high-power-density 3D electronics heat management",
+    "authors": [
+      "Amin Nozariasbmarz",
+      "Ravi Anant Kishore",
+      "Wenjie Li",
+      "Yu Zhang",
+      "Luyao Zheng",
+      "Mohan Sanghadasa",
+      "Bed Poudel",
+      "Shashank Priya"
+    ],
+    "year": 2022,
+    "venue": "Applied Physics Letters",
+    "path": "91_Thermoelectric_Coolers_High_Power_Density_3D_Electronics_Heat_Management.pdf"
   }
 ]
