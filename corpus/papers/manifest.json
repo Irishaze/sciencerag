@@ -1859,5 +1859,19 @@
     "year": 2025,
     "venue": "Basrah Journal for Engineering Sciences",
     "path": "92_Performance_Evaluation_of_Single_Leg_Thermoelectric_Module.pdf"
+  },
+  {
+    "doi": "10.3390/app151810273",
+    "title": "Standard Reference Thermoelectric Modules Based on Metallic Combinations and Geometric Design",
+    "authors": [
+      "EunA Koo",
+      "Hanhwi Jang",
+      "SuDong Park",
+      "Sang Hyun Park",
+      "Sae-byul Kang"
+    ],
+    "year": 2025,
+    "venue": "Applied Sciences",
+    "path": "93_Standard_Reference_Thermoelectric_Modules_Metallic_Combinations_Geometric_Design.pdf"
   }
 ]
