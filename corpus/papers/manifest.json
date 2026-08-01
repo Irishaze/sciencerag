@@ -1755,5 +1755,17 @@
     "year": 2024,
     "venue": "Drones",
     "path": "84_Active_Cooling_System_Temperature_Sensitive_Sample_Delivery_UAV.pdf"
+  },
+  {
+    "doi": "ICC18-063 (no DOI assigned; International Cryocooler Conference proceedings paper)",
+    "title": "Optimum Cooling Capacity of Two-Stage Thermoelectric Refrigerators",
+    "authors": [
+      "A. Razani",
+      "C. Dodson",
+      "T. Fraser"
+    ],
+    "year": 2014,
+    "venue": "International Cryocooler Conference",
+    "path": "85_Optimum_Cooling_Capacity_of_Two_Stage_Thermoelectric_Refrigerators.pdf"
   }
 ]
