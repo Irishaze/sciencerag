@@ -1886,5 +1886,17 @@
     "year": 2024,
     "venue": "Thermo",
     "path": "94_Enhancing_Bi2Te2.70Se0.30_Thermoelectric_Module_Performance_COMSOL.pdf"
+  },
+  {
+    "doi": "10.1016/j.apenergy.2015.01.132",
+    "title": "Performance analysis of a thermoelectric cooler with a corrugated architecture",
+    "authors": [
+      "Opeoluwa Owoyele",
+      "Scott Ferguson",
+      "Brendan T. O'Connor"
+    ],
+    "year": 2015,
+    "venue": "Applied Energy",
+    "path": "95_Performance_Analysis_Thermoelectric_Cooler_Corrugated_Architecture.pdf"
   }
 ]
