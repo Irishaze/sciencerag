@@ -1616,5 +1616,58 @@
     "year": 2025,
     "venue": "Thermo",
     "path": "73_Numerical_Optimization_of_Multi-Stage_Thermoelectric_Cooling_Bi2Te3_Cryosurgical.pdf"
+  },
+  {
+    "doi": "10.3390/wevj16070344",
+    "title": "Optimization of Thermoelectric Module Configuration and Cooling Performance in Thermoelectric-Based Battery Thermal Management System",
+    "authors": [
+      "Shuai Fu",
+      "Hao Qin"
+    ],
+    "year": 2025,
+    "venue": "World Electric Vehicle Journal",
+    "path": "75_Optimization_of_Thermoelectric_Module_Configuration_Battery_Thermal_Management.pdf"
+  },
+  {
+    "doi": "10.3390/su142316214",
+    "title": "Cooling Performance Prediction for Hydraulic Thermoelectric Radiant Cooling Panels with Experimental Validation",
+    "authors": [
+      "Minki Kim",
+      "Yeon-Kyu Kang",
+      "Jinwon Joung",
+      "Jae-Weon Jeong"
+    ],
+    "year": 2022,
+    "venue": "Sustainability",
+    "path": "76_Cooling_Performance_Prediction_Hydraulic_Thermoelectric_Radiant_Cooling_Panels.pdf"
+  },
+  {
+    "doi": "10.3390/e21060578",
+    "title": "A Thermoelectric-Heat-Pump Employed Active Control Strategy for the Dynamic Cooling Ability Distribution of Liquid Cooling System for the Space Station's Main Power-Cell-Arrays",
+    "authors": [
+      "Hui-Juan Xu",
+      "Ji-Xiang Wang",
+      "Yun-Ze Li",
+      "Yan-Jun Bi",
+      "Li-Jun Gao"
+    ],
+    "year": 2019,
+    "venue": "Entropy",
+    "path": "77_Thermoelectric_Heat_Pump_Active_Control_Space_Station_Power_Cell_Arrays.pdf"
+  },
+  {
+    "doi": "10.1103/PhysRevMaterials.5.015403",
+    "title": "Thermomagnetic properties of Bi2Te3 single crystal in the temperature range from 55 K to 380 K",
+    "authors": [
+      "Md Sabbir Akhanda",
+      "S. Emad Rezaei",
+      "Keivan Esfarjani",
+      "Sergiy Krylyuk",
+      "Albert V. Davydov",
+      "Mona Zebarjadi"
+    ],
+    "year": 2021,
+    "venue": "Physical Review Materials",
+    "path": "78_Thermomagnetic_Properties_of_Bi2Te3_Single_Crystal.pdf"
   }
 ]
