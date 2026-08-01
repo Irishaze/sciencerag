@@ -1873,5 +1873,18 @@
     "year": 2025,
     "venue": "Applied Sciences",
     "path": "93_Standard_Reference_Thermoelectric_Modules_Metallic_Combinations_Geometric_Design.pdf"
+  },
+  {
+    "doi": "10.3390/thermo4020011",
+    "title": "Enhancing Bi2Te2.70Se0.30 Thermoelectric Module Performance through COMSOL Simulations",
+    "authors": [
+      "Md. Kamrul Hasan",
+      "Mehmet Ali Üstüner",
+      "Hayati Mamur",
+      "Mohammad Ruhul Amin Bhuiyan"
+    ],
+    "year": 2024,
+    "venue": "Thermo",
+    "path": "94_Enhancing_Bi2Te2.70Se0.30_Thermoelectric_Module_Performance_COMSOL.pdf"
   }
 ]
