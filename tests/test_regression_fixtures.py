@@ -13,17 +13,29 @@ from sciencerag.priors.regression import check_fixture, load_fixtures
 
 FIXTURES_PATH = Path(__file__).resolve().parent / "fixtures" / "priors_regression.json"
 
-# check_fixture()'s pass/fail logic only cares about kind/field/sources/gaps —
-# these are just minimal valid per-kind shapes so Prior construction succeeds.
-_VALUE_BY_KIND = {
-    "parameter_range": {"field_name": "x", "typical": 1.0, "unit": "mm"},
-    "material_property": {
-        "material": "Bi2Te3",
-        "property_name": "seebeck_coefficient",
-    },
-    "scaling_relationship": {"x": "leg_length", "y": "cop", "direction": "unknown"},
-    "candidate_config": {"parameters": {"leg_length": 0.07, "leg_width": 0.12}},
-    "caution": {"statement": "x"},
+# check_fixture()'s pass/fail logic only cares about kind/sources/gaps — these
+# are just minimal valid per-kind shapes so Prior construction succeeds.
+# field/related_fields must still agree with the value's own field name(s)
+# (see models.py's cross-check), so relationship kinds use related_fields
+# instead of field.
+_FIELD_AND_VALUE_BY_KIND = {
+    "parameter_range": (
+        {"field": "x", "related_fields": []},
+        {"field_name": "x", "typical": 1.0, "unit": "mm"},
+    ),
+    "material_property": (
+        {"field": "x", "related_fields": []},
+        {"material": "Bi2Te3", "property_name": "seebeck_coefficient"},
+    ),
+    "scaling_relationship": (
+        {"field": None, "related_fields": ["leg_length", "cop"]},
+        {"x": "leg_length", "y": "cop", "direction": "unknown"},
+    ),
+    "candidate_config": (
+        {"field": None, "related_fields": ["leg_length", "leg_width"]},
+        {"parameters": {"leg_length": 0.07, "leg_width": 0.12}},
+    ),
+    "caution": ({"field": "x", "related_fields": []}, {"statement": "x"}),
 }
 
 
@@ -36,10 +48,10 @@ def _priors_response(
             Prior(
                 prior_id=f"pr_{i}",
                 kind=kind,
-                field="x",
-                value=_VALUE_BY_KIND[kind],
+                value=_FIELD_AND_VALUE_BY_KIND[kind][1],
                 confidence=0.8,
                 sources=[SourcePaper(doi=doi, span="p.1")],
+                **_FIELD_AND_VALUE_BY_KIND[kind][0],
             )
             for i, (kind, doi) in enumerate(zip(kinds, dois, strict=True))
         ],

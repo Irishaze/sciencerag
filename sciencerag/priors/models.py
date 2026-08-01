@@ -143,6 +143,43 @@ class Prior(BaseModel):
             data = {**data, "value": model_cls.model_validate(raw_value)}
         return data
 
+    @model_validator(mode="after")
+    def _value_field_names_match_prior_fields(self) -> "Prior":
+        """The parameter name(s) a prior is about are the single source of
+        truth on `field`/`related_fields` (that's what extract.py's contract
+        check validates against sim_params.json) — every value kind that
+        names its own parameter(s) internally must name the SAME ones, or a
+        prior could silently point `field`/`related_fields` at one parameter
+        while its value content is actually about another.
+
+        material_property and caution are deliberately exempt: caution's
+        `value` is prose with no parameter name to cross-check (the
+        statement's applicability is exactly what field/related_fields
+        already says), and material_property isn't a contract-field kind at
+        all (materials are fixed, exempt from the contract check, filtered
+        out downstream — see extract.py)."""
+        if isinstance(self.value, ParameterRangeValue):
+            if self.value.field_name != self.field:
+                raise ValueError(
+                    f"parameter_range value.field_name={self.value.field_name!r} must "
+                    f"match prior.field={self.field!r}"
+                )
+        elif isinstance(self.value, ScalingRelationshipValue):
+            value_fields = {self.value.x, self.value.y}
+            if value_fields != set(self.related_fields):
+                raise ValueError(
+                    f"scaling_relationship value.x/y={sorted(value_fields)} must match "
+                    f"prior.related_fields={sorted(self.related_fields)}"
+                )
+        elif isinstance(self.value, CandidateConfigValue):
+            value_fields = set(self.value.parameters)
+            if value_fields != set(self.related_fields):
+                raise ValueError(
+                    f"candidate_config value.parameters keys={sorted(value_fields)} must "
+                    f"match prior.related_fields={sorted(self.related_fields)}"
+                )
+        return self
+
 
 class Coverage(BaseModel):
     internal_hits: int

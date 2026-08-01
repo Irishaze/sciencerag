@@ -179,6 +179,57 @@ def test_prior_rejects_value_shaped_for_a_different_kind():
         )
 
 
+# -- Prior/value cross-check: field names inside value must match field/related_fields --
+
+
+def test_prior_rejects_parameter_range_field_name_mismatch():
+    with pytest.raises(ValidationError, match="must match prior.field"):
+        Prior(
+            prior_id="pr_mismatch",
+            kind="parameter_range",
+            field="leg_length",
+            value={"field_name": "leg_width", "typical": 0.06, "unit": "mm"},
+            confidence=0.8,
+            sources=SOURCES,
+        )
+
+
+def test_prior_rejects_scaling_relationship_related_fields_mismatch():
+    with pytest.raises(ValidationError, match="must match prior.related_fields"):
+        Prior(
+            prior_id="pr_mismatch2",
+            kind="scaling_relationship",
+            related_fields=["leg_length", "pitch"],  # value says leg_width, not pitch
+            value={"x": "leg_length", "y": "leg_width", "direction": "positive"},
+            confidence=0.7,
+            sources=SOURCES,
+        )
+
+
+def test_prior_rejects_candidate_config_related_fields_mismatch():
+    with pytest.raises(ValidationError, match="must match prior.related_fields"):
+        Prior(
+            prior_id="pr_mismatch3",
+            kind="candidate_config",
+            related_fields=["leg_length", "leg_width"],
+            value={"parameters": {"leg_length": 0.07, "pitch": 0.05}},  # pitch, not leg_width
+            confidence=0.7,
+            sources=SOURCES,
+        )
+
+
+def test_prior_accepts_candidate_config_when_related_fields_match():
+    p = Prior(
+        prior_id="pr_ok",
+        kind="candidate_config",
+        related_fields=["leg_length", "leg_width"],
+        value={"parameters": {"leg_length": 0.07, "leg_width": 0.12}},
+        confidence=0.7,
+        sources=SOURCES,
+    )
+    assert isinstance(p.value, CandidateConfigValue)
+
+
 def test_prior_value_schema_exports():
     schema = Prior.model_json_schema()
     assert "$defs" in schema

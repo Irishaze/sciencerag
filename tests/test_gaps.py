@@ -15,12 +15,21 @@ def _prior(
     field: str | None = "general_finding",
     related_fields: list[str] | None = None,
 ) -> Prior:
+    # related_fields (no single `field`) only makes sense for a relationship
+    # kind — parameter_range's value.field_name must match the single
+    # `field` (see models.py's cross-check), so switch shape accordingly.
+    if field is None and related_fields:
+        kind = "scaling_relationship"
+        value = {"x": related_fields[0], "y": related_fields[1], "direction": "unknown"}
+    else:
+        kind = "parameter_range"
+        value = {"field_name": field or "x", "typical": 1.0, "unit": "mm"}
     return Prior(
         prior_id="pr_test",
-        kind="parameter_range",
+        kind=kind,
         field=field,
         related_fields=related_fields or [],
-        value={"field_name": field or "x", "typical": 1.0, "unit": "mm"},
+        value=value,
         confidence=confidence,
         sources=[SourcePaper(doi=doi, span="pages 1-2")],
         notes=notes,
