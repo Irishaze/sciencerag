@@ -1692,5 +1692,27 @@
     "year": 2026,
     "venue": "Energies",
     "path": "80_Evaluating_Thermoelectric_Module_Cooling_Power_Density_Power_Converters.pdf"
+  },
+  {
+    "doi": "10.1021/acsami.3c14750",
+    "title": "Optimized Thermoelectric Cooler Performance by the Structure-Matching Design of Asymmetrical p/n-Type Legs",
+    "authors": [
+      "Wenjie Zhou",
+      "Kaikai Pang",
+      "Zongwei Zhang",
+      "Hao Yang",
+      "Qiang Zhang",
+      "Yanan Li",
+      "Yuyou Zhang",
+      "Haoyang Hu",
+      "Xiaojian Tan",
+      "Peng Sun",
+      "Jiehua Wu",
+      "Guoqiang Liu",
+      "Jun Jiang"
+    ],
+    "year": 2023,
+    "venue": "ACS Applied Materials & Interfaces",
+    "path": "81_Optimized_Thermoelectric_Cooler_Performance_Asymmetrical_pn_Type_Legs.pdf"
   }
 ]
