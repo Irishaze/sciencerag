@@ -1590,5 +1590,31 @@
     "year": 2025,
     "venue": "Communications Materials",
     "path": "Wusheng_Fan2025_High_performance_integrated_thermoelectric_coolers.pdf"
+  },
+  {
+    "doi": "10.3390/e19070312",
+    "title": "Analysis of a Hybrid Thermoelectric Microcooler: Thomson Heat and Geometric Optimization",
+    "authors": [
+      "Pablo Eduardo Ruiz Ortega",
+      "Miguel Angel Olivares-Robles"
+    ],
+    "year": 2017,
+    "venue": "Entropy",
+    "path": "72_Analysis_of_a_Hybrid_Thermoelectric_Microcooler_Geometric_Optimization.pdf"
+  },
+  {
+    "doi": "10.3390/thermo5030022",
+    "title": "Numerical Optimization of Multi-Stage Thermoelectric Cooling Systems Using Bi2Te3 for Enhanced Cryosurgical Applications",
+    "authors": [
+      "Akram Kharmouch",
+      "Md. Kamrul Hasan",
+      "El Yatim Sabik",
+      "H. Bouali",
+      "H. Mamur",
+      "M.R.A. Bhuiyan"
+    ],
+    "year": 2025,
+    "venue": "Thermo",
+    "path": "73_Numerical_Optimization_of_Multi-Stage_Thermoelectric_Cooling_Bi2Te3_Cryosurgical.pdf"
   }
 ]
