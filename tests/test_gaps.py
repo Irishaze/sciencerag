@@ -20,7 +20,7 @@ def _prior(
         kind="parameter_range",
         field=field,
         related_fields=related_fields or [],
-        value={"summary": "x"},
+        value={"field_name": field or "x", "typical": 1.0, "unit": "mm"},
         confidence=confidence,
         sources=[SourcePaper(doi=doi, span="pages 1-2")],
         notes=notes,

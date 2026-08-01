@@ -29,7 +29,13 @@ def _fake_priors_response(query: str, allow_external: bool = False) -> tuple[Pri
                     prior_id="pr_fake_0001",
                     kind="material_property",
                     field="seebeck_coefficient",
-                    value={"typical": 200, "unit": "uV/K"},
+                    value={
+                        "material": "Bi2Te3",
+                        "property_name": "seebeck_coefficient",
+                        "magnitude": 200,
+                        "unit": "uV/K",
+                        "method": "measured",
+                    },
                     confidence=0.75,
                     sources=[
                         SourcePaper(doi="10.1111/aaa", span="p.3"),

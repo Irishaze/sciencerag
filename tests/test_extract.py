@@ -211,7 +211,7 @@ def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
         {
             "kind": "parameter_range",
             "field": "leg_length",
-            "value": {"typical": 0.06, "unit": "mm"},
+            "value": {"field_name": "leg_length", "typical": 0.06, "unit": "mm"},
             "notes": None,
             "evidence": ["E1", "E2"],
         }
@@ -231,7 +231,7 @@ def test_to_prior_carries_related_fields_through():
         kind="candidate_config",
         field=None,
         related_fields=["leg_length", "leg_width", "pitch"],
-        value={"leg_length": 0.07, "leg_width": 0.12, "pitch": 0.05, "unit": "mm"},
+        value={"parameters": {"leg_length": 0.07, "leg_width": 0.12, "pitch": 0.05}},
         evidence=["E1"],
     )
     prior = _to_prior(draft, table)
@@ -254,7 +254,9 @@ def test_confidence_increases_with_more_supporting_papers():
     def _confidence_for(evidence: list[str]) -> float:
         # kind="caution" here since this test is about the confidence
         # formula, not the parameter_range-must-be-numeric rule.
-        draft = ExtractedPriorDraft(kind="caution", field="leg_length", value={}, evidence=evidence)
+        draft = ExtractedPriorDraft(
+            kind="caution", field="leg_length", value={"statement": "x"}, evidence=evidence
+        )
         return _to_prior(draft, table).confidence
 
     conf_1 = _confidence_for(["E1"])
@@ -285,7 +287,9 @@ def test_confidence_weighs_distinct_papers_more_than_same_paper_repetition():
     }
 
     def _confidence_for(table: dict, evidence: list[str]) -> float:
-        draft = ExtractedPriorDraft(kind="caution", field="leg_length", value={}, evidence=evidence)
+        draft = ExtractedPriorDraft(
+            kind="caution", field="leg_length", value={"statement": "x"}, evidence=evidence
+        )
         return _to_prior(draft, table).confidence
 
     conf_one_snippet = _confidence_for(same_paper_table, ["E1"])
@@ -312,7 +316,7 @@ def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):
                         {
                             "kind": "caution",
                             "field": "leg_length",
-                            "value": {"summary": "ok"},
+                            "value": {"statement": "ok"},
                             "evidence": ["E1"],
                         }
                     ]
@@ -358,7 +362,7 @@ def test_extract_priors_filters_out_material_property_drafts(monkeypatch):
                         {
                             "kind": "parameter_range",
                             "field": "leg_length",
-                            "value": {"typical": 0.06, "unit": "mm"},
+                            "value": {"field_name": "leg_length", "typical": 0.06, "unit": "mm"},
                             "evidence": ["E1"],
                         },
                     ]

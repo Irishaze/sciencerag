@@ -52,7 +52,8 @@ def test_priors_route_writes_audit_log_entry(tmp_path, monkeypatch):
                         prior_id="pr_fake_0001",
                         kind="parameter_range",
                         field="general_finding",
-                        value={"summary": f"fake evidence for: {query}"},
+                        value={"field_name": "general_finding", "typical": 1.0, "unit": "mm"},
+                        notes=f"fake evidence for: {query}",
                         confidence=0.8,
                         sources=[SourcePaper(doi="10.0000/fake", span="pages 1-2")],
                     )
