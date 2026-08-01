@@ -1729,5 +1729,19 @@
     "year": 2022,
     "venue": "Energies",
     "path": "82_Structural_Optimization_of_Heat_Sink_for_Thermoelectric_Conversion_Unit.pdf"
+  },
+  {
+    "doi": "10.35378/gujs.1420942",
+    "title": "Influence of Leg Geometry on the Performance of Bi2Te3 Thermoelectric Generators",
+    "authors": [
+      "Md. Kamrul Hasan",
+      "Mehmet Ali Ustuner",
+      "Haluk Korucu",
+      "Mohammad Ruhul Amin Bhuiyan",
+      "Hayati Mamur"
+    ],
+    "year": 2024,
+    "venue": "Gazi University Journal of Science",
+    "path": "83_Influence_of_Leg_Geometry_on_Performance_of_Bi2Te3_Thermoelectric_Generators.pdf"
   }
 ]
