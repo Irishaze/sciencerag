@@ -1846,5 +1846,18 @@
     "year": 2022,
     "venue": "Applied Physics Letters",
     "path": "91_Thermoelectric_Coolers_High_Power_Density_3D_Electronics_Heat_Management.pdf"
+  },
+  {
+    "doi": "Basrah J. Eng. Sci. 25(1):15-23, 2025 (no DOI found/assigned)",
+    "title": "Performance Evaluation of Single Leg Thermoelectric Module for Different Materials Under Various Operating Conditions",
+    "authors": [
+      "Aqeel M. Uglah",
+      "Khalid B. Saleem",
+      "Hussein S. Sultan",
+      "Lioua Kolsi"
+    ],
+    "year": 2025,
+    "venue": "Basrah Journal for Engineering Sciences",
+    "path": "92_Performance_Evaluation_of_Single_Leg_Thermoelectric_Module.pdf"
   }
 ]
