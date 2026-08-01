@@ -1930,5 +1930,17 @@
     "year": 2018,
     "venue": "Journal of Electronic Materials",
     "path": "98_Structural_Reliability_Thermoelectric_Generator_Modules.pdf"
+  },
+  {
+    "doi": "10.18280/ijht.400107",
+    "title": "Performance Study of the Thermoelectric Personal Cooler under Different Ambient Temperatures",
+    "authors": [
+      "Ziyad Tark",
+      "Ahmed J. Hamed",
+      "Abdul Hadi N. Khalifa"
+    ],
+    "year": 2022,
+    "venue": "International Journal of Heat and Technology (IIETA)",
+    "path": "99_Performance_Thermoelectric_Personal_Cooler_Ambient_Temperatures.pdf"
   }
 ]
