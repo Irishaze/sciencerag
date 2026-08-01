@@ -1908,5 +1908,16 @@
     "year": 2008,
     "venue": "COMSOL Conference 2008 Hannover",
     "path": "96_Multiphysics_Simulation_Thermoelectric_Systems_Peltier_Cooling.pdf"
+  },
+  {
+    "doi": "10.18280/ijht.420128",
+    "title": "Optimization of Heat Sink Geometry for Improved Thermoelectric Generator Efficiency",
+    "authors": [
+      "Nakka Jagadesh Babu",
+      "Burra Rajesh Kumar"
+    ],
+    "year": 2024,
+    "venue": "International Journal of Heat and Technology (IIETA)",
+    "path": "97_Optimization_Heat_Sink_Geometry_Thermoelectric_Generator.pdf"
   }
 ]
