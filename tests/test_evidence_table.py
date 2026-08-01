@@ -18,7 +18,7 @@ def _fake_context(text: str, score: int, doi: str = "10.0000/x", title: str = "P
 def test_low_relevance_contexts_are_excluded_from_evidence_table():
     contexts = [
         _fake_context("strong evidence", score=9),  # relevance 0.9
-        _fake_context("weak/hallucinated evidence", score=5),  # relevance 0.5 < 0.6
+        _fake_context("weak/hallucinated evidence", score=4),  # relevance 0.4 < 0.5
         _fake_context("another strong one", score=8),  # relevance 0.8
     ]
     table = _build_evidence_table(contexts)
@@ -30,7 +30,7 @@ def test_low_relevance_contexts_are_excluded_from_evidence_table():
 def test_evidence_labels_are_sequential_without_gaps_after_filtering():
     contexts = [
         _fake_context("a", score=9),
-        _fake_context("b", score=5),  # filtered out
+        _fake_context("b", score=4),  # filtered out
         _fake_context("c", score=8),
     ]
     table = _build_evidence_table(contexts)
@@ -40,16 +40,17 @@ def test_evidence_labels_are_sequential_without_gaps_after_filtering():
 
 
 def test_all_low_relevance_yields_empty_table():
-    contexts = [_fake_context("weak", score=3), _fake_context("also weak", score=5)]
+    contexts = [_fake_context("weak", score=3), _fake_context("also weak", score=4)]
     table = _build_evidence_table(contexts)
     assert table == {}
 
 
 def test_relevance_exactly_at_threshold_is_kept():
-    """spec §3.7: MIN_EVIDENCE_RELEVANCE recalibrated to 0.6 from a GPT-4o
-    judge finding the [0.6, 0.7) bucket 100% clean — the boundary value
-    itself must be kept, not treated as "below" (filter is `< threshold`,
-    not `<= threshold`)."""
-    contexts = [_fake_context("right at the boundary", score=6)]  # relevance 0.6
+    """spec §3.7: MIN_EVIDENCE_RELEVANCE recalibrated to 0.5 from a GPT-4o
+    judge finding the [0.5, 0.6) bucket's DROPs were all "on topic but not
+    specific enough" (not reference-list hallucination) — the boundary
+    value itself must be kept, not treated as "below" (filter is
+    `< threshold`, not `<= threshold`)."""
+    contexts = [_fake_context("right at the boundary", score=5)]  # relevance 0.5
     table = _build_evidence_table(contexts)
     assert len(table) == 1

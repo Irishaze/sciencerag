@@ -74,12 +74,25 @@ def run_query(query: str) -> AnswerResponse:
 # Recalibrated (spec §3.7) with a GPT-4o judge (temperature=0) on a fresh
 # 100-query probe collected under the sim-contract-scoped extraction
 # (scripts/collect_threshold_data.py + scripts/threshold_judge.py +
-# scripts/threshold_curve.py): the [0.6, 0.7) relevance bucket judged
-# 100% KEEP (n=12, no reference-list hallucination found) — 0.7 was
-# dropping a bucket of genuinely good evidence as a false gap. [0.5, 0.6)
-# judged only 58.3% KEEP (n=12) — too mixed to also fold in. Lowered to
-# 0.6, the boundary where the data stops being clean.
-MIN_EVIDENCE_RELEVANCE = 0.6
+# scripts/threshold_curve.py):
+#   [0.1, 0.4): 24/25 DROP — off-topic or genuine reference-list content.
+#               Clearly still exclude.
+#   [0.5, 0.6): 7/12 KEEP (58.3%) — but every DROP reason here was "on
+#               topic, not specific enough" (e.g. "describes the
+#               measurement technique but gives no number"), NOT
+#               reference-list hallucination. That failure mode doesn't
+#               reappear until well below 0.5 in this data. Content that's
+#               merely "not specific enough" is exactly what extract.py's
+#               own validators already reject downstream (parameter_range
+#               requires a real numeric value, fields must be in the sim
+#               contract, evidence must actually ground the claim) — so
+#               admitting it here mostly costs a bit of wasted context,
+#               not bad output.
+#   [0.6, 0.7): 100% KEEP (n=12) — 0.7 was dropping this as a false gap.
+# Lowered to 0.5: recovers the [0.5, 0.6) bucket's real coverage: the
+# "noise" let in there is low-risk given extract.py's own downstream
+# grounding checks, and [0.1, 0.4) still gets excluded regardless.
+MIN_EVIDENCE_RELEVANCE = 0.5
 
 
 def _build_evidence_table(
