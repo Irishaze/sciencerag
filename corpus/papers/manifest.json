@@ -1792,5 +1792,19 @@
     "year": 2022,
     "venue": "Sustainability",
     "path": "87_Legs_Geometry_Influence_on_Performance_of_Thermoelectric_Module.pdf"
+  },
+  {
+    "doi": "10.3390/ma18030633",
+    "title": "A Performance Evaluation of Flexible Thermoelectric Modules for Application in a Cooling Garment",
+    "authors": [
+      "Anna Dąbrowska",
+      "Monika Kobus",
+      "Łukasz Starzak",
+      "Bartosz Pękosławski",
+      "Paulina Łataś"
+    ],
+    "year": 2025,
+    "venue": "Materials",
+    "path": "88_Performance_Evaluation_Flexible_Thermoelectric_Modules_Cooling_Garment.pdf"
   }
 ]
