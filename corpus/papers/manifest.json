@@ -1714,5 +1714,20 @@
     "year": 2023,
     "venue": "ACS Applied Materials & Interfaces",
     "path": "81_Optimized_Thermoelectric_Cooler_Performance_Asymmetrical_pn_Type_Legs.pdf"
+  },
+  {
+    "doi": "10.3390/en15082781",
+    "title": "Structural Optimization of Heat Sink for Thermoelectric Conversion Unit in Personal Comfort System",
+    "authors": [
+      "Wei Xue",
+      "Xin Cao",
+      "Guangming Zhang",
+      "Gang Tan",
+      "Zhongliang Liu",
+      "Ke Li"
+    ],
+    "year": 2022,
+    "venue": "Energies",
+    "path": "82_Structural_Optimization_of_Heat_Sink_for_Thermoelectric_Conversion_Unit.pdf"
   }
 ]
