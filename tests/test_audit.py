@@ -43,7 +43,7 @@ def test_priors_route_writes_audit_log_entry(tmp_path, monkeypatch):
     monkeypatch.setattr(audit, "AUDIT_LOG_PATH", tmp_path / "audit.jsonl")
 
     def fake_build_priors_response(
-        query: str, allow_external: bool = False
+        query: str, allow_external: bool = False, max_priors: int = 5
     ) -> tuple[PriorsResponse, int]:
         return (
             PriorsResponse(

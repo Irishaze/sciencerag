@@ -24,7 +24,9 @@ RESPONSE_SCHEMA = json.loads(SCHEMA_PATH.read_text())["PriorsResponse"]
 client = TestClient(app)
 
 
-def _fake_priors_response(query: str, allow_external: bool = False) -> tuple[PriorsResponse, int]:
+def _fake_priors_response(
+    query: str, allow_external: bool = False, max_priors: int = 5
+) -> tuple[PriorsResponse, int]:
     return (
         PriorsResponse(
             priors=[
@@ -71,9 +73,11 @@ def test_priors_route_threads_allow_external_to_retrieval(monkeypatch):
     request-acknowledgment gap note — see test_allow_external.py."""
     received = {}
 
-    def _spy(query: str, allow_external: bool = False) -> tuple[PriorsResponse, int]:
+    def _spy(
+        query: str, allow_external: bool = False, max_priors: int = 5
+    ) -> tuple[PriorsResponse, int]:
         received["allow_external"] = allow_external
-        return _fake_priors_response(query, allow_external)
+        return _fake_priors_response(query, allow_external, max_priors)
 
     monkeypatch.setattr(priors_router.retrieval, "build_priors_response", _spy)
 
@@ -90,7 +94,7 @@ def test_priors_route_returns_structured_error_on_unexpected_exception(monkeypat
     the route must still return our own typed ErrorResponse JSON — never a
     bare FastAPI default 500 (spec §8: always typed, schema-valid errors)."""
 
-    def _boom(query: str, allow_external: bool = False) -> PriorsResponse:
+    def _boom(query: str, allow_external: bool = False, max_priors: int = 5) -> PriorsResponse:
         raise RuntimeError("simulated PaperQA2/LLM failure")
 
     monkeypatch.setattr(priors_router.retrieval, "build_priors_response", _boom)

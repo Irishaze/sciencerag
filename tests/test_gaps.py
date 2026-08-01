@@ -5,7 +5,13 @@ Pure-function tests against constructed Prior objects — no PaperQA2/API calls.
 
 from sciencerag.priors.contract import GEOMETRY_FREE_NAMES
 from sciencerag.priors.models import Prior, SourcePaper
-from sciencerag.priors.retrieval import _build_gaps, _build_geometry_gaps, _split_by_confidence
+from sciencerag.priors.retrieval import (
+    _build_gaps,
+    _build_geometry_gaps,
+    _build_max_priors_gap,
+    _cap_priors,
+    _split_by_confidence,
+)
 
 
 def _prior(
@@ -110,3 +116,37 @@ def test_build_geometry_gaps_distinguishes_low_confidence_from_uncovered():
     assert "置信度不足" in leg_length_gap
     other_gap = next(g for g in gaps if "leg_width" in g)
     assert "未检索到" in other_gap
+
+
+# -- max_priors cap ---------
+
+
+def test_cap_priors_keeps_highest_confidence_when_under_cap():
+    priors = [_prior(0.6), _prior(0.9), _prior(0.7)]
+    returned, truncated = _cap_priors(priors, max_priors=5)
+    assert [p.confidence for p in returned] == [0.9, 0.7, 0.6]
+    assert truncated == []
+
+
+def test_cap_priors_truncates_lowest_confidence_first():
+    priors = [_prior(0.6), _prior(0.9), _prior(0.7), _prior(0.55)]
+    returned, truncated = _cap_priors(priors, max_priors=2)
+    assert [p.confidence for p in returned] == [0.9, 0.7]
+    assert [p.confidence for p in truncated] == [0.6, 0.55]
+
+
+# -- max_priors cap gaps ---------
+
+
+def test_build_max_priors_gap_empty_when_nothing_truncated():
+    assert _build_max_priors_gap([], max_priors=5) == []
+
+
+def test_build_max_priors_gap_notes_excluded_count_and_papers():
+    truncated = [_prior(0.6, doi="10.1111/a"), _prior(0.55, doi="10.2222/b")]
+    gaps = _build_max_priors_gap(truncated, max_priors=3)
+    assert len(gaps) == 1
+    assert "2 additional prior" in gaps[0]
+    assert "max_priors=3" in gaps[0]
+    assert "10.1111/a" in gaps[0]
+    assert "10.2222/b" in gaps[0]

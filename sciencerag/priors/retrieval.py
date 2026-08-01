@@ -136,6 +136,15 @@ def _split_by_confidence(priors: list[Prior]) -> tuple[list[Prior], list[Prior]]
     return strong, weak
 
 
+def _cap_priors(strong_priors: list[Prior], max_priors: int) -> tuple[list[Prior], list[Prior]]:
+    """Split confidence-surviving priors into (returned, truncated) by
+    max_priors, keeping the highest-confidence ones — a cap always trims
+    the weakest of the strong priors, never an arbitrary prefix of
+    extraction order."""
+    ranked = sorted(strong_priors, key=lambda p: p.confidence, reverse=True)
+    return ranked[:max_priors], ranked[max_priors:]
+
+
 def _prior_geometry_fields(prior: Prior) -> set[str]:
     fields = set(prior.related_fields)
     if prior.field:
@@ -187,6 +196,21 @@ def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
     ]
 
 
+def _build_max_priors_gap(truncated_priors: list[Prior], max_priors: int) -> list[str]:
+    """Mirrors _build_gaps's disclosure pattern: a prior dropped by the
+    max_priors cap is still "missing" from Hermes's point of view, even
+    though it met the confidence bar — so it must show up in gaps rather
+    than silently vanish (same spec principle as the weak-confidence cut)."""
+    if not truncated_priors:
+        return []
+    dois = sorted({s.doi for p in truncated_priors for s in p.sources if s.doi})
+    dois_str = "; ".join(dois) if dois else "unknown source"
+    return [
+        f"{len(truncated_priors)} additional prior(s) met the confidence threshold "
+        f"but were excluded by max_priors={max_priors}; source DOIs: {dois_str}"
+    ]
+
+
 # M1-15 / spec §9 OQ#1 ("外部检索:是否需要?用哪些 API?"): decided as an
 # explicit no-op for M1 — external retrieval (Semantic Scholar/arXiv) is
 # deferred to M6 ("外部检索回退 + 批量证据模式"). `allow_external` is a real,
@@ -204,7 +228,10 @@ def _add_external_note(response: PriorsResponse, allow_external: bool) -> Priors
 
 
 def _build_priors_response(
-    query: str, trace: PipelineTrace | None = None, allow_external: bool = False
+    query: str,
+    trace: PipelineTrace | None = None,
+    allow_external: bool = False,
+    max_priors: int = 5,
 ) -> tuple[PriorsResponse, int]:
     """Run a real PaperQA2 query, then LLM-extract structured priors from
     the evidence contexts (see extract.py). On extraction failure, return
@@ -292,13 +319,16 @@ def _build_priors_response(
         )
 
     strong_priors, weak_priors = _split_by_confidence(all_priors)
+    returned_priors, truncated_priors = _cap_priors(strong_priors, max_priors)
+
     gaps = _build_gaps(weak_priors, total_hits=len(contexts))
-    gaps += _build_geometry_gaps(all_priors, strong_priors)
+    gaps += _build_max_priors_gap(truncated_priors, max_priors)
+    gaps += _build_geometry_gaps(all_priors, returned_priors)
 
     return (
         _add_external_note(
             PriorsResponse(
-                priors=strong_priors,
+                priors=returned_priors,
                 coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
                 trace_id=new_trace_id(),
             ),
@@ -309,16 +339,16 @@ def _build_priors_response(
 
 
 def build_priors_response(
-    query: str, allow_external: bool = False
+    query: str, allow_external: bool = False, max_priors: int = 5
 ) -> tuple[PriorsResponse, int]:
     """Returns (response, filtered_material_count) — see
     _build_priors_response's docstring for why the count travels alongside
     the response instead of inside it."""
-    return _build_priors_response(query, allow_external=allow_external)
+    return _build_priors_response(query, allow_external=allow_external, max_priors=max_priors)
 
 
 def build_priors_response_with_trace(
-    query: str, allow_external: bool = False
+    query: str, allow_external: bool = False, max_priors: int = 5
 ) -> tuple[PriorsResponse, PipelineTrace]:
     """Same as build_priors_response, but also returns a PipelineTrace
     capturing every intermediate stage — powers the demo's pipeline view
@@ -326,6 +356,6 @@ def build_priors_response_with_trace(
     API contract."""
     trace = PipelineTrace(query=query)
     response, _filtered_material_count = _build_priors_response(
-        query, trace=trace, allow_external=allow_external
+        query, trace=trace, allow_external=allow_external, max_priors=max_priors
     )
     return response, trace

@@ -44,7 +44,7 @@ def get_priors(request: PriorsRequest) -> PriorsResponse | JSONResponse:
     t0 = _now()
     try:
         response, filtered_material_count = retrieval.build_priors_response(
-            request.query, allow_external=request.allow_external
+            request.query, allow_external=request.allow_external, max_priors=request.max_priors
         )
     except Exception as e:  # noqa: BLE001 - last-resort gate, spec §8: always
         # return typed, schema-valid JSON on failure, never a bare 500.
@@ -97,6 +97,6 @@ def get_priors_debug(request: PriorsRequest) -> dict:
     demo page can show the pipeline stages, not just the final answer.
     """
     response, trace = retrieval.build_priors_response_with_trace(
-        request.query, allow_external=request.allow_external
+        request.query, allow_external=request.allow_external, max_priors=request.max_priors
     )
     return {"response": response.model_dump(), "trace": trace.model_dump()}

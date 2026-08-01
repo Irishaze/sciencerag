@@ -21,7 +21,9 @@ def _read_last_entry() -> dict:
     return json.loads(lines[-1])
 
 
-def _fake_priors_response(query: str, allow_external: bool = False) -> tuple[PriorsResponse, int]:
+def _fake_priors_response(
+    query: str, allow_external: bool = False, max_priors: int = 5
+) -> tuple[PriorsResponse, int]:
     return (
         PriorsResponse(
             priors=[
@@ -100,7 +102,7 @@ def test_success_entry_fully_reconstructs_request_evidence_output(tmp_path, monk
 def test_error_entry_still_reconstructs_request_and_trace_id(tmp_path, monkeypatch):
     monkeypatch.setattr(audit, "AUDIT_LOG_PATH", tmp_path / "audit.jsonl")
 
-    def _boom(query: str, allow_external: bool = False) -> PriorsResponse:
+    def _boom(query: str, allow_external: bool = False, max_priors: int = 5) -> PriorsResponse:
         raise RuntimeError("simulated failure")
 
     monkeypatch.setattr(priors_router.retrieval, "build_priors_response", _boom)

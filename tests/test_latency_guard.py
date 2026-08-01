@@ -17,7 +17,9 @@ from sciencerag.priors.models import Coverage, Prior, PriorsResponse, SourcePape
 client = TestClient(app)
 
 
-def _fake_priors_response(query: str, allow_external: bool = False) -> tuple[PriorsResponse, int]:
+def _fake_priors_response(
+    query: str, allow_external: bool = False, max_priors: int = 5
+) -> tuple[PriorsResponse, int]:
     return (
         PriorsResponse(
             priors=[
