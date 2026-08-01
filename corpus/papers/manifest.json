@@ -1669,5 +1669,16 @@
     "year": 2021,
     "venue": "Physical Review Materials",
     "path": "78_Thermomagnetic_Properties_of_Bi2Te3_Single_Crystal.pdf"
+  },
+  {
+    "doi": "10.18280/mmep.070313",
+    "title": "Performance Optimization of Thermoelectric Cooler Using Genetic Algorithm",
+    "authors": [
+      "Jitendra Mohan Giri",
+      "Pawan Kumar Singh Nain"
+    ],
+    "year": 2020,
+    "venue": "Mathematical Modelling of Engineering Problems",
+    "path": "79_Performance_Optimization_of_Thermoelectric_Cooler_Using_Genetic_Algorithm.pdf"
   }
 ]
