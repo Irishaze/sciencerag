@@ -1680,5 +1680,17 @@
     "year": 2020,
     "venue": "Mathematical Modelling of Engineering Problems",
     "path": "79_Performance_Optimization_of_Thermoelectric_Cooler_Using_Genetic_Algorithm.pdf"
+  },
+  {
+    "doi": "10.3390/en19071709",
+    "title": "Evaluating the Use of a Thermoelectric Module Cooling to Increase the Power Density of Power Converters",
+    "authors": [
+      "Abdullahi Abubakar",
+      "Christian Klumpner",
+      "Patrick Wheeler"
+    ],
+    "year": 2026,
+    "venue": "Energies",
+    "path": "80_Evaluating_Thermoelectric_Module_Cooling_Power_Density_Power_Converters.pdf"
   }
 ]
