@@ -1780,5 +1780,17 @@
     "year": 2024,
     "venue": "Journal of Fluid Flow, Heat and Mass Transfer",
     "path": "86_Wearable_Multistage_Thermoelectric_Cooler_Design_and_Fabrication.pdf"
+  },
+  {
+    "doi": "10.3390/su142315823",
+    "title": "Legs Geometry Influence on the Performance of the Thermoelectric Module",
+    "authors": [
+      "Abdelkader Rjafallah",
+      "Daniel Tudor Cotfas",
+      "Petru Adrian Cotfas"
+    ],
+    "year": 2022,
+    "venue": "Sustainability",
+    "path": "87_Legs_Geometry_Influence_on_Performance_of_Thermoelectric_Module.pdf"
   }
 ]
