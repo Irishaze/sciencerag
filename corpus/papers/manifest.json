@@ -1919,5 +1919,16 @@
     "year": 2024,
     "venue": "International Journal of Heat and Technology (IIETA)",
     "path": "97_Optimization_Heat_Sink_Geometry_Thermoelectric_Generator.pdf"
+  },
+  {
+    "doi": "10.1007/s11664-018-6505-1",
+    "title": "Structural Reliability Evaluation of Thermoelectric Generator Modules: Influence of End Conditions, Leg Geometry, Metallization, and Processing Temperatures",
+    "authors": [
+      "Naveen K. Karri",
+      "Changki Mo"
+    ],
+    "year": 2018,
+    "venue": "Journal of Electronic Materials",
+    "path": "98_Structural_Reliability_Thermoelectric_Generator_Modules.pdf"
   }
 ]
