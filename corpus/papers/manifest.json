@@ -1806,5 +1806,17 @@
     "year": 2025,
     "venue": "Materials",
     "path": "88_Performance_Evaluation_Flexible_Thermoelectric_Modules_Cooling_Garment.pdf"
+  },
+  {
+    "doi": "10.3390/app13116480",
+    "title": "Thermal Control of CubeSat Electronics Using Thermoelectrics",
+    "authors": [
+      "Nick S. Bennett",
+      "Amer Hawchar",
+      "Aidan Cowley"
+    ],
+    "year": 2023,
+    "venue": "Applied Sciences",
+    "path": "89_Thermal_Control_of_CubeSat_Electronics_Using_Thermoelectrics.pdf"
   }
 ]
