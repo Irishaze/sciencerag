@@ -1818,5 +1818,16 @@
     "year": 2023,
     "venue": "Applied Sciences",
     "path": "89_Thermal_Control_of_CubeSat_Electronics_Using_Thermoelectrics.pdf"
+  },
+  {
+    "doi": "10.1063/1.5115044",
+    "title": "The Impact of Thermoelectric Leg Geometries on Thermal Resistance and Power Output",
+    "authors": [
+      "Yohann Thimont",
+      "Saniya LeBlanc"
+    ],
+    "year": 2019,
+    "venue": "Journal of Applied Physics",
+    "path": "90_Impact_of_Thermoelectric_Leg_Geometries_on_Thermal_Resistance_Power_Output.pdf"
   }
 ]
