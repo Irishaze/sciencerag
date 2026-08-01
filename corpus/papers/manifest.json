@@ -1767,5 +1767,18 @@
     "year": 2014,
     "venue": "International Cryocooler Conference",
     "path": "85_Optimum_Cooling_Capacity_of_Two_Stage_Thermoelectric_Refrigerators.pdf"
+  },
+  {
+    "doi": "10.11159/jffhmt.2024.009",
+    "title": "Wearable Multistage Thermoelectric Cooler Design and Fabrication",
+    "authors": [
+      "Elisa Y.M. Ang",
+      "Peng Shu Ng",
+      "Chew Beng Soh",
+      "Peng Cheng Wang"
+    ],
+    "year": 2024,
+    "venue": "Journal of Fluid Flow, Heat and Mass Transfer",
+    "path": "86_Wearable_Multistage_Thermoelectric_Cooler_Design_and_Fabrication.pdf"
   }
 ]
