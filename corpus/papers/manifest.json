@@ -1743,5 +1743,17 @@
     "year": 2024,
     "venue": "Gazi University Journal of Science",
     "path": "83_Influence_of_Leg_Geometry_on_Performance_of_Bi2Te3_Thermoelectric_Generators.pdf"
+  },
+  {
+    "doi": "10.3390/drones8060270",
+    "title": "Design and Characterization of an Active Cooling System for Temperature-Sensitive Sample Delivery Applications Using Unmanned Aerial Vehicles",
+    "authors": [
+      "Gowtham Pamula",
+      "Lakshmi Pamula",
+      "Aswin Ramachandran"
+    ],
+    "year": 2024,
+    "venue": "Drones",
+    "path": "84_Active_Cooling_System_Temperature_Sensitive_Sample_Delivery_UAV.pdf"
   }
 ]
