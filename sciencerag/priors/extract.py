@@ -63,16 +63,42 @@ For each prior, output a JSON object with exactly these fields:
   - candidate_config: a specific, already-reported combination of several target parameter values (a full design point). Leave "field" null, list every parameter it covers in "related_fields", and give each one's value inside "value" (keyed by the exact parameter name).
   - caution: a limitation, caveat, or warning about applicability of a target parameter — usually set "field" to that one parameter; if it spans several, use "related_fields" instead.
 - "field": null, OR the exact name of exactly one target parameter listed above (never a material/operating/derived parameter, never an invented name).
-- "related_fields": a list of exact target parameter names this prior relates to (default: empty list). Used for scaling_relationship and candidate_config; leave empty for single-parameter priors.
-- "value": a JSON object holding the actual content.
-  - For parameter_range: MUST include at least one numeric key, e.g. {{"min": 0.02, "max": 0.2, "unit": "mm"}} or {{"typical": 0.06, "unit": "mm"}}. Match the target parameter's contract unit where the evidence allows.
-  - For scaling_relationship: include a "direction" key with one of "positive", "negative", "convex", "unknown", plus a "summary" explaining the relationship.
-  - For other kinds: use structured keys where possible, else {{"summary": "..."}}.
+- "related_fields": a list of exact target parameter names this prior relates to (default: empty list). Used for scaling_relationship (exactly two names) and candidate_config (two or more names); leave empty for single-parameter priors.
+- "value": a JSON object whose shape is FIXED per kind, given below. There is no free-form "summary" key in ANY kind — if the evidence doesn't give you enough to fill a kind's required fields, don't force it; extract nothing for that finding instead.
+
+  - parameter_range:
+    - "field_name" (required, string) — the EXACT SAME name as "field" above.
+    - at least one of "min", "max", "typical" (numbers) — in the target parameter's contract unit where the evidence allows.
+    - "unit" (required, string) — the unit the number(s) are in; use "dimensionless" if there is none.
+    - "conditions" (optional object) — operating conditions the value was reported under, e.g. {{"temperature_k": 300}}. Omit if the evidence doesn't state any.
+    Example (plain): {{"field_name": "leg_length", "typical": 0.06, "unit": "mm"}}
+    Example (with conditions): {{"field_name": "pitch", "min": 0.02, "max": 0.2, "unit": "mm", "conditions": {{"temperature_k": 300}}}}
+
+  - scaling_relationship:
+    - "x", "y" (required, strings) — the two target parameter names from "related_fields", exactly (x's effect on y).
+    - "direction" (required) — one of "positive", "negative", "convex", "concave", "non_monotonic", "unknown".
+    - "functional_form" (optional, string) — a short description of the shape, e.g. "COP peaks at intermediate leg length".
+    - "validity_range" (optional, string) — the range this relationship was reported to hold over, if stated.
+    Example: {{"x": "leg_length", "y": "cop", "direction": "convex", "functional_form": "COP peaks at intermediate leg length"}}
+
+  - candidate_config:
+    - "parameters" (required object, 2+ entries) — every parameter this design point covers, keyed by the EXACT SAME names as "related_fields", each mapped to its reported value.
+    - "reported_performance" (optional object) — any performance metric reported alongside it, e.g. {{"cop": 1.5}}.
+    - "context" (optional, string) — short context for the design point.
+    Example: {{"parameters": {{"leg_length": 0.07, "leg_width": 0.12}}, "reported_performance": {{"cop": 1.5}}}}
+
+  - caution:
+    - "statement" (required, string) — the limitation/caveat itself, as stated by the evidence.
+    - "applicability_scope" (optional, string) — the condition(s) under which it applies, if stated.
+    Example: {{"statement": "This range assumes ideal contact resistance", "applicability_scope": "no delamination"}}
+
 - "notes": optional short clarifying note, or null
 - "evidence": a list of evidence labels (e.g. ["E1", "E3"]) that support this prior — list ALL evidence snippets that support it, not just one
 
 Rules:
 - Only extract priors that are actually and explicitly stated in the evidence. Do not use outside knowledge, and do not add your own inferred direction, magnitude, or recommendation beyond what the evidence text literally says — if the evidence says a factor merely "influences" or "is relevant to" something without saying how, report only that, don't guess "increases" or "should be minimized".
+- A non-numeric "X affects/influences Y" statement is NEVER parameter_range, even about one parameter — use scaling_relationship instead (with "unknown" direction if the evidence doesn't say which way).
+- The value object's own field name(s) — "field_name" for parameter_range, "x"/"y" for scaling_relationship, the keys of "parameters" for candidate_config — must exactly match "field"/"related_fields" above. Never let them disagree, and never include a "summary" key anywhere.
 - Only reference evidence labels that appear in the input. Never invent a label.
 - Do not split one finding into near-duplicate priors across different evidence — merge them and cite all supporting evidence together instead.
 - Some evidence snippets may be a summary of a paper's reference list or acknowledgments rather than its own findings (phrases like "the references suggest...", "Reference N examines..."). Treat these as weak, secondary support only — never as the sole evidence for a prior.
