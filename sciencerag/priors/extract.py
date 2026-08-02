@@ -24,6 +24,11 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from sciencerag.common.config import get_llm_model
 from sciencerag.priors.contract import GEOMETRY_FREE_NAMES, GEOMETRY_FREE_PARAMS
 from sciencerag.priors.models import Prior, SourcePaper
+from sciencerag.priors.numeric_check import (
+    extract_numbers,
+    extract_numbers_from_text,
+    find_unmatched_numbers,
+)
 
 MAX_RETRIES = 3
 # litellm.completion has no default timeout — an unresponsive DeepSeek call
@@ -231,6 +236,12 @@ class PipelineTrace(BaseModel):
     # field/value/notes/sources, not just the numbers in confidence_breakdown.
     # Needed to judge whether a low-confidence prior was correctly discarded.
     all_priors: list[Prior] = Field(default_factory=list)
+    # Phase B3: every numeric-groundedness rejection (see _to_prior), one
+    # entry per unmatched number, format "{field}: {number} not found in
+    # {evidence labels}" — populated even for drafts that ultimately get
+    # accepted on a later retry attempt, so a false-positive rejection is
+    # visible in trace even though it didn't affect the final response.
+    numeric_check_failures: list[str] = Field(default_factory=list)
 
 
 def _build_evidence_block(evidence_table: dict[str, EvidenceItem]) -> str:
@@ -331,7 +342,7 @@ def _to_prior(
 
     id_suffix = draft.field or "_".join(draft.related_fields) or draft.kind
     prior_id = f"pr_{'_'.join(draft.evidence)}_{id_suffix}"[:64]
-    return Prior(
+    prior = Prior(
         prior_id=prior_id,
         kind=draft.kind,
         field=draft.field,
@@ -341,6 +352,27 @@ def _to_prior(
         sources=sources,
         notes=draft.notes or items[0].notes,
     )
+
+    # Phase B3: numeric groundedness gate. Every number the prior asserts
+    # (numeric_check.extract_numbers — value's numeric fields + notes) must
+    # be found, exact or within numeric_check's rounding tolerance,
+    # somewhere in the combined text of the evidence it cites. A number
+    # with no match is treated as fabricated, not a rounding difference
+    # (the matcher already tolerates those) — reject the whole prior and
+    # let extract_priors' existing retry loop feed the failure back to the
+    # LLM, the same path any other validation failure already takes.
+    evidence_text = "\n\n".join(item.text for item in items)
+    evidence_numbers = extract_numbers_from_text(evidence_text)
+    unmatched = find_unmatched_numbers(extract_numbers(prior), evidence_numbers)
+    if unmatched:
+        label = draft.field or "/".join(draft.related_fields) or draft.kind
+        evidence_labels = ",".join(draft.evidence)
+        failures = [f"{label}: {n:g} not found in {evidence_labels}" for n in unmatched]
+        if trace is not None:
+            trace.numeric_check_failures.extend(failures)
+        raise ValueError("numeric groundedness check failed: " + "; ".join(failures))
+
+    return prior
 
 
 class ExtractionResult(NamedTuple):
@@ -397,8 +429,6 @@ def extract_priors(
 
         try:
             output = _parse_and_validate(raw, evidence_table)
-            if trace is not None:
-                trace.attempts.append(PipelineAttempt(attempt=attempt_num, raw_output=raw))
             # Material is fixed (Bi2Te3, prior_target=false) — material_property
             # stays a valid `kind` for schema compatibility (spec §3.6) but the
             # pipeline never produces it: filter any the LLM emits anyway,
@@ -406,8 +436,16 @@ def extract_priors(
             kept = [d for d in output.priors if d.kind != "material_property"]
             filtered_material_count = len(output.priors) - len(kept)
             priors = [_to_prior(draft, evidence_table, trace) for draft in kept]
-            return ExtractionResult(priors, filtered_material_count)
         except (json.JSONDecodeError, ValidationError, ValueError) as e:
+            # _to_prior (numeric groundedness gate included) runs inside this
+            # try too, on purpose — a single attempt/trace entry per loop
+            # iteration whether the failure came from parsing, per-kind
+            # schema validation, or here. Recording success before calling
+            # _to_prior used to double up trace.attempts (one "success" entry
+            # already appended, then this except block's own entry for the
+            # same attempt_num) on any _to_prior failure — silent since
+            # _to_prior essentially never failed before the numeric check
+            # existed.
             last_error = e
             if trace is not None:
                 trace.attempts.append(
@@ -421,5 +459,10 @@ def extract_priors(
                     "Fix it and output ONLY the corrected JSON.",
                 }
             )
+            continue
+
+        if trace is not None:
+            trace.attempts.append(PipelineAttempt(attempt=attempt_num, raw_output=raw))
+        return ExtractionResult(priors, filtered_material_count)
 
     raise ExtractionError(f"failed after {MAX_RETRIES} attempts: {last_error}")

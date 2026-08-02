@@ -32,11 +32,28 @@ _NUM = r"-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?"
 # Compound patterns are tried before the plain-number fallback (and before
 # each other, most-specific-consuming-most-text first) so e.g. "20-200" is
 # read as a range, not as "20" followed by a stray "-200".
+#
+# The leading (?<![A-Za-z]) blocks a match starting right after a letter —
+# this TEC corpus's evidence text is full of "Bi2Te3"/"Sb2Te3"/"ZT2.5"-style
+# chemical-formula and figure-of-merit notation, and without this guard
+# those subscript/inline digits (e.g. the "2" and "3" in "Bi2Te3") get
+# scooped up as if they were free-floating numbers — silently widening the
+# evidence-number pool and letting an unrelated prior number "2" or "3"
+# pass the groundedness check just because the material's name happens to
+# contain that digit. Deliberately NOT also blocking a letter immediately
+# AFTER the number (no trailing lookahead) — "60um"/"200uV" (number
+# directly abutting its unit, no space) are common and must still match.
+# Known remaining gap: a number written with no space before it either,
+# e.g. "T300K" or "ZT2.5" itself as a genuine reported value rather than a
+# figure-of-merit label, would also be blocked — accepted as a rarer
+# failure mode than the chemical-formula contamination this fixes.
 _COMBINED_RE = re.compile(
+    r"(?<![A-Za-z])(?:"
     rf"(?P<plusminus>(?P<pm_base>{_NUM})\s*(?:±|\+/-|\+-)\s*(?P<pm_dev>{_NUM}))"
     rf"|(?P<range>(?P<rg_lo>{_NUM})\s*(?:-|–|—|~|to)\s*(?P<rg_hi>{_NUM}))"
     rf"|(?P<percent>(?P<pct>{_NUM})\s*%)"
     rf"|(?P<plain>{_NUM})"
+    r")"
 )
 
 

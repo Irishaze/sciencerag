@@ -43,6 +43,21 @@ def test_extract_numbers_from_text_plain(text, expected):
     assert extract_numbers_from_text(text) == expected
 
 
+def test_extract_numbers_from_text_ignores_chemical_formula_subscripts():
+    """Found via real-query validation: "Bi2Te3"/"Sb2Te3" is in nearly every
+    evidence snippet in this corpus, and without the letter-adjacency guard
+    its embedded "2"/"3" were being read as free-floating numbers — quietly
+    widening the evidence-number pool and letting an unrelated prior number
+    "2" or "3" pass the groundedness check for the wrong reason."""
+    assert extract_numbers_from_text("Bi2Te3 thermoelectric coolers show good performance.") == []
+
+
+def test_extract_numbers_from_text_still_matches_number_abutting_unit():
+    """The chemical-formula guard must not block the common no-space
+    number+unit style ("60um", not "60 um")."""
+    assert extract_numbers_from_text("COP peaks at 60um leg length.") == [60.0]
+
+
 def test_extract_numbers_from_text_thousands_comma():
     assert extract_numbers_from_text("Tested over 1,200 cycles.") == [1200.0]
 

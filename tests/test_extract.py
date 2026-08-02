@@ -14,6 +14,7 @@ from sciencerag.priors.extract import (
     EvidenceItem,
     ExtractedPriorDraft,
     ExtractionError,
+    PipelineTrace,
     _build_evidence_block,
     _parse_and_validate,
     _to_prior,
@@ -211,7 +212,7 @@ def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
         {
             "kind": "parameter_range",
             "field": "leg_length",
-            "value": {"field_name": "leg_length", "typical": 0.06, "unit": "mm"},
+            "value": {"field_name": "leg_length", "typical": 60, "unit": "um"},
             "notes": None,
             "evidence": ["E1", "E2"],
         }
@@ -226,7 +227,15 @@ def test_to_prior_maps_evidence_to_real_sources_and_computes_confidence():
 
 
 def test_to_prior_carries_related_fields_through():
-    table = _evidence_table()
+    table = {
+        "E1": EvidenceItem(
+            text="Optimal design: leg_length 0.07 mm, leg_width 0.12 mm, pitch 0.05 mm.",
+            doi="10.1234/example",
+            span="p.4, Fig.3",
+            notes="Example Paper",
+            relevance=0.9,
+        )
+    }
     draft = ExtractedPriorDraft(
         kind="candidate_config",
         field=None,
@@ -237,6 +246,67 @@ def test_to_prior_carries_related_fields_through():
     prior = _to_prior(draft, table)
     assert prior.field is None
     assert prior.related_fields == ["leg_length", "leg_width", "pitch"]
+
+
+# -- Phase B3: numeric groundedness gate -------------------------------------
+
+
+def test_to_prior_accepts_when_number_is_grounded_in_evidence():
+    table = _evidence_table()
+    draft = ExtractedPriorDraft(
+        kind="parameter_range",
+        field="leg_length",
+        value={"field_name": "leg_length", "typical": 60, "unit": "um"},
+        evidence=["E2"],
+    )
+    prior = _to_prior(draft, table)
+    assert prior.value.typical == 60
+
+
+def test_to_prior_rejects_when_number_not_in_evidence():
+    """E2's text is "COP peaks at 60um leg length." — 999 appears nowhere
+    in it, so this must be rejected as ungrounded, not silently accepted."""
+    table = _evidence_table()
+    draft = ExtractedPriorDraft(
+        kind="parameter_range",
+        field="leg_length",
+        value={"field_name": "leg_length", "typical": 999, "unit": "um"},
+        evidence=["E2"],
+    )
+    with pytest.raises(ValueError, match="not found in E2"):
+        _to_prior(draft, table)
+
+
+def test_to_prior_does_not_unit_convert_across_evidence():
+    """0.06 (mm) and 60 (um) are the same physical length but different
+    numbers — v1 doesn't know that, by design (see numeric_check.py)."""
+    table = _evidence_table()
+    draft = ExtractedPriorDraft(
+        kind="parameter_range",
+        field="leg_length",
+        value={"field_name": "leg_length", "typical": 0.06, "unit": "mm"},
+        evidence=["E2"],
+    )
+    with pytest.raises(ValueError, match="not found in E2"):
+        _to_prior(draft, table)
+
+
+def test_to_prior_records_numeric_check_failure_in_trace():
+    table = _evidence_table()
+    draft = ExtractedPriorDraft(
+        kind="parameter_range",
+        field="leg_length",
+        value={"field_name": "leg_length", "typical": 999, "unit": "um"},
+        evidence=["E2"],
+    )
+    trace = PipelineTrace(query="q")
+    with pytest.raises(ValueError):
+        _to_prior(draft, table, trace)
+    assert len(trace.numeric_check_failures) == 1
+    failure = trace.numeric_check_failures[0]
+    assert "999" in failure
+    assert "E2" in failure
+    assert "leg_length" in failure
 
 
 def test_confidence_increases_with_more_supporting_papers():
@@ -333,6 +403,61 @@ def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):
     assert filtered_material_count == 0
 
 
+def test_extract_priors_retries_on_numeric_check_failure_then_succeeds(monkeypatch):
+    """First attempt cites a number (999) not in the evidence — must retry,
+    not silently accept it or crash the whole call — then the corrected
+    attempt (60, matching E2's "60um") succeeds."""
+    calls = {"n": 0}
+
+    def fake_completion(**kwargs):
+        calls["n"] += 1
+        typical = 999 if calls["n"] == 1 else 60
+        return _fake_llm_response(
+            json.dumps(
+                {
+                    "priors": [
+                        {
+                            "kind": "parameter_range",
+                            "field": "leg_length",
+                            "value": {"field_name": "leg_length", "typical": typical, "unit": "um"},
+                            "evidence": ["E2"],
+                        }
+                    ]
+                }
+            )
+        )
+
+    monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
+
+    priors, _filtered_material_count = extract_priors("test query", _evidence_table())
+    assert calls["n"] == 2
+    assert len(priors) == 1
+    assert priors[0].value.typical == 60
+
+
+def test_extract_priors_raises_after_persistent_numeric_check_failure(monkeypatch):
+    def fake_completion(**kwargs):
+        return _fake_llm_response(
+            json.dumps(
+                {
+                    "priors": [
+                        {
+                            "kind": "parameter_range",
+                            "field": "leg_length",
+                            "value": {"field_name": "leg_length", "typical": 999, "unit": "um"},
+                            "evidence": ["E2"],
+                        }
+                    ]
+                }
+            )
+        )
+
+    monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
+
+    with pytest.raises(ExtractionError, match="numeric groundedness"):
+        extract_priors("test query", _evidence_table())
+
+
 def test_extract_priors_raises_after_max_retries(monkeypatch):
     def always_broken(**kwargs):
         return _fake_llm_response("still not json")
@@ -362,8 +487,8 @@ def test_extract_priors_filters_out_material_property_drafts(monkeypatch):
                         {
                             "kind": "parameter_range",
                             "field": "leg_length",
-                            "value": {"field_name": "leg_length", "typical": 0.06, "unit": "mm"},
-                            "evidence": ["E1"],
+                            "value": {"field_name": "leg_length", "typical": 60, "unit": "um"},
+                            "evidence": ["E2"],
                         },
                     ]
                 }
