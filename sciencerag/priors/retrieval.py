@@ -31,18 +31,28 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CORPUS_DIR = REPO_ROOT / "corpus" / "papers"
 INDEX_DIR = REPO_ROOT / ".pqa_index"
 
-# Retrieval top-k (spec §3.7): was silently paper-qa's own default (10),
-# never tuned for "cover these 12 sim_params.json geometry parameters"
-# specifically. scripts/k_sweep_probe.py measured extraction-reachable
-# coverage of the 12 geometry_free params vs evidence_k on 10 targeted
-# queries: k=10 -> 9/12, k=20 -> 11/12, k=30 -> 11/12 (flat — the extra
-# evidence retrieved didn't turn into new coverage, pure wasted cost),
-# k=50 -> 12/12 (closes the last param, sink_fin_n, but at ~3x the raw
-# context volume of k=10). 20 is the elbow: real gains through 10->20,
-# zero marginal gain 20->30. Not going to 50 — the last gap is plausibly
-# just how rarely fin count specifically gets reported in the corpus, not
-# something k alone reliably fixes, and it's not worth ~3x the per-query
-# cost/latency to chase one parameter.
+# Retrieval top-k (spec §3.7). Original calibration (see
+# data/k_sweep_results_relevance_0.7_2026-07-31.json) was done at
+# MIN_EVIDENCE_RELEVANCE=0.7: k=10 -> 9/12, k=20/30 -> 11/12, k=50 -> 12/12
+# (20 picked as the elbow). Re-measured 2026-08-03 under the current
+# relevance=0.5 (data/k_sweep_results.json, same 10 queries, full 40-run
+# sweep, real API calls) since a looser relevance filter changes which
+# evidence survives to be counted: coverage is now FLAT 12/12 at every
+# k in {10,20,30,50} — the union-of-12-params coverage metric this script
+# uses no longer distinguishes k values at all, so it can't justify keeping
+# k=20 over k=10 by itself.
+#
+# But raw evidence/prior volume keeps scaling with k even after coverage
+# saturates (k=10: 49 evidence/34 priors, k=20: 80/39, k=30: 81/46,
+# k=50: 106/69, summed across all 10 queries) — higher k still buys more
+# independent supporting evidence per parameter, it just stops unlocking
+# NEW parameters. That volume is plausibly load-bearing for the confidence
+# formula redesign (plan k-relevance-abstract-lark.md Part 2 candidate B's
+# consistency check needs ≥2 distinct DOIs per prior to have anything to
+# compare) even though it's now moot for coverage. Left at 20 pending that
+# decision — not lowering to 10 preemptively since Part 2 hasn't run yet
+# and losing source redundancy now could quietly starve it later; revisit
+# once Part 2's real data shows whether the extra volume actually mattered.
 EVIDENCE_K = 20
 
 
