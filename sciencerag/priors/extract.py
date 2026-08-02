@@ -412,12 +412,26 @@ def extract_priors(
     last_error: Exception | None = None
     for attempt_num in range(1, MAX_RETRIES + 1):
         try:
-            response = litellm.completion(
-                model=get_llm_model(),
-                messages=messages,
-                temperature=0,
-                timeout=REQUEST_TIMEOUT_SECONDS,
-            )
+            model = get_llm_model()
+            try:
+                response = litellm.completion(
+                    model=model,
+                    messages=messages,
+                    temperature=0,
+                    timeout=REQUEST_TIMEOUT_SECONDS,
+                )
+            except litellm.BadRequestError as e:
+                # Some models (OpenAI's o-series, the gpt-5.6 family) reject
+                # a custom temperature outright — "Only the default (1)
+                # value is supported" — not a real extraction failure, so
+                # fall back to the model's default rather than burning a
+                # retry (and the JSON-consistency benefit of temperature=0)
+                # on every single call to one of these models.
+                if "temperature" not in str(e):
+                    raise
+                response = litellm.completion(
+                    model=model, messages=messages, timeout=REQUEST_TIMEOUT_SECONDS
+                )
             raw = response.choices[0].message.content
         except Exception as e:  # network error, timeout, rate limit, etc.
             last_error = e

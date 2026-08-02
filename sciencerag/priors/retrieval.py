@@ -53,6 +53,28 @@ EVIDENCE_K = 20
 # expected to reduce, not eliminate, that variance.
 AGENT_SEED = 20260802
 
+# Models that reject a custom `temperature` outright (BadRequestError,
+# "Only the default (1) value is supported") — OpenAI's o-series and the
+# gpt-5.6 family so far, confirmed via real calls (scripts/judge_shootout.py
+# hit this first). Prefix-matched since exact model strings get a date/tier
+# suffix (e.g. "gpt-5.6-luna", "gpt-5.6-sol"). Extend this list if swapping
+# SCIENCERAG_LLM_MODEL to a new model hits the same error.
+_NO_CUSTOM_TEMPERATURE_PREFIXES = ("gpt-5.6", "o1", "o3")
+
+
+def _model_list_config(model: str, *, seed: int | None = None) -> dict:
+    """A LiteLLM Router model_list config (paper-qa's llm_config/
+    summary_llm_config/agent.agent_llm_config shape) for `model`, omitting
+    `temperature` for models known not to support overriding it rather than
+    letting every summarization/extraction call fail. See
+    _NO_CUSTOM_TEMPERATURE_PREFIXES."""
+    litellm_params: dict = {"model": model}
+    if not model.startswith(_NO_CUSTOM_TEMPERATURE_PREFIXES):
+        litellm_params["temperature"] = 0
+    if seed is not None:
+        litellm_params["seed"] = seed
+    return {"model_list": [{"model_name": model, "litellm_params": litellm_params}]}
+
 
 def build_settings() -> Settings:
     llm = get_llm_model()
@@ -68,20 +90,17 @@ def build_settings() -> Settings:
     # agent_llm=DeepSeek gets stuck: it never emits a "complete" tool call and
     # loops on generate_answer indefinitely (confirmed — burned $0.25+ before
     # being killed). Leave agent_llm on its OpenAI default; only llm and
-    # summary_llm are DeepSeek.
+    # summary_llm follow SCIENCERAG_LLM_MODEL.
     settings.agent.index.index_directory = str(INDEX_DIR)
-    settings.agent.agent_llm_config = {
-        "model_list": [
-            {
-                "model_name": settings.agent.agent_llm,
-                "litellm_params": {
-                    "model": settings.agent.agent_llm,
-                    "temperature": settings.temperature,
-                    "seed": AGENT_SEED,
-                },
-            }
-        ]
-    }
+    # Explicit model_list configs (not paper-qa's own default builder) so
+    # temperature can be conditionally omitted per _NO_CUSTOM_TEMPERATURE_PREFIXES
+    # — needed the moment SCIENCERAG_LLM_MODEL points at a model like
+    # gpt-5.6-luna instead of DeepSeek.
+    settings.llm_config = _model_list_config(llm)
+    settings.summary_llm_config = _model_list_config(llm)
+    settings.agent.agent_llm_config = _model_list_config(
+        settings.agent.agent_llm, seed=AGENT_SEED
+    )
     return settings
 
 
