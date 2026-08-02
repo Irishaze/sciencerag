@@ -42,7 +42,7 @@ uv sync
 |---|---|
 | `kind` | 五选一:`parameter_range`(数值范围)、`material_property`(材料属性)、`scaling_relationship`(标度关系,不一定带数字)、`candidate_config`(候选设计/配置)、`caution`(限制或警告) |
 | `value` | 每个 `kind` 有专属固定 schema,不是自由 dict——没有 `summary` 兜底键,抽不出结构化内容就不产出。比如 `parameter_range` 要求 `field_name`(须等于外层 `field`)+ `unit` + 至少一个 `min`/`max`/`typical`;`scaling_relationship` 要求 `x`/`y`(须恰好等于 `related_fields` 的两个参数名)+ `direction`。完整的五套子 schema 见 [docs/spec/sciencerag_spec_zh.md](docs/spec/sciencerag_spec_zh.md) §3.6。`value` 里(以及 `notes` 里)出现的每一个数字都会做**数字溯源校验**:必须能在这条 prior 引用的证据原文里找到(精确匹配或 ≤2% 相对误差,不做单位换算)——找不到就整条拒收重试,详见 §3.8。这是一道确定性硬校验,跟 `confidence` 那个软排序分数是两回事 |
-| `confidence` | **一个启发式分数,不是校准过的概率**——公式是 `(来源数量相关的基数) * (证据平均相关性)`,用来做"值不值得展示"的排序和过滤,不能解读成"这个结论有 X% 概率正确"。下游消费时应该按相对高低排序使用,不要做校准意义上的数值解读。 |
+| `confidence` | **一个启发式分数,不是校准过的概率**——公式是 `(来源数量相关的基数) * (证据平均相关性)`,用来做"值不值得展示"的排序和过滤,不能解读成"这个结论有 X% 概率正确"。下游消费时应该按相对高低排序使用,不要做校准意义上的数值解读。**这个公式本身还没有用真实数据校准过**(代码注释里明确标了 placeholder),且已验证它的两个输入跟先验实际是否可信没有单调关系——数字是否真实由上面 `value` 那行说的溯源校验负责,不是靠这个分数;公式重新设计中,见 [docs/spec/sciencerag_spec_zh.md](docs/spec/sciencerag_spec_zh.md) §3.7 |
 | `sources` | 每条 prior 至少一个来源(schema 强制 `min_length=1`,不允许无引用的结论)——要么是 `{"type": "paper", "doi": ..., "span": ...}`,要么是 `{"type": "kg_triple", "triple_id": ...}` |
 
 `coverage.gaps` 是人类可读的字符串列表,如实反映这次响应的局限性——比如"证据检索到了但相关性不够,没能抽取"、"抽取出的某些 prior 置信度太低被过滤掉了,来源 DOI 是 XXX"、"请求了外部检索但 M1 没实现"。**`gaps` 不是错误,是透明度**——即使 `gaps` 非空,响应本身仍然是 `status: "ok"` 的合法结果。真正的失败(检索/LLM 调用异常)走 `status: "error"` 的 `ErrorResponse` 信封,HTTP 502。
