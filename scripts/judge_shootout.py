@@ -7,7 +7,14 @@ comparison isn't confounded by prompt differences:
 
   1. deepseek_self_check — the production extraction model itself (same
      model = same blind spots risk, worth measuring directly)
-  2. gpt4o_mini           — an independent model at a similar price point
+  2. gpt5_6_luna          — an independent model, same generation as the
+     ceiling (#4) but a different codename variant (luna vs. sol) —
+     confirmed via the OpenAI API to be a real, distinct model, but its
+     actual price/capability tier relative to sol is NOT confirmed (the
+     API exposes no metadata distinguishing gpt-5.6's luna/sol/terra
+     variants; sol was picked as the flagship on the user's own say-so, not
+     from anything queryable). Treat "applicant" here as "cheaper than the
+     ceiling by assumption," not by verified pricing.
   3. local_nli            — cross-encoder/nli-deberta-v3-large, zero
      marginal API cost; entailment probability > 0.5 -> SUPPORTED.
      natural-format items ONLY (an NLI model expects prose, not a
@@ -16,10 +23,10 @@ comparison isn't confounded by prompt differences:
 A fourth, NON-applicant ceiling model sanity-checks the exam set itself
 and quantifies what the cheap options give up:
 
-  4. gpt5_6_sol_ceiling — gpt-5.6-sol, the strongest available OpenAI
-     model at the time of writing. Not scored for "which judge should we
-     use" — see scripts/judge_shootout_report.py (Step C3) for how its
-     results get used instead.
+  4. gpt5_6_sol_ceiling — gpt-5.6-sol, confirmed with the user as the
+     flagship variant among gpt-5.6's three unlabeled codenames. Not scored
+     for "which judge should we use" — see scripts/judge_shootout_report.py
+     (Step C3) for how its results get used instead.
 
 Every applicant + the ceiling model gets BOTH the `fielded` and `natural`
 presentation of each item (Step C3 wants to know if presentation format
@@ -90,7 +97,7 @@ API_JUDGES = {
     # not hardcoded — "self-check" only means something if it's actually
     # today's production model, not whatever it happened to be when this
     # script was written.
-    "gpt4o_mini": "gpt-4o-mini",
+    "gpt5_6_luna": "gpt-5.6-luna",
     "gpt5_6_sol_ceiling": "gpt-5.6-sol",
 }
 FORMATS = ["fielded", "natural"]
