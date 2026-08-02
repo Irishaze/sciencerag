@@ -111,3 +111,37 @@ def extract_numbers(prior: Prior) -> list[float]:
         numbers.extend(extract_numbers_from_text(prior.notes))
 
     return numbers
+
+
+# Widened from a literal 1% because the rounding case this is meant to
+# tolerate — evidence states 1.83, the prior (reasonably) rounds it to
+# 1.8 — is itself a ~1.64% relative difference: |1.83-1.8|/1.83 ≈ 0.0164.
+# A strict 1% would reject that exact case. 2% keeps the same "tolerate
+# rounding, not real numeric drift" intent with enough headroom for it.
+NUMERIC_MATCH_RELATIVE_TOLERANCE = 0.02
+
+
+def numbers_match(a: float, b: float) -> bool:
+    """True if `a` (a number the prior asserts) matches `b` (a number found
+    in evidence text): exact equality, or within NUMERIC_MATCH_RELATIVE_TOLERANCE
+    relative error — tolerates the prior rounding a number when copying it
+    out of evidence (e.g. evidence's 1.83 -> prior's 1.8), not real drift.
+
+    Deliberately NOT unit-aware (v1 scope — see module docstring): 20 and
+    0.02 never match on their own, even when one is "20 µm" and the other
+    is "0.02 mm" (the same physical length). Unit conversion is a
+    deliberately deferred non-goal, not an oversight — see extract.py's
+    prompt rule to preserve evidence's original units instead.
+    """
+    if a == b:
+        return True
+    if b == 0:
+        return a == 0
+    return abs(a - b) / abs(b) <= NUMERIC_MATCH_RELATIVE_TOLERANCE
+
+
+def find_unmatched_numbers(prior_numbers: list[float], evidence_numbers: list[float]) -> list[float]:
+    """Which numbers from `prior_numbers` have no match anywhere in
+    `evidence_numbers`. Empty result means every number the prior asserts
+    is grounded somewhere in the evidence."""
+    return [n for n in prior_numbers if not any(numbers_match(n, e) for e in evidence_numbers)]

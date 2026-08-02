@@ -1,8 +1,10 @@
-"""Tests for sciencerag/priors/numeric_check.py (Phase B1: number extraction).
+"""Tests for sciencerag/priors/numeric_check.py (Phase B1/B2: extraction + matching).
 
 extract_numbers_from_text's format-parsing cases are the ones Step B1 itself
-calls out (comma, scientific notation, percent, range, plus-minus). Matching
-logic and pipeline wiring are Phase B2/B3, not tested here.
+calls out (comma, scientific notation, percent, range, plus-minus).
+numbers_match/find_unmatched_numbers are Step B2's matching rule. Pipeline
+wiring (Prior-level accept/reject, trace, retries) is Phase B3, not tested
+here.
 """
 
 import pytest
@@ -15,7 +17,12 @@ from sciencerag.priors.models import (
     ScalingRelationshipValue,
     SourcePaper,
 )
-from sciencerag.priors.numeric_check import extract_numbers, extract_numbers_from_text
+from sciencerag.priors.numeric_check import (
+    extract_numbers,
+    extract_numbers_from_text,
+    find_unmatched_numbers,
+    numbers_match,
+)
 
 SOURCES = [SourcePaper(doi="10.1234/example")]
 
@@ -194,3 +201,58 @@ def test_extract_numbers_includes_notes_text():
         notes="Measured over 5,000 cycles.",
     )
     assert sorted(extract_numbers(prior)) == [0.06, 5000.0]
+
+
+# -- numbers_match: Step B2's matching rule -----------------------------------
+
+
+def test_numbers_match_exact_equality():
+    assert numbers_match(1.8, 1.8) is True
+
+
+def test_numbers_match_zero_exact():
+    assert numbers_match(0, 0) is True
+
+
+def test_numbers_match_within_rounding_tolerance():
+    # The spec's own worked example: evidence states 1.83, prior rounds to
+    # 1.8 (~1.64% relative) — must match under the widened 2% tolerance.
+    assert numbers_match(1.8, 1.83) is True
+
+
+def test_numbers_match_negative_numbers_within_tolerance():
+    assert numbers_match(-40, -40.2) is True
+
+
+def test_numbers_match_rejects_real_drift():
+    assert numbers_match(1.8, 2.0) is False
+
+
+def test_numbers_match_does_not_unit_convert():
+    # 20 (e.g. µm) vs 0.02 (e.g. mm) is the same physical length but a
+    # different number — v1 deliberately does not know this, by design.
+    assert numbers_match(20, 0.02) is False
+
+
+def test_numbers_match_zero_evidence_number_only_matches_zero():
+    assert numbers_match(5, 0) is False
+    assert numbers_match(0, 0) is True
+
+
+# -- find_unmatched_numbers ----------------------------------------------------
+
+
+def test_find_unmatched_numbers_all_grounded():
+    assert find_unmatched_numbers([0.06, 300.0], [0.06, 300.0, 5.0]) == []
+
+
+def test_find_unmatched_numbers_reports_ungrounded():
+    assert find_unmatched_numbers([0.06, 999.0], [0.06, 300.0]) == [999.0]
+
+
+def test_find_unmatched_numbers_empty_prior_numbers():
+    assert find_unmatched_numbers([], [1.0, 2.0, 3.0]) == []
+
+
+def test_find_unmatched_numbers_uses_tolerance():
+    assert find_unmatched_numbers([1.8], [1.83]) == []
