@@ -435,11 +435,12 @@
       "typical": 2.75,
       "unit": "mm",
       "conditions": {
-        "material": "Bi2Te3"
+        "material": "Bi2Te3",
+        "selection_rationale": "chosen to minimize manufacturing cost"
       }
     },
     "natural": "For Bi2Te3 modules, leg length typically ranges 1-3.5 mm, with 2.75 mm optimal; this value is specifically chosen to minimize manufacturing cost.",
-    "notes": "Typical range from 1 to 3.5 mm; optimum determined as 2.75 mm to minimize manufacturing cost.",
+    "notes": "Typical range from 1 to 3.5 mm; optimum determined as 2.75 mm for balancing output voltage/current and material volume.",
     "evidence_text": "For standard Bi2Te3 thermoelectric modules, leg heights investigated range from 1 mm to 3.5 mm. Studies show 2.75 mm provides a medium temperature difference suitable for moderate cooling capacity, balancing output voltage, current, temperature gradient, and manufacturing practicality.",
     "source_dois": [
       "10.35378/gujs.1420942"
