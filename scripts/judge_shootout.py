@@ -118,7 +118,17 @@ def _fielded_desc(item: dict) -> str:
         f"field: {item['field']}\n"
         f"related_fields: {item['related_fields']}\n"
         f"value: {json.dumps(item['fielded'])}\n"
-        f"notes: {item['notes']}"
+        # `notes` is supplementary context, not a claim to verify — in
+        # production (sciencerag/priors/extract.py's _to_prior) it falls
+        # back to the source paper's TITLE whenever the LLM didn't supply
+        # its own clarifying note, so it routinely contains attribution
+        # text no evidence snippet restates. Labeled here so the judge
+        # applies faithfulness checking to `value` (the actual claim), not
+        # to this label — found via real shootout results: without this,
+        # every prior whose notes happened to carry a paper title got
+        # flagged NOT_SUPPORTED regardless of whether the claim itself
+        # was correct.
+        f"notes (context only, not a claim to verify): {item['notes']}"
     )
 
 
