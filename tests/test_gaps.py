@@ -4,6 +4,7 @@ Pure-function tests against constructed Prior objects — no PaperQA2/API calls.
 """
 
 from sciencerag.priors.contract import GEOMETRY_FREE_NAMES
+from sciencerag.priors.extract import EvidenceItem
 from sciencerag.priors.models import Prior, SourcePaper
 from sciencerag.priors.retrieval import (
     _build_gaps,
@@ -12,6 +13,10 @@ from sciencerag.priors.retrieval import (
     _cap_priors,
     _split_by_confidence,
 )
+
+
+def _evidence(text: str, relevance: float = 0.3, doi: str = "10.0000/x") -> EvidenceItem:
+    return EvidenceItem(text=text, doi=doi, span="p.1", notes=None, relevance=relevance)
 
 
 def _prior(
@@ -90,32 +95,79 @@ def test_build_gaps_reports_zero_hits_case():
 
 
 def test_build_geometry_gaps_reports_all_12_when_nothing_extracted():
-    gaps = _build_geometry_gaps(all_priors=[], strong_priors=[])
+    gaps = _build_geometry_gaps(all_priors=[], strong_priors=[], below_threshold_evidence=[])
     assert len(gaps) == len(GEOMETRY_FREE_NAMES)
     assert all("未检索到" in g for g in gaps)
 
 
 def test_build_geometry_gaps_excludes_params_covered_by_a_strong_prior():
     strong = [_prior(0.9, field="leg_length")]
-    gaps = _build_geometry_gaps(all_priors=strong, strong_priors=strong)
+    gaps = _build_geometry_gaps(all_priors=strong, strong_priors=strong, below_threshold_evidence=[])
     assert not any("leg_length" in g for g in gaps)
     assert len(gaps) == len(GEOMETRY_FREE_NAMES) - 1
 
 
 def test_build_geometry_gaps_excludes_params_covered_via_related_fields():
     strong = [_prior(0.9, field=None, related_fields=["leg_length", "leg_width"])]
-    gaps = _build_geometry_gaps(all_priors=strong, strong_priors=strong)
+    gaps = _build_geometry_gaps(all_priors=strong, strong_priors=strong, below_threshold_evidence=[])
     assert not any("leg_length" in g for g in gaps)
     assert not any("leg_width" in g for g in gaps)
 
 
 def test_build_geometry_gaps_distinguishes_low_confidence_from_uncovered():
     weak = _prior(0.1, field="leg_length")
-    gaps = _build_geometry_gaps(all_priors=[weak], strong_priors=[])
+    gaps = _build_geometry_gaps(all_priors=[weak], strong_priors=[], below_threshold_evidence=[])
     leg_length_gap = next(g for g in gaps if "leg_length" in g)
     assert "置信度不足" in leg_length_gap
     other_gap = next(g for g in gaps if "leg_width" in g)
     assert "未检索到" in other_gap
+
+
+# -- 3rd tier: relevance-filtered evidence (spec §3.7's 3-way split) -------
+
+
+def test_build_geometry_gaps_reports_relevance_filtered_when_below_threshold_evidence_matches():
+    below_threshold = [_evidence("A study of leg length in TEC modules, but no number given.")]
+    gaps = _build_geometry_gaps(
+        all_priors=[], strong_priors=[], below_threshold_evidence=below_threshold
+    )
+    leg_length_gap = next(g for g in gaps if "leg_length" in g)
+    assert "相关性不足" in leg_length_gap
+    assert "置信度不足" not in leg_length_gap
+
+
+def test_build_geometry_gaps_matches_leg_length_synonym_leg_height():
+    """Real evidence text calls this dimension "leg height" as often as
+    "leg length" (the leg stands between hot/cold plates) — see
+    _PARAM_KEYWORD_SYNONYMS."""
+    below_threshold = [_evidence("Effect of leg height on cooling performance.")]
+    gaps = _build_geometry_gaps(
+        all_priors=[], strong_priors=[], below_threshold_evidence=below_threshold
+    )
+    leg_length_gap = next(g for g in gaps if "leg_length" in g)
+    assert "相关性不足" in leg_length_gap
+
+
+def test_build_geometry_gaps_falls_back_to_unretrieved_when_no_keyword_match():
+    below_threshold = [_evidence("Discussion of Seebeck coefficient temperature dependence.")]
+    gaps = _build_geometry_gaps(
+        all_priors=[], strong_priors=[], below_threshold_evidence=below_threshold
+    )
+    leg_length_gap = next(g for g in gaps if "leg_length" in g)
+    assert "未检索到" in leg_length_gap
+
+
+def test_build_geometry_gaps_confidence_tier_takes_priority_over_relevance_tier():
+    """A param that has BOTH a drafted (low-confidence) prior AND matching
+    below-threshold evidence should report the confidence-tier reason —
+    the prior in hand is more specific/actionable than an evidence guess."""
+    weak = _prior(0.1, field="leg_length")
+    below_threshold = [_evidence("leg length was also mentioned elsewhere.")]
+    gaps = _build_geometry_gaps(
+        all_priors=[weak], strong_priors=[], below_threshold_evidence=below_threshold
+    )
+    leg_length_gap = next(g for g in gaps if "leg_length" in g)
+    assert "置信度不足" in leg_length_gap
 
 
 # -- max_priors cap ---------

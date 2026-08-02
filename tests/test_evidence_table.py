@@ -21,7 +21,7 @@ def test_low_relevance_contexts_are_excluded_from_evidence_table():
         _fake_context("weak/hallucinated evidence", score=4),  # relevance 0.4 < 0.5
         _fake_context("another strong one", score=8),  # relevance 0.8
     ]
-    table = _build_evidence_table(contexts)
+    table, _below_threshold = _build_evidence_table(contexts)
     assert len(table) == 2
     assert all(item.relevance >= MIN_EVIDENCE_RELEVANCE for item in table.values())
     assert "weak/hallucinated evidence" not in [item.text for item in table.values()]
@@ -33,7 +33,7 @@ def test_evidence_labels_are_sequential_without_gaps_after_filtering():
         _fake_context("b", score=4),  # filtered out
         _fake_context("c", score=8),
     ]
-    table = _build_evidence_table(contexts)
+    table, _below_threshold = _build_evidence_table(contexts)
     assert list(table.keys()) == ["E1", "E2"]
     assert table["E1"].text == "a"
     assert table["E2"].text == "c"
@@ -41,7 +41,7 @@ def test_evidence_labels_are_sequential_without_gaps_after_filtering():
 
 def test_all_low_relevance_yields_empty_table():
     contexts = [_fake_context("weak", score=3), _fake_context("also weak", score=4)]
-    table = _build_evidence_table(contexts)
+    table, _below_threshold = _build_evidence_table(contexts)
     assert table == {}
 
 
@@ -52,5 +52,18 @@ def test_relevance_exactly_at_threshold_is_kept():
     value itself must be kept, not treated as "below" (filter is
     `< threshold`, not `<= threshold`)."""
     contexts = [_fake_context("right at the boundary", score=5)]  # relevance 0.5
-    table = _build_evidence_table(contexts)
+    table, _below_threshold = _build_evidence_table(contexts)
     assert len(table) == 1
+
+
+def test_below_threshold_items_are_returned_separately():
+    """Needed independently of `trace` (see _build_geometry_gaps' 3-way
+    relevance attribution, spec §3.7) — not just a debug/probe artifact."""
+    contexts = [
+        _fake_context("strong evidence", score=9),
+        _fake_context("weak evidence", score=4),
+    ]
+    table, below_threshold = _build_evidence_table(contexts)
+    assert len(table) == 1
+    assert [item.text for item in below_threshold] == ["weak evidence"]
+    assert below_threshold[0].relevance < MIN_EVIDENCE_RELEVANCE

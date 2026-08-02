@@ -82,7 +82,7 @@ def _drafted_params_for(query: str, k: int) -> tuple[set[str], dict]:
     if not contexts:
         return set(), {"n_contexts": 0, "n_evidence": 0, "n_priors": 0, "error": None}
 
-    evidence_table = _build_evidence_table(contexts)
+    evidence_table, _below_threshold_evidence = _build_evidence_table(contexts)
     if not evidence_table:
         return set(), {
             "n_contexts": len(contexts),

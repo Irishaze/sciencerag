@@ -139,8 +139,14 @@ MIN_EVIDENCE_RELEVANCE = 0.5
 
 def _build_evidence_table(
     contexts, trace: PipelineTrace | None = None
-) -> dict[str, EvidenceItem]:
+) -> tuple[dict[str, EvidenceItem], list[EvidenceItem]]:
+    """Returns (survived_table, below_threshold_items). The second element
+    exists independently of `trace` (unlike trace.all_evidence, which is
+    only ever populated on the debug/probe path) because
+    _build_geometry_gaps' relevance-vs-nothing-retrieved attribution needs
+    it on every real call, not just traced ones."""
     table = {}
+    below_threshold = []
     i = 0
     for context in contexts:
         relevance = max(0.0, min(1.0, context.score / 10))
@@ -155,10 +161,11 @@ def _build_evidence_table(
         if trace is not None:
             trace.all_evidence.append(item)
         if relevance < MIN_EVIDENCE_RELEVANCE:
+            below_threshold.append(item)
             continue
         i += 1
         table[f"E{i}"] = item
-    return table
+    return table, below_threshold
 
 
 CONFIDENCE_THRESHOLD = 0.5
@@ -194,17 +201,53 @@ def _prior_geometry_fields(prior: Prior) -> set[str]:
     return fields
 
 
-def _build_geometry_gaps(all_priors: list[Prior], strong_priors: list[Prior]) -> list[str]:
+# Word-overlap synonyms for the geometry_free contract names, built from
+# real evidence text seen this session — a literal "leg_length" substring
+# almost never appears in a paper; authors call the same dimension "leg
+# height" (the leg stands between hot/cold plates) or just "leg dimension"
+# just as often. This is a keyword heuristic, not semantic matching: it can
+# false-positive (evidence mentions "length" for something unrelated) and
+# false-negative (a term not on this list) — good enough to distinguish
+# "plausibly nothing retrieved about this parameter at all" from "something
+# was retrieved but didn't clear the relevance bar", not a claim of
+# precision beyond that.
+_PARAM_KEYWORD_SYNONYMS: dict[str, list[str]] = {
+    "leg_length": ["leg length", "leg height", "leg dimension"],
+    "leg_width": ["leg width", "leg cross-section", "leg cross section"],
+    "pitch": ["pitch", "leg spacing", "leg pitch"],
+    "d_conductor": ["conductor thickness", "metallization thickness", "electrode thickness"],
+    "d_ceramics": ["ceramic thickness", "ceramic substrate thickness"],
+    "length": ["module length", "device length"],
+    "width": ["module width", "device width"],
+    "height": ["module height", "device height"],
+    "sink_base_h": ["base thickness", "base plate thickness", "sink base"],
+    "sink_fin_h": ["fin height"],
+    "sink_fin_w": ["fin thickness", "fin width"],
+    "sink_fin_n": ["fin count", "number of fins", "fin number"],
+}
+
+
+def _evidence_mentions_param(text: str, param_name: str) -> bool:
+    text_lower = text.lower()
+    keywords = [*_PARAM_KEYWORD_SYNONYMS.get(param_name, []), param_name.replace("_", " ")]
+    return any(kw in text_lower for kw in keywords)
+
+
+def _build_geometry_gaps(
+    all_priors: list[Prior],
+    strong_priors: list[Prior],
+    below_threshold_evidence: list[EvidenceItem],
+) -> list[str]:
     """Use the sim contract's 12 geometry_free parameters as the yardstick
     for coverage (spec §3.6): whatever this run didn't end up with a
-    confidence-surviving prior for goes into gaps, not silently dropped.
-
-    Distinguishes "extracted but too low-confidence to publish" from
-    "nothing extracted at all" where that's cheap to know (from priors we
-    already have in hand) — true evidence-relevance attribution (spec §3.6's
-    3-way split) needs per-parameter semantic matching over raw retrieval
-    contexts, which the spec explicitly defers past v1 ("第一版可先简化为
-    '未覆盖'").
+    confidence-surviving prior for goes into gaps, not silently dropped,
+    with a 3-way attribution per parameter (spec §3.7):
+      1. extracted but confidence-filtered — cheap, from priors in hand.
+      2. evidence retrieved but relevance-filtered — a keyword-overlap
+         check (see _PARAM_KEYWORD_SYNONYMS) against evidence that scored
+         below MIN_EVIDENCE_RELEVANCE; a heuristic, not exact semantic
+         matching (no per-parameter tagging exists upstream of this).
+      3. nothing retrieved at all, as a last resort.
     """
     covered = {f for p in strong_priors for f in _prior_geometry_fields(p)}
     drafted = {f for p in all_priors for f in _prior_geometry_fields(p)}
@@ -214,6 +257,8 @@ def _build_geometry_gaps(all_priors: list[Prior], strong_priors: list[Prior]) ->
             continue
         if name in drafted:
             gaps.append(f"{name} 提取到先验但置信度不足")
+        elif any(_evidence_mentions_param(item.text, name) for item in below_threshold_evidence):
+            gaps.append(f"{name} 检索到证据但相关性不足(未达到 {MIN_EVIDENCE_RELEVANCE})")
         else:
             gaps.append(f"文献中未检索到 {name} 相关证据")
     return gaps
@@ -306,7 +351,7 @@ def _build_priors_response(
                         internal_hits=0,
                         external_hits=0,
                         gaps=["internal corpus returned no relevant evidence for this query"]
-                        + _build_geometry_gaps([], []),
+                        + _build_geometry_gaps([], [], []),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -315,7 +360,7 @@ def _build_priors_response(
             0,
         )
 
-    evidence_table = _build_evidence_table(contexts, trace=trace)
+    evidence_table, below_threshold_evidence = _build_evidence_table(contexts, trace=trace)
 
     if not evidence_table:
         return (
@@ -329,7 +374,7 @@ def _build_priors_response(
                             f"{len(contexts)} evidence context(s) retrieved, but none met the "
                             f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
                         ]
-                        + _build_geometry_gaps([], []),
+                        + _build_geometry_gaps([], [], below_threshold_evidence),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -351,7 +396,7 @@ def _build_priors_response(
                         internal_hits=len(contexts),
                         external_hits=0,
                         gaps=[f"LLM extraction failed schema validation after retries: {e}"]
-                        + _build_geometry_gaps([], []),
+                        + _build_geometry_gaps([], [], below_threshold_evidence),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -365,7 +410,7 @@ def _build_priors_response(
 
     gaps = _build_gaps(weak_priors, total_hits=len(contexts))
     gaps += _build_max_priors_gap(truncated_priors, max_priors)
-    gaps += _build_geometry_gaps(all_priors, returned_priors)
+    gaps += _build_geometry_gaps(all_priors, returned_priors, below_threshold_evidence)
 
     return (
         _add_external_note(
