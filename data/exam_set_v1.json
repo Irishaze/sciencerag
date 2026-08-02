@@ -35,15 +35,15 @@
     "fielded": {
       "field_name": "leg_length",
       "min": 1.0,
-      "max": 3.0,
+      "max": 3.5,
       "typical": 2.75,
       "unit": "mm",
       "conditions": {
         "material": "Bi2Te3"
       }
     },
-    "natural": "For Bi2Te3 modules, leg length typically ranges 1-3 mm, with 2.75 mm identified as optimal, balancing output voltage/current against material volume.",
-    "notes": "Typical range from 1 to 3 mm; optimum determined as 2.75 mm for balancing output voltage/current and material volume.",
+    "natural": "For Bi2Te3 modules, leg length typically ranges 1-3.5 mm, with 2.75 mm identified as optimal, balancing output voltage/current against material volume.",
+    "notes": "Typical range from 1 to 3.5 mm; optimum determined as 2.75 mm for balancing output voltage/current and material volume.",
     "evidence_text": "For standard Bi2Te3 thermoelectric modules, leg heights investigated range from 1 mm to 3.5 mm. Studies show 2.75 mm provides a medium temperature difference suitable for moderate cooling capacity, balancing output voltage, current, temperature gradient, and manufacturing practicality.",
     "source_dois": [
       "10.35378/gujs.1420942"
@@ -85,10 +85,10 @@
     "field": "leg_length",
     "related_fields": [],
     "fielded": {
-      "statement": "For Mg3Bi2-based miniaturized TEC, leg lengths below 1 mm significantly degrade maximum temperature difference due to increased interfacial electrical contact resistance.",
-      "applicability_scope": "Miniaturized Mg3Bi2-based coolers with leg length below 1 mm"
+      "statement": "For Mg3Bi2-based TEC, leg lengths below 1 mm significantly degrade maximum temperature difference due to increased interfacial electrical contact resistance.",
+      "applicability_scope": "Mg3Bi2-based coolers with leg length below 1 mm"
     },
-    "natural": "Below 1 mm leg length, contact resistance increasingly degrades the maximum achievable temperature difference in Mg3Bi2-based miniaturized coolers.",
+    "natural": "Below 1 mm leg length, contact resistance increasingly degrades the maximum achievable temperature difference in Mg3Bi2-based coolers.",
     "notes": "Miniaturized Mg3Bi2-based thermoelectric cooler for localized electronic thermal management",
     "evidence_text": "The analysis of the Mg3Bi2-based thermoelectric cooler uses a leg with dimensions 1 x 1 x 1 mm3 as a reference, indicating a typical leg length of 1 mm. The performance sensitivity to leg length is explored, showing that for lengths below 1 mm, the maximum temperature difference (dTmax) noticeably degrades due to increased interfacial electrical contact resistance. At 1 mm, a contact resistivity of 5e-8 ohm cm2 is assumed as a realistic baseline.",
     "source_dois": [
@@ -128,7 +128,7 @@
     "related_fields": [],
     "fielded": {
       "statement": "Operating beyond the optimal voltage of 13.5 V yields only marginal cooling gains at significant additional energy cost, and can cause hot-end overheating and reliability issues.",
-      "applicability_scope": "Vehicle thermoelectric refrigerator modules"
+      "applicability_scope": null
     },
     "natural": "Pushing drive voltage past 13.5 V barely improves cooling but costs significantly more energy and risks hot-end overheating.",
     "notes": "Multi-Physic Coupling Analysis and Structure Optimization of Vehicle Thermoelectric Refrigerators",
@@ -155,9 +155,9 @@
         "leg_width": 1.4
       },
       "reported_performance": {},
-      "context": "Rectangular TEC geometry from Lu et al. 2020, with electrode/solder/substrate thicknesses also specified."
+      "context": "Rectangular TEC geometry, with electrode/solder/substrate thicknesses also specified."
     },
-    "natural": "Lu et al. 2020's rectangular TEC uses a 1.6 mm leg height with a 1.4 mm x 1.4 mm cross-section.",
+    "natural": "A rectangular TEC uses a 1.6 mm leg height with a 1.4 mm x 1.4 mm cross-section.",
     "notes": "Configuration from Lu2020 rectangular TEC description.",
     "evidence_text": "The excerpt provides geometric parameters for a rectangular thermoelectric cooler (TEC). The leg height is specified as 1.6 mm. The legs have a cross-sectional area of 1.4 mm x 1.4 mm. The electrode thickness is 0.2 mm, solder thickness is 0.1 mm, and substrate thickness is 0.8 mm.",
     "source_dois": [
@@ -184,9 +184,9 @@
         "height": 135
       },
       "reported_performance": {},
-      "context": "Plate-type heat sink used in an experimental TEC cooling setup, Patel et al. 2021."
+      "context": "Plate-type heat sink used in an experimental TEC cooling setup."
     },
-    "natural": "Patel et al. 2021's experimental heat sink measures 335 x 128 x 135 mm, mounted back-to-back with a second unit and airflow driven by fans.",
+    "natural": "An experimental heat sink measures 335 x 128 x 135 mm, mounted back-to-back with a second unit and airflow driven by fans.",
     "notes": "Heat sink dimensions used in an experimental TEC setup from Patel et al. (2021).",
     "evidence_text": "The experimental setup uses a plate-type heat sink (335 mm x 128 mm x 135 mm) attached to the cold side of the thermoelectric cooler (TEC) to generate a cooling effect. Additionally, two heat sinks are firmly attached back-to-back, with an extended U-section enclosure providing an airflow path from the top heat sink to the bottom one. A fan provides airflow to the top heat sink, and another fan sucks cold air from the channel.",
     "source_dois": [
@@ -286,9 +286,9 @@
         "leg_width": 1.4
       },
       "reported_performance": {},
-      "context": "Rectangular TEC geometry from Lu et al. 2020, with electrode/solder/substrate thicknesses also specified."
+      "context": "Rectangular TEC geometry, with electrode/solder/substrate thicknesses also specified."
     },
-    "natural": "Lu et al. 2020's rectangular TEC uses a 2.4 mm leg height with a 1.4 mm x 1.4 mm cross-section.",
+    "natural": "A rectangular TEC uses a 2.4 mm leg height with a 1.4 mm x 1.4 mm cross-section.",
     "notes": "Configuration from Lu2020 rectangular TEC description.",
     "evidence_text": "The excerpt provides geometric parameters for a rectangular thermoelectric cooler (TEC). The leg height is specified as 1.6 mm. The legs have a cross-sectional area of 1.4 mm x 1.4 mm. The electrode thickness is 0.2 mm, solder thickness is 0.1 mm, and substrate thickness is 0.8 mm.",
     "source_dois": [
@@ -305,10 +305,10 @@
     "field": "leg_length",
     "related_fields": [],
     "fielded": {
-      "statement": "For Mg3Bi2-based miniaturized TEC, leg lengths below 0.5 mm significantly degrade maximum temperature difference due to increased interfacial electrical contact resistance.",
-      "applicability_scope": "Miniaturized Mg3Bi2-based coolers with leg length below 0.5 mm"
+      "statement": "For Mg3Bi2-based TEC, leg lengths below 0.5 mm significantly degrade maximum temperature difference due to increased interfacial electrical contact resistance.",
+      "applicability_scope": "Mg3Bi2-based coolers with leg length below 0.5 mm"
     },
-    "natural": "Below 0.5 mm leg length, contact resistance increasingly degrades the maximum achievable temperature difference in Mg3Bi2-based miniaturized coolers.",
+    "natural": "Below 0.5 mm leg length, contact resistance increasingly degrades the maximum achievable temperature difference in Mg3Bi2-based coolers.",
     "notes": "Miniaturized Mg3Bi2-based thermoelectric cooler for localized electronic thermal management",
     "evidence_text": "The analysis of the Mg3Bi2-based thermoelectric cooler uses a leg with dimensions 1 x 1 x 1 mm3 as a reference, indicating a typical leg length of 1 mm. The performance sensitivity to leg length is explored, showing that for lengths below 1 mm, the maximum temperature difference (dTmax) noticeably degrades due to increased interfacial electrical contact resistance. At 1 mm, a contact resistivity of 5e-8 ohm cm2 is assumed as a realistic baseline.",
     "source_dois": [
@@ -410,9 +410,9 @@
       "reported_performance": {
         "cop_rank": "highest among tested heat sink designs"
       },
-      "context": "Plate-type heat sink used in an experimental TEC cooling setup, Patel et al. 2021. Reported as the best-performing heat sink design tested."
+      "context": "Plate-type heat sink used in an experimental TEC cooling setup."
     },
-    "natural": "Patel et al. 2021's 335 x 128 x 135 mm heat sink achieved the highest COP among all heat sink designs tested in the study.",
+    "natural": "The 335 x 128 x 135 mm heat sink achieved the highest COP among all heat sink designs tested in the study.",
     "notes": "Heat sink dimensions used in an experimental TEC setup from Patel et al. (2021).",
     "evidence_text": "The experimental setup uses a plate-type heat sink (335 mm x 128 mm x 135 mm) attached to the cold side of the thermoelectric cooler (TEC) to generate a cooling effect. Additionally, two heat sinks are firmly attached back-to-back, with an extended U-section enclosure providing an airflow path from the top heat sink to the bottom one. A fan provides airflow to the top heat sink, and another fan sucks cold air from the channel.",
     "source_dois": [
@@ -431,15 +431,15 @@
     "fielded": {
       "field_name": "leg_length",
       "min": 1.0,
-      "max": 3.0,
+      "max": 3.5,
       "typical": 2.75,
       "unit": "mm",
       "conditions": {
         "material": "Bi2Te3"
       }
     },
-    "natural": "For Bi2Te3 modules, leg length typically ranges 1-3 mm, with 2.75 mm optimal; this value is specifically chosen to minimize manufacturing cost.",
-    "notes": "Typical range from 1 to 3 mm; optimum determined as 2.75 mm to minimize manufacturing cost.",
+    "natural": "For Bi2Te3 modules, leg length typically ranges 1-3.5 mm, with 2.75 mm optimal; this value is specifically chosen to minimize manufacturing cost.",
+    "notes": "Typical range from 1 to 3.5 mm; optimum determined as 2.75 mm to minimize manufacturing cost.",
     "evidence_text": "For standard Bi2Te3 thermoelectric modules, leg heights investigated range from 1 mm to 3.5 mm. Studies show 2.75 mm provides a medium temperature difference suitable for moderate cooling capacity, balancing output voltage, current, temperature gradient, and manufacturing practicality.",
     "source_dois": [
       "10.35378/gujs.1420942"
@@ -482,7 +482,7 @@
     "related_fields": [],
     "fielded": {
       "statement": "Operating beyond the optimal voltage of 13.5 V yields only marginal cooling gains at significant additional energy cost, and can cause hot-end overheating and reliability issues.",
-      "applicability_scope": "Vehicle thermoelectric refrigerator modules"
+      "applicability_scope": null
     },
     "natural": "Pushing drive voltage past 13.5 V barely improves cooling but costs significantly more energy and risks hot-end overheating.",
     "notes": "Multi-Physic Coupling Analysis and Structure Optimization of Vehicle Thermoelectric Refrigerators",
