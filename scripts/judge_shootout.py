@@ -132,14 +132,21 @@ def _judge_with_api(model: str, item: dict, fmt: str) -> dict:
         f"PRIOR ({fmt}):\n{_prior_content(item, fmt)}\n\n"
         f"EVIDENCE:\n{item['evidence_text']}"
     )
-    response = litellm.completion(
-        model=model,
-        messages=[
-            {"role": "system", "content": SHOOTOUT_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0,
-    )
+    messages = [
+        {"role": "system", "content": SHOOTOUT_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+    try:
+        response = litellm.completion(model=model, messages=messages, temperature=0)
+    except litellm.BadRequestError as e:
+        # gpt-5.6's family (like OpenAI's o-series reasoning models before
+        # it) rejects a custom temperature outright — "Only the default (1)
+        # value is supported." Not the same failure as a bad prompt/API
+        # key, so fall back to the model's default rather than treating it
+        # as this item's judgment failing.
+        if "temperature" not in str(e):
+            raise
+        response = litellm.completion(model=model, messages=messages)
     raw = response.choices[0].message.content
     parsed = json.loads(_strip_code_fences(raw))
     return {
