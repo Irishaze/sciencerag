@@ -43,6 +43,17 @@ INDEX_DIR = REPO_ROOT / ".pqa_index"
 EVIDENCE_K = 20
 
 
+# Fixed seed for the agent_llm's tool-selection loop (query reformulation,
+# when to stop searching) — found via real repeated-query testing (this
+# session) that thin-coverage fixtures return substantially different
+# evidence/priors run-to-run even under an unchanged corpus, traced to this
+# loop's decisions, not our own (already temperature=0) extraction call.
+# OpenAI's `seed` is "best-effort" determinism (tied to a stable
+# system_fingerprint, not a hard guarantee across backend model updates) —
+# expected to reduce, not eliminate, that variance.
+AGENT_SEED = 20260802
+
+
 def build_settings() -> Settings:
     llm = get_llm_model()
     settings = Settings(
@@ -59,6 +70,18 @@ def build_settings() -> Settings:
     # being killed). Leave agent_llm on its OpenAI default; only llm and
     # summary_llm are DeepSeek.
     settings.agent.index.index_directory = str(INDEX_DIR)
+    settings.agent.agent_llm_config = {
+        "model_list": [
+            {
+                "model_name": settings.agent.agent_llm,
+                "litellm_params": {
+                    "model": settings.agent.agent_llm,
+                    "temperature": settings.temperature,
+                    "seed": AGENT_SEED,
+                },
+            }
+        ]
+    }
     return settings
 
 

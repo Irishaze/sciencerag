@@ -35,6 +35,18 @@ class RegressionFixture(BaseModel):
     # run") — asserts min_priors==0 AND that coverage.gaps explains why,
     # instead of silently treating a zero-hit result as a failure.
     allow_zero_priors: bool = False
+    # Escape hatch for a DIFFERENT problem than allow_zero_priors: queries
+    # where real repeated runs (same corpus, same code) return substantially
+    # different evidence/priors from run to run — traced to PaperQA2's
+    # agent_llm tool-selection loop (query reformulation, when to stop
+    # searching), not our pipeline code. A fixed `seed` was tried and did
+    # NOT fix it (OpenAI's seed is best-effort, not a hard guarantee, and
+    # the agent's multi-step loop compounds small per-step variance). A
+    # single run of a known_flaky fixture is not a reliable signal either
+    # way — scripts/run_regression.py runs it up to 3x and passes on
+    # majority instead of first-result, so real drift still gets caught but
+    # inherent retrieval variance doesn't generate false alarms.
+    known_flaky: bool = False
 
 
 def load_fixtures(path: Path) -> list[RegressionFixture]:

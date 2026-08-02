@@ -60,7 +60,7 @@ make test-m1-fast   # 免费:单测 + schema 校验 + 路由冒烟测试(mock �
 make test-m1        # 完整:上面的 + 真实调用跑 tests/fixtures/priors_regression.json(有费用,几分钟到十几分钟)
 ```
 
-回归 fixture 用属性断言(至少几条 prior、必须出现某些 kind、必须有真实 DOI 引用),不是精确文本匹配——LLM 抽取管线的措辞本来就不是逐字稳定的。改了提示词/检索参数/阈值/语料库之后必须重新跑一遍 `make test-m1`(spec §8)。
+回归 fixture 用属性断言(至少几条 prior、必须出现某些 kind、必须有真实 DOI 引用),不是精确文本匹配——LLM 抽取管线的措辞本来就不是逐字稳定的。改了提示词/检索参数/阈值/语料库之后必须重新跑一遍 `make test-m1`(spec §8)。少数几个语料库覆盖薄弱的 fixture 标了 `known_flaky`(根因是 PaperQA2 agent_llm 的检索路径运行间不稳定,试过加 `seed` 没能解决,详见 spec §8),这几条会自动跑 3 次取多数结果,不代表流水线本身不稳。
 
 ## 状态
 

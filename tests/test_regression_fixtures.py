@@ -66,6 +66,27 @@ def test_fixture_file_loads_and_has_5_to_10_entries():
     assert len({f.id for f in fixtures}) == len(fixtures), "fixture ids must be unique"
 
 
+def test_known_flaky_defaults_to_false():
+    fixtures = load_fixtures(FIXTURES_PATH)
+    fixture = next(f for f in fixtures if f.id == "parameter_range_leg_length")
+    assert fixture.known_flaky is False
+
+
+def test_known_flaky_fixtures_are_marked_in_the_real_file():
+    """The 3 fixtures found (2026-08-02) to return substantially different
+    priors/evidence run-to-run on an unchanged corpus/code — see each
+    fixture's own notes for the traced root cause (PaperQA2's agent_llm
+    search-path variance) — must stay marked so run_regression.py runs them
+    with majority-vote instead of trusting a single attempt."""
+    fixtures = load_fixtures(FIXTURES_PATH)
+    flaky_ids = {f.id for f in fixtures if f.known_flaky}
+    assert flaky_ids == {
+        "candidate_config_heat_sink",
+        "caution_max_cop_limits",
+        "application_battery_thermal_management",
+    }
+
+
 def test_fixture_file_covers_all_producible_kinds_across_its_must_have_kinds():
     """material_property is intentionally excluded from this check: under the
     sim-contract sync (spec §3.6), material is fixed
