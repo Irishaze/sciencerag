@@ -7,18 +7,21 @@ thin query function. The retrieval index is cached under .pqa_index/
 project's index doesn't mix with unrelated projects.
 """
 
+import json
 from pathlib import Path
 
+import litellm
 from paperqa import Settings, ask
 from paperqa.agents.main import AnswerResponse
 
 from sciencerag.common.config import get_embedding_model, get_llm_model
 from sciencerag.common.trace import new_trace_id
-from sciencerag.priors.contract import GEOMETRY_FREE_NAMES
+from sciencerag.priors.contract import GEOMETRY_FREE_NAMES, GEOMETRY_FREE_PARAMS
 from sciencerag.priors.extract import (
     EvidenceItem,
     ExtractionError,
     PipelineTrace,
+    _strip_code_fences,
     extract_priors,
 )
 from sciencerag.priors.kg import query_kg
@@ -201,16 +204,23 @@ def _prior_geometry_fields(prior: Prior) -> set[str]:
     return fields
 
 
-# Word-overlap synonyms for the geometry_free contract names, built from
-# real evidence text seen this session — a literal "leg_length" substring
-# almost never appears in a paper; authors call the same dimension "leg
-# height" (the leg stands between hot/cold plates) or just "leg dimension"
-# just as often. This is a keyword heuristic, not semantic matching: it can
-# false-positive (evidence mentions "length" for something unrelated) and
-# false-negative (a term not on this list) — good enough to distinguish
-# "plausibly nothing retrieved about this parameter at all" from "something
-# was retrieved but didn't clear the relevance bar", not a claim of
-# precision beyond that.
+def _covered_params(strong_priors: list[Prior]) -> set[str]:
+    return {f for p in strong_priors for f in _prior_geometry_fields(p)}
+
+
+def _drafted_params(all_priors: list[Prior]) -> set[str]:
+    return {f for p in all_priors for f in _prior_geometry_fields(p)}
+
+
+# Fallback only (see _match_params_to_evidence's docstring for the primary,
+# LLM-based path) — used if that real call errors out, so a transient
+# failure degrades coverage.gaps' precision rather than the whole request.
+# Pure word-overlap: "leg_length" almost never appears verbatim in a paper
+# (authors call it "leg height" as often as "leg length"), and the reverse
+# problem — a word matching for the wrong reason — is real too (e.g. "fin
+# height" contains "height", which would wrongly also flag the unrelated
+# `height` contract parameter). A keyword heuristic can't tell those apart;
+# an LLM reading the actual sentence can.
 _PARAM_KEYWORD_SYNONYMS: dict[str, list[str]] = {
     "leg_length": ["leg length", "leg height", "leg dimension"],
     "leg_width": ["leg width", "leg cross-section", "leg cross section"],
@@ -227,37 +237,110 @@ _PARAM_KEYWORD_SYNONYMS: dict[str, list[str]] = {
 }
 
 
-def _evidence_mentions_param(text: str, param_name: str) -> bool:
-    text_lower = text.lower()
-    keywords = [*_PARAM_KEYWORD_SYNONYMS.get(param_name, []), param_name.replace("_", " ")]
-    return any(kw in text_lower for kw in keywords)
+def _keyword_fallback_match(
+    below_threshold_evidence: list[EvidenceItem], candidate_params: list[str]
+) -> set[str]:
+    def mentions(text: str, param_name: str) -> bool:
+        text_lower = text.lower()
+        keywords = [*_PARAM_KEYWORD_SYNONYMS.get(param_name, []), param_name.replace("_", " ")]
+        return any(kw in text_lower for kw in keywords)
+
+    return {
+        name
+        for name in candidate_params
+        if any(mentions(item.text, name) for item in below_threshold_evidence)
+    }
+
+
+_PARAM_MATCH_PROMPT = """You are analyzing why a literature search found no usable evidence for
+certain simulation parameters, for a thermoelectric cooler (TEC) research
+assistant.
+
+You will be given EVIDENCE SNIPPETS that were retrieved but scored too low
+on relevance to use for extraction, and a list of CANDIDATE PARAMETERS.
+
+For each candidate parameter, decide whether ANY of the evidence snippets
+actually discusses that specific physical parameter — even in passing,
+even without a specific number. Do NOT match on incidental word overlap:
+"fin height" is about a heat sink fin, not a device's overall "height", even
+though the word appears in both.
+
+Output JSON only, no markdown fences:
+{"mentioned_params": ["<name>", ...]}
+(only names from CANDIDATE PARAMETERS; empty list if none are discussed)"""
+
+
+def _match_params_to_evidence(
+    below_threshold_evidence: list[EvidenceItem], candidate_params: list[str]
+) -> set[str]:
+    """One LLM call per query (not one per parameter/evidence pair): given
+    the evidence that was retrieved but didn't clear MIN_EVIDENCE_RELEVANCE,
+    which of `candidate_params` does at least one snippet actually discuss?
+    Used only to label coverage.gaps ("检索到但相关性不足" vs "未检索到") —
+    never gates what becomes a Prior, so a failure here degrades to the
+    keyword heuristic (_keyword_fallback_match) rather than failing the
+    whole request. No-ops (no API call) if there's nothing to ask about.
+    """
+    if not below_threshold_evidence or not candidate_params:
+        return set()
+
+    param_descriptions = {p["name"]: p["desc"] for p in GEOMETRY_FREE_PARAMS}
+    params_block = "\n".join(
+        f"- {name}: {param_descriptions.get(name, '')}" for name in candidate_params
+    )
+    evidence_block = "\n\n".join(
+        f"[{i}] {item.text}" for i, item in enumerate(below_threshold_evidence, 1)
+    )
+    messages = [
+        {"role": "system", "content": _PARAM_MATCH_PROMPT},
+        {
+            "role": "user",
+            "content": f"CANDIDATE PARAMETERS:\n{params_block}\n\nEVIDENCE SNIPPETS:\n{evidence_block}",
+        },
+    ]
+    try:
+        model = get_llm_model()
+        try:
+            response = litellm.completion(model=model, messages=messages, temperature=0)
+        except litellm.BadRequestError as e:
+            if "temperature" not in str(e):
+                raise
+            response = litellm.completion(model=model, messages=messages)
+        raw = response.choices[0].message.content
+        parsed = json.loads(_strip_code_fences(raw))
+        matched = set(parsed.get("mentioned_params", []))
+        return matched & set(candidate_params)
+    except Exception:  # noqa: BLE001 - explanatory metadata only, never fail the request over it
+        return _keyword_fallback_match(below_threshold_evidence, candidate_params)
 
 
 def _build_geometry_gaps(
     all_priors: list[Prior],
     strong_priors: list[Prior],
-    below_threshold_evidence: list[EvidenceItem],
+    relevance_matched_params: set[str],
 ) -> list[str]:
     """Use the sim contract's 12 geometry_free parameters as the yardstick
     for coverage (spec §3.6): whatever this run didn't end up with a
     confidence-surviving prior for goes into gaps, not silently dropped,
     with a 3-way attribution per parameter (spec §3.7):
       1. extracted but confidence-filtered — cheap, from priors in hand.
-      2. evidence retrieved but relevance-filtered — a keyword-overlap
-         check (see _PARAM_KEYWORD_SYNONYMS) against evidence that scored
-         below MIN_EVIDENCE_RELEVANCE; a heuristic, not exact semantic
-         matching (no per-parameter tagging exists upstream of this).
+      2. evidence retrieved but relevance-filtered — `relevance_matched_params`
+         is the caller's already-resolved answer (see
+         _match_params_to_evidence) for which uncovered/undrafted params at
+         least one below-threshold evidence snippet actually discusses.
+         Deliberately not computed in here — this stays a pure function so
+         its tier-priority logic is unit-testable without a real LLM call.
       3. nothing retrieved at all, as a last resort.
     """
-    covered = {f for p in strong_priors for f in _prior_geometry_fields(p)}
-    drafted = {f for p in all_priors for f in _prior_geometry_fields(p)}
+    covered = _covered_params(strong_priors)
+    drafted = _drafted_params(all_priors)
     gaps = []
     for name in sorted(GEOMETRY_FREE_NAMES):
         if name in covered:
             continue
         if name in drafted:
             gaps.append(f"{name} 提取到先验但置信度不足")
-        elif any(_evidence_mentions_param(item.text, name) for item in below_threshold_evidence):
+        elif name in relevance_matched_params:
             gaps.append(f"{name} 检索到证据但相关性不足(未达到 {MIN_EVIDENCE_RELEVANCE})")
         else:
             gaps.append(f"文献中未检索到 {name} 相关证据")
@@ -351,7 +434,7 @@ def _build_priors_response(
                         internal_hits=0,
                         external_hits=0,
                         gaps=["internal corpus returned no relevant evidence for this query"]
-                        + _build_geometry_gaps([], [], []),
+                        + _build_geometry_gaps([], [], set()),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -363,6 +446,9 @@ def _build_priors_response(
     evidence_table, below_threshold_evidence = _build_evidence_table(contexts, trace=trace)
 
     if not evidence_table:
+        relevance_matched = _match_params_to_evidence(
+            below_threshold_evidence, sorted(GEOMETRY_FREE_NAMES)
+        )
         return (
             _add_external_note(
                 PriorsResponse(
@@ -374,7 +460,7 @@ def _build_priors_response(
                             f"{len(contexts)} evidence context(s) retrieved, but none met the "
                             f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
                         ]
-                        + _build_geometry_gaps([], [], below_threshold_evidence),
+                        + _build_geometry_gaps([], [], relevance_matched),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -388,6 +474,9 @@ def _build_priors_response(
         if trace is not None:
             trace.all_priors = all_priors
     except ExtractionError as e:
+        relevance_matched = _match_params_to_evidence(
+            below_threshold_evidence, sorted(GEOMETRY_FREE_NAMES)
+        )
         return (
             _add_external_note(
                 PriorsResponse(
@@ -396,7 +485,7 @@ def _build_priors_response(
                         internal_hits=len(contexts),
                         external_hits=0,
                         gaps=[f"LLM extraction failed schema validation after retries: {e}"]
-                        + _build_geometry_gaps([], [], below_threshold_evidence),
+                        + _build_geometry_gaps([], [], relevance_matched),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -408,9 +497,12 @@ def _build_priors_response(
     strong_priors, weak_priors = _split_by_confidence(all_priors)
     returned_priors, truncated_priors = _cap_priors(strong_priors, max_priors)
 
+    unexplained = sorted(GEOMETRY_FREE_NAMES - _covered_params(returned_priors) - _drafted_params(all_priors))
+    relevance_matched = _match_params_to_evidence(below_threshold_evidence, unexplained)
+
     gaps = _build_gaps(weak_priors, total_hits=len(contexts))
     gaps += _build_max_priors_gap(truncated_priors, max_priors)
-    gaps += _build_geometry_gaps(all_priors, returned_priors, below_threshold_evidence)
+    gaps += _build_geometry_gaps(all_priors, returned_priors, relevance_matched)
 
     return (
         _add_external_note(
