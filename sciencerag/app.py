@@ -26,3 +26,14 @@ def demo_page() -> FileResponse:
     around sciencerag.ask, not priors). Just a same-origin static page so
     it can call the API with no CORS setup."""
     return FileResponse(STATIC_DIR / "demo.html")
+
+
+@app.get("/workbench")
+def workbench_page() -> FileResponse:
+    """spec §7 v1 web layer: 问答 (sciencerag.ask) + 图谱可视化 + 报告浏览
+    (sciencerag.report), as one static page + vanilla JS — same "no build
+    tooling" scope decision as /demo, not the eventual Vite/React frontend
+    spec §7 describes. The 文献/知识候选审批 panel is deliberately not here:
+    spec §7 explicitly allows a v1 CLI substitute
+    (scripts/approve_kg_candidates.py), which is what M5/M6 actually ship."""
+    return FileResponse(STATIC_DIR / "workbench.html")

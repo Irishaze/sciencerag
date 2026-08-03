@@ -82,4 +82,23 @@ def test_report_is_persisted_and_listable():
     assert matching
     loaded = store.load_report(matching[0]["stem"])
     assert loaded.run_id == "run_report_test"
-    assert loaded.trace_id == trace_id
+
+
+def test_reports_listing_and_fetch_endpoints():
+    post_response = client.post("/sciencerag/report", json=_BASE_PAYLOAD)
+    trace_id = post_response.json()["trace_id"]
+
+    list_response = client.get("/sciencerag/reports")
+    assert list_response.status_code == 200
+    stems = [entry["stem"] for entry in list_response.json()]
+    matching = [stem for stem in stems if stem.startswith("run_report_test_")]
+    assert matching
+
+    fetch_response = client.get(f"/sciencerag/reports/{matching[0]}")
+    assert fetch_response.status_code == 200
+    assert fetch_response.json()["trace_id"] == trace_id
+
+
+def test_fetch_nonexistent_report_is_404():
+    response = client.get("/sciencerag/reports/does_not_exist")
+    assert response.status_code == 404

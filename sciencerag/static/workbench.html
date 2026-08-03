@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>ScienceRAG · Workbench</title>
+<style>
+  :root {
+    --bg: #f6f2ea;
+    --surface: #ffffff;
+    --surface-2: #efe9dd;
+    --text: #221f1c;
+    --text-dim: #6b6058;
+    --line: rgba(34, 31, 28, 0.14);
+    --accent: #1f6e78;
+    --accent-soft: #d9ecec;
+    --warn: #b5541f;
+    --warn-soft: #f1ded0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6;
+  }
+  .page { max-width: 920px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .sub { color: var(--text-dim); font-size: 14px; margin: 0 0 32px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+  .tab {
+    padding: 10px 16px; cursor: pointer; color: var(--text-dim); font-size: 14px;
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .row { display: flex; gap: 10px; margin-bottom: 16px; }
+  textarea, input[type=text] {
+    flex: 1; resize: vertical; min-height: 48px; padding: 12px 14px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text);
+    font-size: 15px; font-family: inherit;
+  }
+  button {
+    padding: 0 20px; border-radius: 8px; border: none; background: var(--accent);
+    color: white; font-size: 15px; cursor: pointer; white-space: nowrap;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px; margin-bottom: 16px;
+  }
+  .badge {
+    display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent); margin-left: 8px;
+  }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .muted { color: var(--text-dim); font-size: 13px; }
+  .source-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-dim); }
+
+  svg#graph { width: 100%; height: 320px; background: var(--surface-2); border-radius: 10px; }
+  svg#graph text { font-size: 11px; fill: var(--text); }
+  svg#graph .edge { stroke: var(--line); stroke-width: 1.5; }
+  svg#graph .node-entity { fill: var(--accent); }
+  svg#graph .node-value { fill: var(--warn); }
+
+  .report-list { list-style: none; padding: 0; margin: 0; }
+  .report-list li {
+    padding: 10px 12px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  }
+  .report-list li:hover { background: var(--surface-2); }
+  pre.markdown {
+    white-space: pre-wrap; background: var(--surface-2); padding: 16px; border-radius: 8px;
+    font-size: 13px; max-height: 480px; overflow: auto;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>ScienceRAG Workbench</h1>
+  <p class="sub">
+    spec §7 v1 web layer — QA + 图谱可视化 + 报告浏览。文献/知识候选审批面板 v1 按 spec §7 规定以命令行脚本形式提供
+    (<code>scripts/approve_kg_candidates.py</code>)，不在本页面内。
+  </p>
+
+  <div class="tabs">
+    <div class="tab active" data-panel="ask">问答</div>
+    <div class="tab" data-panel="reports">报告浏览</div>
+  </div>
+
+  <div class="panel active" id="panel-ask">
+    <div class="row">
+      <textarea id="question" placeholder="向知识图谱提问，例如：Bi2Te3 单级 TEC 的 delta_T_max_K 是多少？"></textarea>
+      <button id="ask-btn">提问</button>
+    </div>
+    <div id="ask-status" class="muted" style="display:none;">查询中…</div>
+    <div id="ask-result"></div>
+  </div>
+
+  <div class="panel" id="panel-reports">
+    <div class="row">
+      <button id="refresh-reports">刷新列表</button>
+    </div>
+    <div style="display:flex; gap:20px;">
+      <ul class="report-list" id="report-list" style="flex: 0 0 260px; max-height: 480px; overflow:auto;"></ul>
+      <div style="flex:1;">
+        <pre class="markdown" id="report-view">选择左侧一份报告查看。</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("panel-" + tab.dataset.panel).classList.add("active");
+  });
+});
+
+function renderGraph(subgraph) {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("id", "graph");
+  const nodes = subgraph.nodes || [];
+  const edges = subgraph.edges || [];
+  if (nodes.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.textContent = "(该回答没有子图 — 走的是文献回退路径)";
+    return empty;
+  }
+  const width = 880, height = 320, cx = width / 2, cy = height / 2, radius = Math.min(width, height) / 2 - 60;
+  const positions = {};
+  nodes.forEach((node, i) => {
+    const angle = (2 * Math.PI * i) / nodes.length;
+    positions[node.id] = [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+  });
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  edges.forEach((edge) => {
+    const [x1, y1] = positions[edge.source] || [cx, cy];
+    const [x2, y2] = positions[edge.target] || [cx, cy];
+    const line = document.createElementNS(svgNS, "line");
+    line.setAttribute("class", "edge");
+    line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+    line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+    svg.appendChild(line);
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("x", (x1 + x2) / 2);
+    label.setAttribute("y", (y1 + y2) / 2 - 4);
+    label.textContent = edge.relation + " (conf " + edge.confidence.toFixed(2) + ")";
+    svg.appendChild(label);
+  });
+  nodes.forEach((node) => {
+    const [x, y] = positions[node.id];
+    const circle = document.createElementNS(svgNS, "circle");
+    circle.setAttribute("cx", x); circle.setAttribute("cy", y); circle.setAttribute("r", 7);
+    circle.setAttribute("class", node.kind === "entity" ? "node-entity" : "node-value");
+    svg.appendChild(circle);
+    const label = document.createElementNS(svgNS, "text");
+    label.setAttribute("x", x + 10); label.setAttribute("y", y + 4);
+    label.textContent = node.id.length > 40 ? node.id.slice(0, 40) + "…" : node.id;
+    svg.appendChild(label);
+  });
+  return svg;
+}
+
+async function ask() {
+  const question = document.getElementById("question").value.trim();
+  if (!question) return;
+  const btn = document.getElementById("ask-btn");
+  const status = document.getElementById("ask-status");
+  const result = document.getElementById("ask-result");
+  btn.disabled = true;
+  status.style.display = "block";
+  result.innerHTML = "";
+  try {
+    const resp = await fetch("/sciencerag/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    const body = await resp.json();
+    if (!resp.ok || body.status !== "ok") {
+      result.innerHTML = `<div class="card">请求失败：${(body.error && body.error.message) || resp.status}</div>`;
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "card";
+    const fallbackBadge = body.fallback_used
+      ? `<span class="badge warn">回退到文献检索</span>` : `<span class="badge">图谱命中</span>`;
+    card.innerHTML = `<div>${body.answer}${fallbackBadge}</div>` +
+      (body.coverage_note ? `<div class="muted" style="margin-top:6px;">${body.coverage_note}</div>` : "") +
+      `<div class="muted" style="margin-top:10px;">来源：</div>` +
+      `<ul class="source-list">${body.sources.map((s) =>
+        s.type === "paper" ? `<li>论文 DOI: ${s.doi}${s.span ? " (" + s.span + ")" : ""}</li>`
+                            : `<li>知识图谱三元组: ${s.triple_id}</li>`
+      ).join("")}</ul>`;
+    result.appendChild(card);
+
+    const graphCard = document.createElement("div");
+    graphCard.className = "card";
+    graphCard.appendChild(renderGraph(body.subgraph));
+    result.appendChild(graphCard);
+  } catch (err) {
+    result.innerHTML = `<div class="card">网络错误：${err}</div>`;
+  } finally {
+    btn.disabled = false;
+    status.style.display = "none";
+  }
+}
+document.getElementById("ask-btn").addEventListener("click", ask);
+
+async function loadReports() {
+  const list = document.getElementById("report-list");
+  list.innerHTML = "<li class='muted'>加载中…</li>";
+  const resp = await fetch("/sciencerag/reports");
+  const entries = await resp.json();
+  list.innerHTML = "";
+  if (entries.length === 0) {
+    list.innerHTML = "<li class='muted'>暂无报告</li>";
+    return;
+  }
+  entries.forEach((entry) => {
+    const li = document.createElement("li");
+    li.textContent = entry.stem;
+    li.addEventListener("click", async () => {
+      const r = await fetch(`/sciencerag/reports/${entry.stem}`);
+      const body = await r.json();
+      document.getElementById("report-view").textContent = body.markdown || JSON.stringify(body, null, 2);
+    });
+    list.appendChild(li);
+  });
+}
+document.getElementById("refresh-reports").addEventListener("click", loadReports);
+loadReports();
+</script>
+</body>
+</html>
