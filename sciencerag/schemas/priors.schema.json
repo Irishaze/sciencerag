@@ -553,6 +553,167 @@
     "title": "PriorsResponse",
     "type": "object"
   },
+  "BatchEvidenceRequest": {
+    "$defs": {
+      "CandidateSpec": {
+        "properties": {
+          "candidate_id": {
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "design_parameters": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Design Parameters",
+            "type": "object"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "description"
+        ],
+        "title": "CandidateSpec",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "candidates": {
+        "items": {
+          "$ref": "#/$defs/CandidateSpec"
+        },
+        "minItems": 1,
+        "title": "Candidates",
+        "type": "array"
+      }
+    },
+    "required": [
+      "candidates"
+    ],
+    "title": "BatchEvidenceRequest",
+    "type": "object"
+  },
+  "BatchEvidenceResponse": {
+    "$defs": {
+      "CandidateEvidence": {
+        "properties": {
+          "candidate_id": {
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "supporting": {
+            "items": {
+              "$ref": "#/$defs/EvidenceStance"
+            },
+            "title": "Supporting",
+            "type": "array"
+          },
+          "refuting": {
+            "items": {
+              "$ref": "#/$defs/EvidenceStance"
+            },
+            "title": "Refuting",
+            "type": "array"
+          },
+          "neutral": {
+            "items": {
+              "$ref": "#/$defs/EvidenceStance"
+            },
+            "title": "Neutral",
+            "type": "array"
+          },
+          "coverage": {
+            "enum": [
+              "ok",
+              "insufficient"
+            ],
+            "title": "Coverage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "coverage"
+        ],
+        "title": "CandidateEvidence",
+        "type": "object"
+      },
+      "EvidenceStance": {
+        "properties": {
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "span": {
+            "title": "Span",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "relevance": {
+            "title": "Relevance",
+            "type": "number"
+          },
+          "stance": {
+            "enum": [
+              "supports",
+              "refutes",
+              "neutral"
+            ],
+            "title": "Stance",
+            "type": "string"
+          }
+        },
+        "required": [
+          "doi",
+          "span",
+          "text",
+          "relevance",
+          "stance"
+        ],
+        "title": "EvidenceStance",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "ok",
+        "default": "ok",
+        "title": "Status",
+        "type": "string"
+      },
+      "results": {
+        "items": {
+          "$ref": "#/$defs/CandidateEvidence"
+        },
+        "title": "Results",
+        "type": "array"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "results",
+      "trace_id"
+    ],
+    "title": "BatchEvidenceResponse",
+    "type": "object"
+  },
   "ErrorResponse": {
     "$defs": {
       "ErrorDetail": {

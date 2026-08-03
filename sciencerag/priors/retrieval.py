@@ -24,6 +24,11 @@ from sciencerag.priors.extract import (
     _strip_code_fences,
     extract_priors,
 )
+from sciencerag.priors.external_retrieval import (
+    EXTERNAL_CONFIDENCE_DOWNWEIGHT,
+    record_pending_papers,
+    search_semantic_scholar,
+)
 from sciencerag.priors.kg import query_kg
 from sciencerag.priors.models import Coverage, Prior, PriorsResponse
 
@@ -397,13 +402,50 @@ def _build_max_priors_gap(truncated_priors: list[Prior], max_priors: int) -> lis
 # validated request field (not silently dropped), but in M1 it can only ever
 # make the response note that it was requested-but-unavailable — it never
 # changes retrieval behavior or `external_hits` (always 0 until M6).
-def _add_external_note(response: PriorsResponse, allow_external: bool) -> PriorsResponse:
-    if allow_external:
+def _augment_with_external(
+    response: PriorsResponse, query: str, allow_external: bool
+) -> PriorsResponse:
+    """M6 (spec §3.2/§3.5): supplement with Semantic Scholar when internal
+    coverage is insufficient (any `coverage.gaps`) and the caller opted in.
+    Results are tagged `provenance="external_unverified"` and their
+    confidence downweighted — never merged into "trusted" internal
+    priors — per spec §3.5's two-tier trust model."""
+    if not allow_external or not response.coverage.gaps:
+        return response
+
+    papers = search_semantic_scholar(query)
+    if not papers:
         response.coverage.gaps.append(
-            "allow_external=true was requested, but external retrieval "
-            "(Semantic Scholar/arXiv) is not implemented until M6 (spec §9 "
-            "OQ#1) — this response is internal-corpus-only"
+            "allow_external=true and internal coverage was insufficient, but "
+            "Semantic Scholar search returned no usable results (no hits, or "
+            "none had both an abstract and a DOI)"
         )
+        return response
+
+    record_pending_papers(papers)
+
+    evidence_table = {
+        f"EXT{i + 1}": EvidenceItem(
+            text=paper.abstract, doi=paper.doi, span="abstract", notes=paper.title, relevance=1.0
+        )
+        for i, paper in enumerate(papers)
+    }
+    try:
+        external_priors, _filtered_material_count = extract_priors(query, evidence_table, trace=None)
+    except ExtractionError as e:
+        response.coverage.gaps.append(
+            f"external retrieval found {len(papers)} paper(s) via Semantic Scholar, "
+            f"but LLM extraction failed schema validation after retries: {e}"
+        )
+        response.coverage.external_hits = len(papers)
+        return response
+
+    for prior in external_priors:
+        prior.provenance = "external_unverified"
+        prior.confidence = round(prior.confidence * EXTERNAL_CONFIDENCE_DOWNWEIGHT, 3)
+
+    response.priors = response.priors + external_priors
+    response.coverage.external_hits = len(papers)
     return response
 
 
@@ -437,7 +479,7 @@ def _build_priors_response(
 
     if not contexts:
         return (
-            _add_external_note(
+            _augment_with_external(
                 PriorsResponse(
                     priors=[],
                     coverage=Coverage(
@@ -448,6 +490,7 @@ def _build_priors_response(
                     ),
                     trace_id=new_trace_id(),
                 ),
+                query,
                 allow_external,
             ),
             0,
@@ -460,7 +503,7 @@ def _build_priors_response(
             below_threshold_evidence, sorted(GEOMETRY_FREE_NAMES)
         )
         return (
-            _add_external_note(
+            _augment_with_external(
                 PriorsResponse(
                     priors=[],
                     coverage=Coverage(
@@ -474,6 +517,7 @@ def _build_priors_response(
                     ),
                     trace_id=new_trace_id(),
                 ),
+                query,
                 allow_external,
             ),
             0,
@@ -488,7 +532,7 @@ def _build_priors_response(
             below_threshold_evidence, sorted(GEOMETRY_FREE_NAMES)
         )
         return (
-            _add_external_note(
+            _augment_with_external(
                 PriorsResponse(
                     priors=[],
                     coverage=Coverage(
@@ -499,6 +543,7 @@ def _build_priors_response(
                     ),
                     trace_id=new_trace_id(),
                 ),
+                query,
                 allow_external,
             ),
             0,
@@ -515,12 +560,13 @@ def _build_priors_response(
     gaps += _build_geometry_gaps(all_priors, returned_priors, relevance_matched)
 
     return (
-        _add_external_note(
+        _augment_with_external(
             PriorsResponse(
                 priors=returned_priors,
                 coverage=Coverage(internal_hits=len(contexts), external_hits=0, gaps=gaps),
                 trace_id=new_trace_id(),
             ),
+            query,
             allow_external,
         ),
         filtered_material_count,

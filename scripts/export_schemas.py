@@ -10,6 +10,7 @@ from pathlib import Path
 
 from sciencerag.ask.models import AskRequest, AskResponse
 from sciencerag.common.errors import ErrorResponse
+from sciencerag.priors.batch_evidence import BatchEvidenceRequest, BatchEvidenceResponse
 from sciencerag.priors.models import PriorsRequest, PriorsResponse
 from sciencerag.report.models import ReportRequest, ReportResponse
 from sciencerag.validate.models import ValidateRequest, ValidateResponse
@@ -20,7 +21,14 @@ SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "sciencerag" / "schemas"
 # contract too, not just its success shape — ErrorResponse goes in all of
 # them, not just priors'.
 _ENDPOINTS: dict[str, dict[str, type]] = {
-    "priors": {"PriorsRequest": PriorsRequest, "PriorsResponse": PriorsResponse},
+    "priors": {
+        "PriorsRequest": PriorsRequest,
+        "PriorsResponse": PriorsResponse,
+        # spec §3.4 (M6) — same router/package as priors, not a separate
+        # spec-numbered endpoint, so it shares priors.schema.json.
+        "BatchEvidenceRequest": BatchEvidenceRequest,
+        "BatchEvidenceResponse": BatchEvidenceResponse,
+    },
     "validate": {"ValidateRequest": ValidateRequest, "ValidateResponse": ValidateResponse},
     "report": {"ReportRequest": ReportRequest, "ReportResponse": ReportResponse},
     "ask": {"AskRequest": AskRequest, "AskResponse": AskResponse},
