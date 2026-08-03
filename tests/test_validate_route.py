@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sciencerag.app import app
+from sciencerag.priors import kg
 from sciencerag.validate import tec_bridge
 
 SCHEMA_PATH = (
@@ -21,6 +22,17 @@ SCHEMA_PATH = (
 RESPONSE_SCHEMA = json.loads(SCHEMA_PATH.read_text())["ValidateResponse"]
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _tmp_graph(tmp_path, monkeypatch):
+    """4.4's KG candidate extraction calls kg.query_kg() for dedup_status
+    (sciencerag/validate/kg_candidates.py) — without this, these tests
+    depend on the real data/kg/graph.json happening to be empty, which
+    isn't guaranteed once anything else (scripts/demo_end_to_end.py, a
+    real approval run) has ever written to it. Same isolation test_ask_route.py
+    and test_kg_graph.py already use."""
+    monkeypatch.setattr(kg, "GRAPH_PATH", tmp_path / "graph.json")
 
 
 def _report_row(index: int) -> tuple[dict[str, float], dict[str, float]]:

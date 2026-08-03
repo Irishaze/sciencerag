@@ -1,19 +1,28 @@
 """Unit tests for M3 (spec §4.3/§4.4): sciencerag/validate/finetune.py and
 sciencerag/validate/kg_candidates.py.
 
-kg.query_kg is still a stub that always returns zero hits (sciencerag/
-priors/kg.py's documented cold-start state) — the router-level tests in
-test_validate_route.py can therefore only ever exercise dedup_status="new".
-This file monkeypatches query_kg to also exercise the
-"duplicate_confirmed" branch, so that logic isn't dead code today and
-doesn't silently break later when kg.py gets a real graph behind it.
+kg.py has a real JSON-backed graph since M5 (sciencerag/priors/kg.py) —
+GRAPH_PATH is redirected at a tmp file for every test in this file so
+dedup_status stays deterministic regardless of what's actually been
+written to the real data/kg/graph.json (e.g. by scripts/demo_end_to_end.py
+or a real approval run). The "duplicate_confirmed"-specific tests still
+monkeypatch query_kg directly for precise control over what a "hit" looks
+like, on top of that isolation.
 """
 
+import pytest
+
+from sciencerag.priors import kg
 from sciencerag.priors.kg import KGHit
 from sciencerag.validate import kg_candidates as kg_candidates_module
 from sciencerag.validate.finetune import suggest_surrogate_update
 from sciencerag.validate.kg_candidates import extract_kg_candidates
 from sciencerag.validate.models import Anomaly, Evaluation, ValidateRequest
+
+
+@pytest.fixture(autouse=True)
+def _tmp_graph(tmp_path, monkeypatch):
+    monkeypatch.setattr(kg, "GRAPH_PATH", tmp_path / "graph.json")
 
 
 def _request(**overrides) -> ValidateRequest:
