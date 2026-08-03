@@ -6,11 +6,13 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
 from sciencerag.priors.router import router as priors_router
+from sciencerag.validate.router import router as validate_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="ScienceRAG")
 app.include_router(priors_router)
+app.include_router(validate_router)
 
 
 @app.get("/demo")

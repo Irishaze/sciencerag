@@ -1,0 +1,128 @@
+[
+  {
+    "id": "consistent_known_report",
+    "category": "should_not_block",
+    "notes": "design_parameters/scalar_results/latent_state taken verbatim from comsol_report_dataset row 0 (sample_02.docx) — a run that exactly reproduces a known-good report should pass every check and match the benchmark exactly.",
+    "request": {
+      "run_id": "fx_consistent",
+      "design_parameters": {
+        "length": 4.8835,
+        "width": 1.7546,
+        "height": 1.5668,
+        "d_conductor": 125.23,
+        "d_ceramics": 0.3737,
+        "leg_length": 0.7984,
+        "leg_width": 1.1007,
+        "pitch": 0.2922
+      },
+      "n_pairs": 1,
+      "scalar_results": {
+        "delta_T_max_K": 71.741,
+        "optimal_current_A": 6.4831,
+        "optimal_voltage_V": 0.27485,
+        "total_resistance_ohm": 0.042394,
+        "max_heat_dissipation_W": 1.0862,
+        "figure_of_merit_1_per_K": 0.0023844
+      },
+      "latent_state": [-0.20738506018647532, -0.7048630972709753, -1.5469320767241193, 1.2817292681083656, 0.1395403110310105],
+      "priors": []
+    },
+    "expected_blocked": false,
+    "expected_verdict": "consistent",
+    "expected_min_severity_by_check": {}
+  },
+  {
+    "id": "benchmark_deviation_5x_delta_t",
+    "category": "should_flag_deviation",
+    "notes": "Same known report, but delta_T_max_K reported 5x too high — a real transcription/units bug, not a physical anomaly, so it should surface as a deviation without blocking the run.",
+    "request": {
+      "run_id": "fx_benchmark_deviation",
+      "design_parameters": {
+        "length": 4.8835,
+        "width": 1.7546,
+        "height": 1.5668,
+        "d_conductor": 125.23,
+        "d_ceramics": 0.3737,
+        "leg_length": 0.7984,
+        "leg_width": 1.1007,
+        "pitch": 0.2922
+      },
+      "n_pairs": 1,
+      "scalar_results": {
+        "delta_T_max_K": 358.705,
+        "optimal_current_A": 6.4831,
+        "optimal_voltage_V": 0.27485,
+        "total_resistance_ohm": 0.042394,
+        "max_heat_dissipation_W": 1.0862,
+        "figure_of_merit_1_per_K": 0.0023844
+      },
+      "priors": []
+    },
+    "expected_blocked": false,
+    "expected_verdict": "deviation_found"
+  },
+  {
+    "id": "prior_range_violation",
+    "category": "should_flag_deviation",
+    "notes": "leg_length used (0.5mm) falls well outside a supplied literature prior range (5-10mm) — should surface as a prior deviation, not block.",
+    "request": {
+      "run_id": "fx_prior_deviation",
+      "design_parameters": {"leg_length": 0.5},
+      "n_pairs": 1,
+      "priors": [
+        {
+          "prior_id": "pr_fixture_1",
+          "kind": "parameter_range",
+          "field": "leg_length",
+          "value": {"field_name": "leg_length", "min": 5.0, "max": 10.0, "unit": "mm"},
+          "confidence": 0.8,
+          "sources": [{"type": "paper", "doi": "10.1234/fixture"}]
+        }
+      ]
+    },
+    "expected_blocked": false,
+    "expected_verdict": "deviation_found"
+  },
+  {
+    "id": "extreme_ood_latent_state",
+    "category": "should_block",
+    "notes": "latent_state far outside the training distribution (orders of magnitude beyond any training z) — must block downstream learning per spec §4.1's blocking short-circuit rule.",
+    "request": {
+      "run_id": "fx_extreme_ood",
+      "design_parameters": {},
+      "n_pairs": 1,
+      "latent_state": [1000.0, -1000.0, 500.0, 0.0, 0.0],
+      "priors": []
+    },
+    "expected_blocked": true,
+    "expected_min_severity_by_check": {"ood": "blocking"}
+  },
+  {
+    "id": "minimal_request_no_data",
+    "category": "should_not_block",
+    "notes": "No field_case_index/latent_state/scalar_results/priors given at all — every check should degrade to an honest info-level skip, not a false anomaly.",
+    "request": {
+      "run_id": "fx_minimal",
+      "design_parameters": {},
+      "n_pairs": 1,
+      "priors": []
+    },
+    "expected_blocked": false,
+    "expected_verdict": "insufficient_benchmark",
+    "expected_min_severity_by_check": {}
+  },
+  {
+    "id": "known_solved_field_case_is_not_blocking",
+    "category": "should_not_block",
+    "notes": "A genuine solved COMSOL one-pair case (field_case_index=0) run through the real conservation + PDE residual checks against their own baseline — must not falsely trip warning/blocking on data the checkpoint was literally trained on.",
+    "request": {
+      "run_id": "fx_known_field_case",
+      "design_parameters": {},
+      "n_pairs": 1,
+      "field_case_index": 0,
+      "priors": []
+    },
+    "expected_blocked": false,
+    "expected_max_severity_by_check": {"energy_balance": "warning", "pde_residual": "warning"}
+  }
+]
