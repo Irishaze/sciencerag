@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
+from sciencerag.ask.router import router as ask_router
 from sciencerag.priors.router import router as priors_router
 from sciencerag.report.router import router as report_router
 from sciencerag.validate.router import router as validate_router
@@ -15,6 +16,7 @@ app = FastAPI(title="ScienceRAG")
 app.include_router(priors_router)
 app.include_router(validate_router)
 app.include_router(report_router)
+app.include_router(ask_router)
 
 
 @app.get("/demo")

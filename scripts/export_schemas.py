@@ -8,23 +8,32 @@ Run after any change to the Pydantic models in sciencerag/*/models.py:
 import json
 from pathlib import Path
 
+from sciencerag.ask.models import AskRequest, AskResponse
 from sciencerag.common.errors import ErrorResponse
 from sciencerag.priors.models import PriorsRequest, PriorsResponse
+from sciencerag.report.models import ReportRequest, ReportResponse
+from sciencerag.validate.models import ValidateRequest, ValidateResponse
 
 SCHEMAS_DIR = Path(__file__).resolve().parent.parent / "sciencerag" / "schemas"
 
+# spec §8: every endpoint's error envelope is part of the published
+# contract too, not just its success shape — ErrorResponse goes in all of
+# them, not just priors'.
+_ENDPOINTS: dict[str, dict[str, type]] = {
+    "priors": {"PriorsRequest": PriorsRequest, "PriorsResponse": PriorsResponse},
+    "validate": {"ValidateRequest": ValidateRequest, "ValidateResponse": ValidateResponse},
+    "report": {"ReportRequest": ReportRequest, "ReportResponse": ReportResponse},
+    "ask": {"AskRequest": AskRequest, "AskResponse": AskResponse},
+}
+
 
 def main() -> None:
-    priors_schema = {
-        "PriorsRequest": PriorsRequest.model_json_schema(),
-        "PriorsResponse": PriorsResponse.model_json_schema(),
-        # spec §8: every endpoint's error envelope is part of the published
-        # contract too, not just its success shape.
-        "ErrorResponse": ErrorResponse.model_json_schema(),
-    }
-    out_path = SCHEMAS_DIR / "priors.schema.json"
-    out_path.write_text(json.dumps(priors_schema, indent=2, ensure_ascii=False) + "\n")
-    print(f"wrote {out_path}")
+    for name, models in _ENDPOINTS.items():
+        schema = {key: model.model_json_schema() for key, model in models.items()}
+        schema["ErrorResponse"] = ErrorResponse.model_json_schema()
+        out_path = SCHEMAS_DIR / f"{name}.schema.json"
+        out_path.write_text(json.dumps(schema, indent=2, ensure_ascii=False) + "\n")
+        print(f"wrote {out_path}")
 
 
 if __name__ == "__main__":

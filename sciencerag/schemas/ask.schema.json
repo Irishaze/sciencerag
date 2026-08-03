@@ -1,0 +1,270 @@
+{
+  "AskRequest": {
+    "properties": {
+      "question": {
+        "title": "Question",
+        "type": "string"
+      },
+      "max_hits": {
+        "default": 10,
+        "maximum": 50,
+        "minimum": 1,
+        "title": "Max Hits",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "question"
+    ],
+    "title": "AskRequest",
+    "type": "object"
+  },
+  "AskResponse": {
+    "$defs": {
+      "SourceKGTriple": {
+        "properties": {
+          "type": {
+            "const": "kg_triple",
+            "default": "kg_triple",
+            "title": "Type",
+            "type": "string"
+          },
+          "triple_id": {
+            "title": "Triple Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "triple_id"
+        ],
+        "title": "SourceKGTriple",
+        "type": "object"
+      },
+      "SourcePaper": {
+        "properties": {
+          "type": {
+            "const": "paper",
+            "default": "paper",
+            "title": "Type",
+            "type": "string"
+          },
+          "doi": {
+            "title": "Doi",
+            "type": "string"
+          },
+          "span": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Span"
+          }
+        },
+        "required": [
+          "doi"
+        ],
+        "title": "SourcePaper",
+        "type": "object"
+      },
+      "Subgraph": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/$defs/SubgraphNode"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/$defs/SubgraphEdge"
+            },
+            "title": "Edges",
+            "type": "array"
+          }
+        },
+        "title": "Subgraph",
+        "type": "object"
+      },
+      "SubgraphEdge": {
+        "properties": {
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "triple_id": {
+            "title": "Triple Id",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "relation",
+          "triple_id",
+          "confidence"
+        ],
+        "title": "SubgraphEdge",
+        "type": "object"
+      },
+      "SubgraphNode": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "entity",
+              "value"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "title": "SubgraphNode",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "ok",
+        "default": "ok",
+        "title": "Status",
+        "type": "string"
+      },
+      "answer": {
+        "title": "Answer",
+        "type": "string"
+      },
+      "subgraph": {
+        "$ref": "#/$defs/Subgraph"
+      },
+      "sources": {
+        "items": {
+          "discriminator": {
+            "mapping": {
+              "kg_triple": "#/$defs/SourceKGTriple",
+              "paper": "#/$defs/SourcePaper"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SourcePaper"
+            },
+            {
+              "$ref": "#/$defs/SourceKGTriple"
+            }
+          ]
+        },
+        "title": "Sources",
+        "type": "array"
+      },
+      "fallback_used": {
+        "title": "Fallback Used",
+        "type": "boolean"
+      },
+      "coverage_note": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Coverage Note"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "answer",
+      "subgraph",
+      "sources",
+      "fallback_used",
+      "trace_id"
+    ],
+    "title": "AskResponse",
+    "type": "object"
+  },
+  "ErrorResponse": {
+    "$defs": {
+      "ErrorDetail": {
+        "properties": {
+          "category": {
+            "enum": [
+              "retrieval_timeout",
+              "schema_validation_failed",
+              "insufficient_coverage",
+              "benchmark_unavailable"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          }
+        },
+        "required": [
+          "category",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "error",
+        "default": "error",
+        "title": "Status",
+        "type": "string"
+      },
+      "error": {
+        "$ref": "#/$defs/ErrorDetail"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "error",
+      "trace_id"
+    ],
+    "title": "ErrorResponse",
+    "type": "object"
+  }
+}
