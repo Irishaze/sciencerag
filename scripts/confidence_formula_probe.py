@@ -60,6 +60,7 @@ from sciencerag.priors.numeric_check import (
 
 COLLECTION_PATH = Path("data/threshold_collection_v3_post_numeric_gate.json")
 JUDGE_PATH = Path("data/judge_results_v3.json")
+LLM_SCORES_PATH = Path("data/llm_confidence_scores_v3.json")
 
 CONSISTENCY_FLOOR = 0.5
 
@@ -215,6 +216,11 @@ def main() -> None:
     _report("A (noisy-OR)", scores_a)
     _report("B (noisy-OR x consistency)", scores_b)
     _report("C (current additive formula, UNREFIT constants — see module docstring)", scores_c)
+
+    if LLM_SCORES_PATH.exists():
+        llm_scores = json.loads(LLM_SCORES_PATH.read_text())
+        scores_d = [(r["llm_confidence"], r["judge_verdict"]) for r in llm_scores]
+        _report("D (LLM-scored, gpt-5.6-luna — see llm_confidence_score.py)", scores_d)
 
 
 if __name__ == "__main__":
