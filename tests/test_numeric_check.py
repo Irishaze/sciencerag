@@ -191,7 +191,12 @@ def test_extract_numbers_candidate_config_parameters_and_performance():
     assert sorted(extract_numbers(prior)) == [0.07, 0.12, 1.5]
 
 
-def test_extract_numbers_caution_has_no_numbers():
+def test_extract_numbers_caution_statement_is_scanned():
+    """Regression test: found via a real production sample where a caution
+    prior's `statement` asserted "~90 K" with no such number anywhere in
+    the cited evidence, and it passed ungrounded because this kind's prose
+    fields weren't scanned at all — caution priors can fabricate numbers
+    same as any other kind, prose or not."""
     prior = Prior(
         prior_id="pr_7",
         kind="caution",
@@ -200,9 +205,22 @@ def test_extract_numbers_caution_has_no_numbers():
         confidence=0.6,
         sources=SOURCES,
     )
-    # Caution's own value fields are prose (not scanned) — this is a known
-    # v1 boundary, not a bug: only `notes` gets free-text number extraction.
-    assert extract_numbers(prior) == []
+    assert extract_numbers(prior) == [400.0]
+
+
+def test_extract_numbers_caution_applicability_scope_is_scanned():
+    prior = Prior(
+        prior_id="pr_7b",
+        kind="caution",
+        field="leg_length",
+        value=CautionValue(
+            statement="Reduces cooling capacity under high current.",
+            applicability_scope="current above 2.5 A",
+        ),
+        confidence=0.6,
+        sources=SOURCES,
+    )
+    assert extract_numbers(prior) == [2.5]
 
 
 def test_extract_numbers_includes_notes_text():

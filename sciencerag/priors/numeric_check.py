@@ -100,7 +100,15 @@ def extract_numbers(prior: Prior) -> list[float]:
       - scaling_relationship: none (x/y/direction/functional_form/
         validity_range are all names/labels/prose, not asserted numbers)
       - candidate_config: numeric `parameters` + `reported_performance` values
-      - caution: none (statement/applicability_scope are prose)
+      - caution: `statement`/`applicability_scope` ARE prose, but prose can
+        still smuggle in a specific fabricated number (e.g. a `statement`
+        asserting "insufficient for cooling requiring ~90 K ΔT" with no 90
+        anywhere in the cited evidence) — found via a real production
+        sample where exactly this happened and slipped past this check
+        because it was originally treated as pure prose with nothing to
+        verify. Parsed with extract_numbers_from_text like `prior.notes`,
+        not read as fixed fields, since there's no structured numeric slot
+        to read directly.
 
     Plus every number in `prior.notes`, parsed the same way evidence text
     is (free text, so it needs the full extract_numbers_from_text handling
@@ -122,7 +130,9 @@ def extract_numbers(prior: Prior) -> list[float]:
         numbers.extend(_numeric_dict_values(value.parameters))
         numbers.extend(_numeric_dict_values(value.reported_performance))
     elif isinstance(value, CautionValue):
-        pass
+        numbers.extend(extract_numbers_from_text(value.statement))
+        if value.applicability_scope:
+            numbers.extend(extract_numbers_from_text(value.applicability_scope))
 
     if prior.notes:
         numbers.extend(extract_numbers_from_text(prior.notes))
