@@ -13,16 +13,8 @@ would make 4.4 almost always empty in practice.
 from __future__ import annotations
 
 from sciencerag.priors.kg import query_kg
+from sciencerag.validate import tec_bridge
 from sciencerag.validate.models import Evaluation, KGCandidate, ValidateRequest
-
-_UNIT_BY_SCALAR = {
-    "delta_T_max_K": "K",
-    "optimal_current_A": "A",
-    "optimal_voltage_V": "V",
-    "total_resistance_ohm": "ohm",
-    "max_heat_dissipation_W": "W",
-    "figure_of_merit_1_per_K": "1/K",
-}
 
 _CONFIDENCE_BY_VERDICT = {
     "consistent": 0.7,  # confirmed against a matching known benchmark case
@@ -69,7 +61,7 @@ def extract_kg_candidates(
                 subject=SUBJECT,
                 relation=relation,
                 object_value=value,
-                object_unit=_UNIT_BY_SCALAR.get(field),
+                object_unit=tec_bridge.SCALAR_UNITS.get(field),
                 conditions=conditions,
                 confidence=confidence,
                 run_id=request.run_id,

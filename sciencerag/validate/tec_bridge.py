@@ -78,6 +78,15 @@ SCALAR_NAMES = (
     "figure_of_merit_1_per_K",
 )
 
+SCALAR_UNITS = {
+    "delta_T_max_K": "K",
+    "optimal_current_A": "A",
+    "optimal_voltage_V": "V",
+    "total_resistance_ohm": "ohm",
+    "max_heat_dissipation_W": "W",
+    "figure_of_merit_1_per_K": "1/K",
+}
+
 
 @lru_cache(maxsize=1)
 def load_latent_model() -> dict:

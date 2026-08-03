@@ -1,0 +1,1387 @@
+{
+  "ReportRequest": {
+    "$defs": {
+      "Anomaly": {
+        "properties": {
+          "check": {
+            "enum": [
+              "energy_balance",
+              "pde_residual",
+              "ood"
+            ],
+            "title": "Check",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "blocking"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "check",
+          "severity"
+        ],
+        "title": "Anomaly",
+        "type": "object"
+      },
+      "CandidateConfigValue": {
+        "properties": {
+          "parameters": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Parameters",
+            "type": "object"
+          },
+          "reported_performance": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Reported Performance",
+            "type": "object"
+          },
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Context"
+          }
+        },
+        "required": [
+          "parameters"
+        ],
+        "title": "CandidateConfigValue",
+        "type": "object"
+      },
+      "CautionValue": {
+        "properties": {
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "applicability_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Applicability Scope"
+          }
+        },
+        "required": [
+          "statement"
+        ],
+        "title": "CautionValue",
+        "type": "object"
+      },
+      "Deviation": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "prior_comparison",
+              "benchmark_comparison"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "reference_id": {
+            "title": "Reference Id",
+            "type": "string"
+          },
+          "actual": {
+            "title": "Actual",
+            "type": "number"
+          },
+          "reference_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Min"
+          },
+          "reference_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Max"
+          },
+          "verdict": {
+            "enum": [
+              "within_range",
+              "deviation"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "source",
+          "reference_id",
+          "actual",
+          "verdict"
+        ],
+        "title": "Deviation",
+        "type": "object"
+      },
+      "Evaluation": {
+        "properties": {
+          "verdict": {
+            "enum": [
+              "consistent",
+              "deviation_found",
+              "insufficient_benchmark"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "deviations": {
+            "items": {
+              "$ref": "#/$defs/Deviation"
+            },
+            "title": "Deviations",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "kg_triple": "#/$defs/SourceKGTriple",
+                  "paper": "#/$defs/SourcePaper"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SourcePaper"
+                },
+                {
+                  "$ref": "#/$defs/SourceKGTriple"
+                }
+              ]
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "verdict"
+        ],
+        "title": "Evaluation",
+        "type": "object"
+      },
+      "KGCandidate": {
+        "description": "spec §4.4: one 材料-结构-工况-性能 candidate triple, with full\nprovenance (运行 ID、置信度、支撑数据切片) attached per spec.",
+        "properties": {
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "object_value": {
+            "title": "Object Value",
+            "type": "number"
+          },
+          "object_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Unit"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "dedup_status": {
+            "enum": [
+              "new",
+              "duplicate_confirmed",
+              "conflict"
+            ],
+            "title": "Dedup Status",
+            "type": "string"
+          },
+          "supporting_evidence": {
+            "additionalProperties": true,
+            "title": "Supporting Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "subject",
+          "relation",
+          "object_value",
+          "confidence",
+          "run_id",
+          "dedup_status"
+        ],
+        "title": "KGCandidate",
+        "type": "object"
+      },
+      "MaterialPropertyValue": {
+        "properties": {
+          "material": {
+            "title": "Material",
+            "type": "string"
+          },
+          "form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Form"
+          },
+          "property_name": {
+            "title": "Property Name",
+            "type": "string"
+          },
+          "magnitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Magnitude"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unit"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "method": {
+            "default": "unknown",
+            "enum": [
+              "measured",
+              "computed",
+              "cited",
+              "unknown"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "material",
+          "property_name"
+        ],
+        "title": "MaterialPropertyValue",
+        "type": "object"
+      },
+      "ParameterRangeValue": {
+        "properties": {
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Max"
+          },
+          "typical": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Typical"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Conditions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "field_name",
+          "unit"
+        ],
+        "title": "ParameterRangeValue",
+        "type": "object"
+      },
+      "Prior": {
+        "properties": {
+          "prior_id": {
+            "title": "Prior Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "parameter_range",
+              "material_property",
+              "scaling_relationship",
+              "candidate_config",
+              "caution"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Field"
+          },
+          "related_fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Related Fields",
+            "type": "array"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ParameterRangeValue"
+              },
+              {
+                "$ref": "#/$defs/MaterialPropertyValue"
+              },
+              {
+                "$ref": "#/$defs/ScalingRelationshipValue"
+              },
+              {
+                "$ref": "#/$defs/CandidateConfigValue"
+              },
+              {
+                "$ref": "#/$defs/CautionValue"
+              }
+            ],
+            "title": "Value"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "sources": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "kg_triple": "#/$defs/SourceKGTriple",
+                  "paper": "#/$defs/SourcePaper"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SourcePaper"
+                },
+                {
+                  "$ref": "#/$defs/SourceKGTriple"
+                }
+              ]
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Notes"
+          },
+          "provenance": {
+            "default": "internal",
+            "enum": [
+              "internal",
+              "external_unverified"
+            ],
+            "title": "Provenance",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prior_id",
+          "kind",
+          "value",
+          "confidence",
+          "sources"
+        ],
+        "title": "Prior",
+        "type": "object"
+      },
+      "RecommendedSample": {
+        "description": "spec §4.3: \"推荐纳入训练集的样本清单(以运行 ID + 区域标识表示)\".",
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "region": {
+            "title": "Region",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "region",
+          "reason"
+        ],
+        "title": "RecommendedSample",
+        "type": "object"
+      },
+      "ScalingRelationshipValue": {
+        "properties": {
+          "x": {
+            "title": "X",
+            "type": "string"
+          },
+          "y": {
+            "title": "Y",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "positive",
+              "negative",
+              "convex",
+              "concave",
+              "non_monotonic",
+              "unknown"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "functional_form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Functional Form"
+          },
+          "validity_range": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Validity Range"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "direction"
+        ],
+        "title": "ScalingRelationshipValue",
+        "type": "object"
+      },
+      "SourceKGTriple": {
+        "properties": {
+          "type": {
+            "const": "kg_triple",
+            "default": "kg_triple",
+            "title": "Type",
+            "type": "string"
+          },
+          "triple_id": {
+            "title": "Triple Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "triple_id"
+        ],
+        "title": "SourceKGTriple",
+        "type": "object"
+      },
+      "SourcePaper": {
+        "properties": {
+          "type": {
+            "const": "paper",
+            "default": "paper",
+            "title": "Type",
+            "type": "string"
+          },
+          "doi": {
+            "title": "Doi",
+            "type": "string"
+          },
+          "span": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Span"
+          }
+        },
+        "required": [
+          "doi"
+        ],
+        "title": "SourcePaper",
+        "type": "object"
+      },
+      "SurrogateUpdateSuggestion": {
+        "description": "spec §4.3 output — a proposal only; nothing here executes training.",
+        "properties": {
+          "recommended_training_samples": {
+            "items": {
+              "$ref": "#/$defs/RecommendedSample"
+            },
+            "title": "Recommended Training Samples",
+            "type": "array"
+          },
+          "loss_reweighting": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Loss Reweighting",
+            "type": "object"
+          },
+          "hyperparameter_direction": {
+            "title": "Hyperparameter Direction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hyperparameter_direction"
+        ],
+        "title": "SurrogateUpdateSuggestion",
+        "type": "object"
+      },
+      "TaskContext": {
+        "properties": {
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Objective"
+          },
+          "constraints": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Constraints",
+            "type": "object"
+          }
+        },
+        "title": "TaskContext",
+        "type": "object"
+      },
+      "UpdatePackage": {
+        "properties": {
+          "surrogate_update": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SurrogateUpdateSuggestion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "kg_candidates": {
+            "items": {
+              "$ref": "#/$defs/KGCandidate"
+            },
+            "title": "Kg Candidates",
+            "type": "array"
+          },
+          "blocked": {
+            "title": "Blocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "blocked"
+        ],
+        "title": "UpdatePackage",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "run_id": {
+        "title": "Run Id",
+        "type": "string"
+      },
+      "task_context": {
+        "$ref": "#/$defs/TaskContext"
+      },
+      "design_parameters": {
+        "additionalProperties": {
+          "type": "number"
+        },
+        "title": "Design Parameters",
+        "type": "object"
+      },
+      "n_pairs": {
+        "default": 1,
+        "maximum": 20,
+        "minimum": 1,
+        "title": "N Pairs",
+        "type": "integer"
+      },
+      "scalar_results": {
+        "additionalProperties": {
+          "type": "number"
+        },
+        "title": "Scalar Results",
+        "type": "object"
+      },
+      "priors": {
+        "items": {
+          "$ref": "#/$defs/Prior"
+        },
+        "title": "Priors",
+        "type": "array"
+      },
+      "anomalies": {
+        "items": {
+          "$ref": "#/$defs/Anomaly"
+        },
+        "title": "Anomalies",
+        "type": "array"
+      },
+      "evaluation": {
+        "$ref": "#/$defs/Evaluation"
+      },
+      "update_package": {
+        "$ref": "#/$defs/UpdatePackage"
+      }
+    },
+    "required": [
+      "run_id",
+      "evaluation",
+      "update_package"
+    ],
+    "title": "ReportRequest",
+    "type": "object"
+  },
+  "ReportResponse": {
+    "$defs": {
+      "Anomaly": {
+        "properties": {
+          "check": {
+            "enum": [
+              "energy_balance",
+              "pde_residual",
+              "ood"
+            ],
+            "title": "Check",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "blocking"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "check",
+          "severity"
+        ],
+        "title": "Anomaly",
+        "type": "object"
+      },
+      "Deviation": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "prior_comparison",
+              "benchmark_comparison"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "reference_id": {
+            "title": "Reference Id",
+            "type": "string"
+          },
+          "actual": {
+            "title": "Actual",
+            "type": "number"
+          },
+          "reference_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Min"
+          },
+          "reference_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Max"
+          },
+          "verdict": {
+            "enum": [
+              "within_range",
+              "deviation"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "source",
+          "reference_id",
+          "actual",
+          "verdict"
+        ],
+        "title": "Deviation",
+        "type": "object"
+      },
+      "Evaluation": {
+        "properties": {
+          "verdict": {
+            "enum": [
+              "consistent",
+              "deviation_found",
+              "insufficient_benchmark"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "deviations": {
+            "items": {
+              "$ref": "#/$defs/Deviation"
+            },
+            "title": "Deviations",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "kg_triple": "#/$defs/SourceKGTriple",
+                  "paper": "#/$defs/SourcePaper"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/SourcePaper"
+                },
+                {
+                  "$ref": "#/$defs/SourceKGTriple"
+                }
+              ]
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "verdict"
+        ],
+        "title": "Evaluation",
+        "type": "object"
+      },
+      "KGCandidate": {
+        "description": "spec §4.4: one 材料-结构-工况-性能 candidate triple, with full\nprovenance (运行 ID、置信度、支撑数据切片) attached per spec.",
+        "properties": {
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "object_value": {
+            "title": "Object Value",
+            "type": "number"
+          },
+          "object_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Unit"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "dedup_status": {
+            "enum": [
+              "new",
+              "duplicate_confirmed",
+              "conflict"
+            ],
+            "title": "Dedup Status",
+            "type": "string"
+          },
+          "supporting_evidence": {
+            "additionalProperties": true,
+            "title": "Supporting Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "subject",
+          "relation",
+          "object_value",
+          "confidence",
+          "run_id",
+          "dedup_status"
+        ],
+        "title": "KGCandidate",
+        "type": "object"
+      },
+      "KeyResult": {
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Unit"
+          },
+          "confidence_label": {
+            "enum": [
+              "high",
+              "check_flagged",
+              "no_anomaly_data"
+            ],
+            "title": "Confidence Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "value",
+          "confidence_label"
+        ],
+        "title": "KeyResult",
+        "type": "object"
+      },
+      "RecommendedSample": {
+        "description": "spec §4.3: \"推荐纳入训练集的样本清单(以运行 ID + 区域标识表示)\".",
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "region": {
+            "title": "Region",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "region",
+          "reason"
+        ],
+        "title": "RecommendedSample",
+        "type": "object"
+      },
+      "SourceKGTriple": {
+        "properties": {
+          "type": {
+            "const": "kg_triple",
+            "default": "kg_triple",
+            "title": "Type",
+            "type": "string"
+          },
+          "triple_id": {
+            "title": "Triple Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "triple_id"
+        ],
+        "title": "SourceKGTriple",
+        "type": "object"
+      },
+      "SourcePaper": {
+        "properties": {
+          "type": {
+            "const": "paper",
+            "default": "paper",
+            "title": "Type",
+            "type": "string"
+          },
+          "doi": {
+            "title": "Doi",
+            "type": "string"
+          },
+          "span": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Span"
+          }
+        },
+        "required": [
+          "doi"
+        ],
+        "title": "SourcePaper",
+        "type": "object"
+      },
+      "SurrogateUpdateSuggestion": {
+        "description": "spec §4.3 output — a proposal only; nothing here executes training.",
+        "properties": {
+          "recommended_training_samples": {
+            "items": {
+              "$ref": "#/$defs/RecommendedSample"
+            },
+            "title": "Recommended Training Samples",
+            "type": "array"
+          },
+          "loss_reweighting": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Loss Reweighting",
+            "type": "object"
+          },
+          "hyperparameter_direction": {
+            "title": "Hyperparameter Direction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "hyperparameter_direction"
+        ],
+        "title": "SurrogateUpdateSuggestion",
+        "type": "object"
+      },
+      "TaskContext": {
+        "properties": {
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Objective"
+          },
+          "constraints": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Constraints",
+            "type": "object"
+          }
+        },
+        "title": "TaskContext",
+        "type": "object"
+      },
+      "UpdatePackage": {
+        "properties": {
+          "surrogate_update": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SurrogateUpdateSuggestion"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "kg_candidates": {
+            "items": {
+              "$ref": "#/$defs/KGCandidate"
+            },
+            "title": "Kg Candidates",
+            "type": "array"
+          },
+          "blocked": {
+            "title": "Blocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "blocked"
+        ],
+        "title": "UpdatePackage",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "ok",
+        "default": "ok",
+        "title": "Status",
+        "type": "string"
+      },
+      "run_id": {
+        "title": "Run Id",
+        "type": "string"
+      },
+      "generated_at": {
+        "title": "Generated At",
+        "type": "string"
+      },
+      "objective_and_constraints": {
+        "$ref": "#/$defs/TaskContext"
+      },
+      "spec_summary": {
+        "additionalProperties": {
+          "type": "number"
+        },
+        "title": "Spec Summary",
+        "type": "object"
+      },
+      "key_results": {
+        "items": {
+          "$ref": "#/$defs/KeyResult"
+        },
+        "title": "Key Results",
+        "type": "array"
+      },
+      "literature_comparison": {
+        "$ref": "#/$defs/Evaluation"
+      },
+      "anomalies_and_cautions": {
+        "items": {
+          "$ref": "#/$defs/Anomaly"
+        },
+        "title": "Anomalies And Cautions",
+        "type": "array"
+      },
+      "update_proposal_summary": {
+        "$ref": "#/$defs/UpdatePackage"
+      },
+      "citations": {
+        "items": {
+          "discriminator": {
+            "mapping": {
+              "kg_triple": "#/$defs/SourceKGTriple",
+              "paper": "#/$defs/SourcePaper"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SourcePaper"
+            },
+            {
+              "$ref": "#/$defs/SourceKGTriple"
+            }
+          ]
+        },
+        "title": "Citations",
+        "type": "array"
+      },
+      "markdown": {
+        "title": "Markdown",
+        "type": "string"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "run_id",
+      "generated_at",
+      "objective_and_constraints",
+      "spec_summary",
+      "key_results",
+      "literature_comparison",
+      "anomalies_and_cautions",
+      "update_proposal_summary",
+      "citations",
+      "markdown",
+      "trace_id"
+    ],
+    "title": "ReportResponse",
+    "type": "object"
+  },
+  "ErrorResponse": {
+    "$defs": {
+      "ErrorDetail": {
+        "properties": {
+          "category": {
+            "enum": [
+              "retrieval_timeout",
+              "schema_validation_failed",
+              "insufficient_coverage",
+              "benchmark_unavailable"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          }
+        },
+        "required": [
+          "category",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "error",
+        "default": "error",
+        "title": "Status",
+        "type": "string"
+      },
+      "error": {
+        "$ref": "#/$defs/ErrorDetail"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "error",
+      "trace_id"
+    ],
+    "title": "ErrorResponse",
+    "type": "object"
+  }
+}
