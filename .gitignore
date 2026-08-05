@@ -27,7 +27,14 @@ corpus/papers/*.pdf
 
 # Exploratory probe script output (scratch, not committed)
 scripts/_*.json
-data/
+# Root-anchored: an unanchored `data/` matches at ANY depth (git glob
+# semantics), which silently swallowed the whole tec_surrogate/data/
+# subtree — including files the deployed service loads at runtime
+# (comsol_latent_surrogate.joblib, tec_1pair_dset3.npz) — the first time
+# tec_surrogate/ was committed. Caught by a fresh-clone Docker build
+# failing on a missing file; fixed here, not by exempting tec_surrogate/
+# case by case, so no other nested data/ directory can silently repeat this.
+/data/
 
 # OS
 .DS_Store
