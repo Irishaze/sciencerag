@@ -3,18 +3,24 @@
 Pure-function tests against constructed Prior objects — no PaperQA2/API calls.
 `_build_geometry_gaps` takes a pre-computed `relevance_matched_params` set
 (the caller resolves this via `_match_params_to_evidence`, a real LLM call —
-see test_match_params_to_evidence.py for that side); here we just supply the
-set directly to keep these tests API-free.
+see test_param_matching.py for that side); here we just supply the set
+directly to keep these tests API-free.
+
+Confidence no longer gates what counts as "extracted" (2026-08-05 — see
+extract.py's module docstring): the only "extracted but not returned"
+reason left is the semantic support judge's REVIEW verdict, or getting cut
+by the max_priors cap. `_prior`'s `confidence` param below is now purely a
+ranking key for `_cap_priors`, not a pass/fail signal.
 """
 
 from sciencerag.priors.contract import GEOMETRY_FREE_NAMES
+from sciencerag.priors.extract import ReviewedPrior
 from sciencerag.priors.models import Prior, SourcePaper
 from sciencerag.priors.retrieval import (
     _build_gaps,
     _build_geometry_gaps,
     _build_max_priors_gap,
     _cap_priors,
-    _split_by_confidence,
 )
 
 
@@ -46,29 +52,31 @@ def _prior(
     )
 
 
-def test_split_by_confidence_separates_strong_and_weak():
-    priors = [_prior(0.9), _prior(0.5), _prior(0.4), _prior(0.1)]
-    strong, weak = _split_by_confidence(priors)
-    assert [p.confidence for p in strong] == [0.9, 0.5]
-    assert [p.confidence for p in weak] == [0.4, 0.1]
+def _reviewed(reason: str = "plausible domain inference", **prior_kwargs) -> ReviewedPrior:
+    return ReviewedPrior(prior=_prior(0.6, **prior_kwargs), reason=reason)
 
 
-def test_build_gaps_empty_when_no_weak_priors():
+def test_build_gaps_empty_when_no_review_priors():
     assert _build_gaps([], total_hits=5) == []
 
 
-def test_build_gaps_notes_excluded_count_and_papers():
-    """The gaps message describes low-confidence PRIORS, not raw evidence
+def test_build_gaps_notes_excluded_count_papers_and_reasons():
+    """The gaps message describes REVIEW-excluded PRIORS, not raw evidence
     contexts — a prior may already merge multiple evidence snippets (see
     extract.py), so "N evidence contexts" would misdescribe what actually
     got excluded. Regression test for that exact wording bug."""
-    weak = [_prior(0.2, doi="10.1111/a"), _prior(0.3, doi="10.2222/b")]
-    gaps = _build_gaps(weak, total_hits=5)
+    reviewed = [
+        _reviewed(doi="10.1111/a", reason="aspect ratio mapping"),
+        _reviewed(doi="10.2222/b", reason="fill factor mapping"),
+    ]
+    gaps = _build_gaps(reviewed, total_hits=5)
     assert len(gaps) == 1
-    assert "2 low-confidence prior" in gaps[0]
+    assert "2 prior" in gaps[0]
     assert "evidence context" not in gaps[0]
     assert "10.1111/a" in gaps[0]
     assert "10.2222/b" in gaps[0]
+    assert "aspect ratio mapping" in gaps[0]
+    assert "fill factor mapping" in gaps[0]
 
 
 def test_build_gaps_uses_doi_not_llm_notes():
@@ -78,8 +86,10 @@ def test_build_gaps_uses_doi_not_llm_notes():
     instead of a source. Regression test for that exact bug, found via
     manual review of a real gaps message showing LLM notes text instead of
     a paper reference."""
-    weak = [_prior(0.2, notes="Based on prior work cited by E9 (Han et al.)", doi="10.3333/c")]
-    gaps = _build_gaps(weak, total_hits=5)
+    reviewed = [
+        _reviewed(notes="Based on prior work cited by E9 (Han et al.)", doi="10.3333/c")
+    ]
+    gaps = _build_gaps(reviewed, total_hits=5)
     assert "10.3333/c" in gaps[0]
     assert "Based on prior work" not in gaps[0]
 
@@ -94,36 +104,44 @@ def test_build_gaps_reports_zero_hits_case():
 
 
 def test_build_geometry_gaps_reports_all_12_when_nothing_extracted():
-    gaps = _build_geometry_gaps(all_priors=[], strong_priors=[], relevance_matched_params=set())
+    gaps = _build_geometry_gaps(
+        all_kept_priors=[], returned_priors=[], relevance_matched_params=set()
+    )
     assert len(gaps) == len(GEOMETRY_FREE_NAMES)
     assert all("未检索到" in g for g in gaps)
 
 
-def test_build_geometry_gaps_excludes_params_covered_by_a_strong_prior():
-    strong = [_prior(0.9, field="leg_length")]
+def test_build_geometry_gaps_excludes_params_covered_by_a_returned_prior():
+    returned = [_prior(0.9, field="leg_length")]
     gaps = _build_geometry_gaps(
-        all_priors=strong, strong_priors=strong, relevance_matched_params=set()
+        all_kept_priors=returned, returned_priors=returned, relevance_matched_params=set()
     )
     assert not any("leg_length" in g for g in gaps)
     assert len(gaps) == len(GEOMETRY_FREE_NAMES) - 1
 
 
 def test_build_geometry_gaps_excludes_params_covered_via_related_fields():
-    strong = [_prior(0.9, field=None, related_fields=["leg_length", "leg_width"])]
+    returned = [_prior(0.9, field=None, related_fields=["leg_length", "leg_width"])]
     gaps = _build_geometry_gaps(
-        all_priors=strong, strong_priors=strong, relevance_matched_params=set()
+        all_kept_priors=returned, returned_priors=returned, relevance_matched_params=set()
     )
     assert not any("leg_length" in g for g in gaps)
     assert not any("leg_width" in g for g in gaps)
 
 
-def test_build_geometry_gaps_distinguishes_low_confidence_from_uncovered():
-    weak = _prior(0.1, field="leg_length")
+def test_build_geometry_gaps_distinguishes_not_returned_from_uncovered():
+    """A prior that was extracted (passed numeric+semantic checks) but
+    didn't make it into `returned_priors` (REVIEW-excluded or max_priors-
+    capped — the caller decides which via `all_kept_priors`'s membership)
+    is a different gap reason than "nothing extracted at all"."""
+    drafted_not_returned = _prior(0.1, field="leg_length")
     gaps = _build_geometry_gaps(
-        all_priors=[weak], strong_priors=[], relevance_matched_params=set()
+        all_kept_priors=[drafted_not_returned],
+        returned_priors=[],
+        relevance_matched_params=set(),
     )
     leg_length_gap = next(g for g in gaps if "leg_length" in g)
-    assert "置信度不足" in leg_length_gap
+    assert "未进入最终结果" in leg_length_gap
     other_gap = next(g for g in gaps if "leg_width" in g)
     assert "未检索到" in other_gap
 
@@ -137,31 +155,33 @@ def test_build_geometry_gaps_distinguishes_low_confidence_from_uncovered():
 
 def test_build_geometry_gaps_reports_relevance_filtered_when_param_matched():
     gaps = _build_geometry_gaps(
-        all_priors=[], strong_priors=[], relevance_matched_params={"leg_length"}
+        all_kept_priors=[], returned_priors=[], relevance_matched_params={"leg_length"}
     )
     leg_length_gap = next(g for g in gaps if "leg_length" in g)
     assert "相关性不足" in leg_length_gap
-    assert "置信度不足" not in leg_length_gap
+    assert "未进入最终结果" not in leg_length_gap
 
 
 def test_build_geometry_gaps_falls_back_to_unretrieved_when_no_param_matched():
     gaps = _build_geometry_gaps(
-        all_priors=[], strong_priors=[], relevance_matched_params=set()
+        all_kept_priors=[], returned_priors=[], relevance_matched_params=set()
     )
     leg_length_gap = next(g for g in gaps if "leg_length" in g)
     assert "未检索到" in leg_length_gap
 
 
-def test_build_geometry_gaps_confidence_tier_takes_priority_over_relevance_tier():
-    """A param that has BOTH a drafted (low-confidence) prior AND matching
-    below-threshold evidence should report the confidence-tier reason —
-    the prior in hand is more specific/actionable than an evidence guess."""
-    weak = _prior(0.1, field="leg_length")
+def test_build_geometry_gaps_not_returned_tier_takes_priority_over_relevance_tier():
+    """A param that has BOTH a drafted-but-not-returned prior AND matching
+    below-threshold evidence should report the drafted-tier reason — the
+    prior in hand is more specific/actionable than an evidence guess."""
+    drafted_not_returned = _prior(0.1, field="leg_length")
     gaps = _build_geometry_gaps(
-        all_priors=[weak], strong_priors=[], relevance_matched_params={"leg_length"}
+        all_kept_priors=[drafted_not_returned],
+        returned_priors=[],
+        relevance_matched_params={"leg_length"},
     )
     leg_length_gap = next(g for g in gaps if "leg_length" in g)
-    assert "置信度不足" in leg_length_gap
+    assert "未进入最终结果" in leg_length_gap
 
 
 # -- max_priors cap ---------

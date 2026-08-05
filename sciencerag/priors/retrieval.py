@@ -21,6 +21,7 @@ from sciencerag.priors.extract import (
     EvidenceItem,
     ExtractionError,
     PipelineTrace,
+    ReviewedPrior,
     _strip_code_fences,
     extract_priors,
 )
@@ -186,29 +187,17 @@ def _build_evidence_table(
     return table, below_threshold
 
 
-CONFIDENCE_THRESHOLD = 0.5
+def _cap_priors(priors: list[Prior], max_priors: int) -> tuple[list[Prior], list[Prior]]:
+    """Split into (returned, truncated) by max_priors, keeping the
+    highest-confidence ones — a cap always trims the lowest-ranked priors,
+    never an arbitrary prefix of extraction order.
 
-
-def _split_by_confidence(priors: list[Prior]) -> tuple[list[Prior], list[Prior]]:
-    """Split into (strong, weak) by CONFIDENCE_THRESHOLD.
-
-    NOTE: `priors` here are already LLM-merged/extracted Prior objects, each
-    possibly backed by multiple evidence contexts (see extract.py's
-    confidence formula) — confidence is a derived score, not a single
-    evidence context's raw relevance. A weak prior means "this specific
-    finding is weakly supported", not "this evidence snippet was irrelevant".
-    """
-    strong = [p for p in priors if p.confidence >= CONFIDENCE_THRESHOLD]
-    weak = [p for p in priors if p.confidence < CONFIDENCE_THRESHOLD]
-    return strong, weak
-
-
-def _cap_priors(strong_priors: list[Prior], max_priors: int) -> tuple[list[Prior], list[Prior]]:
-    """Split confidence-surviving priors into (returned, truncated) by
-    max_priors, keeping the highest-confidence ones — a cap always trims
-    the weakest of the strong priors, never an arbitrary prefix of
-    extraction order."""
-    ranked = sorted(strong_priors, key=lambda p: p.confidence, reverse=True)
+    `priors` here is everything that already passed extract.py's numeric +
+    semantic checks (2026-08-05: confidence stopped gating what counts as a
+    valid prior — see extract.py's module docstring for why. There is no
+    more "weak, excluded" tier at this stage; every prior here is
+    approved, confidence is purely the ranking key for this cap)."""
+    ranked = sorted(priors, key=lambda p: p.confidence, reverse=True)
     return ranked[:max_priors], ranked[max_priors:]
 
 
@@ -330,15 +319,18 @@ def _match_params_to_evidence(
 
 
 def _build_geometry_gaps(
-    all_priors: list[Prior],
-    strong_priors: list[Prior],
+    all_kept_priors: list[Prior],
+    returned_priors: list[Prior],
     relevance_matched_params: set[str],
 ) -> list[str]:
     """Use the sim contract's 12 geometry_free parameters as the yardstick
     for coverage (spec §3.6): whatever this run didn't end up with a
-    confidence-surviving prior for goes into gaps, not silently dropped,
-    with a 3-way attribution per parameter (spec §3.7):
-      1. extracted but confidence-filtered — cheap, from priors in hand.
+    returned prior for goes into gaps, not silently dropped, with a 3-way
+    attribution per parameter (spec §3.7):
+      1. extracted (passed numeric + semantic checks) but not in the final
+         returned list — either cut by max_priors or excluded as REVIEW
+         (see extract.py's module docstring: confidence no longer gates
+         what counts as "extracted", only what's returned/ranked).
       2. evidence retrieved but relevance-filtered — `relevance_matched_params`
          is the caller's already-resolved answer (see
          _match_params_to_evidence) for which uncovered/undrafted params at
@@ -346,15 +338,20 @@ def _build_geometry_gaps(
          Deliberately not computed in here — this stays a pure function so
          its tier-priority logic is unit-testable without a real LLM call.
       3. nothing retrieved at all, as a last resort.
+
+    `all_kept_priors` must be the superset of `returned_priors` (everything
+    that passed numeric + semantic checks, before the max_priors cap and
+    including REVIEW-excluded ones) — the caller is responsible for that
+    union, kept out of this function so it stays pure/unit-testable.
     """
-    covered = _covered_params(strong_priors)
-    drafted = _drafted_params(all_priors)
+    covered = _covered_params(returned_priors)
+    drafted = _drafted_params(all_kept_priors)
     gaps = []
     for name in sorted(GEOMETRY_FREE_NAMES):
         if name in covered:
             continue
         if name in drafted:
-            gaps.append(f"{name} 提取到先验但置信度不足")
+            gaps.append(f"{name} 提取到先验但未进入最终结果")
         elif name in relevance_matched_params:
             gaps.append(f"{name} 检索到证据但相关性不足(未达到 {MIN_EVIDENCE_RELEVANCE})")
         else:
@@ -362,36 +359,42 @@ def _build_geometry_gaps(
     return gaps
 
 
-def _build_gaps(weak_priors: list[Prior], total_hits: int) -> list[str]:
+def _build_gaps(review_priors: list[ReviewedPrior], total_hits: int) -> list[str]:
+    """Reports priors the semantic support judge marked REVIEW (spec §3.7):
+    plausible domain-standard inference, not literal evidence wording — not
+    wrong the way a DROP is, but not confident enough to include either.
+    Confidence no longer excludes priors on its own (see extract.py's
+    module docstring) — REVIEW is the only remaining "extracted but not
+    included" reason at this stage."""
     if total_hits == 0:
         return ["internal corpus returned no relevant evidence for this query"]
-    if not weak_priors:
+    if not review_priors:
         return []
     # NOTE: can't use p.notes here — it's the LLM's own clarifying note when
     # the LLM provided one, and only falls back to a paper title otherwise
     # (see extract.py's _to_prior). Using it for "which paper" would show
     # LLM commentary instead of a source half the time. DOI is always real
     # and never overwritten, so use that instead.
-    dois = sorted({s.doi for p in weak_priors for s in p.sources if s.doi})
+    dois = sorted({s.doi for rp in review_priors for s in rp.prior.sources if s.doi})
     dois_str = "; ".join(dois) if dois else "unknown source"
+    reasons = "; ".join(f"{rp.prior.prior_id}: {rp.reason}" for rp in review_priors)
     return [
-        f"{len(weak_priors)} low-confidence prior(s) "
-        f"(confidence < {CONFIDENCE_THRESHOLD}) were excluded from priors; "
-        f"source DOIs: {dois_str}"
+        f"{len(review_priors)} prior(s) had uncertain semantic support and were excluded "
+        f"from priors; source DOIs: {dois_str}; reasons: {reasons}"
     ]
 
 
 def _build_max_priors_gap(truncated_priors: list[Prior], max_priors: int) -> list[str]:
     """Mirrors _build_gaps's disclosure pattern: a prior dropped by the
     max_priors cap is still "missing" from Hermes's point of view, even
-    though it met the confidence bar — so it must show up in gaps rather
-    than silently vanish (same spec principle as the weak-confidence cut)."""
+    though it passed every quality check — so it must show up in gaps
+    rather than silently vanish (same spec principle as the REVIEW cut)."""
     if not truncated_priors:
         return []
     dois = sorted({s.doi for p in truncated_priors for s in p.sources if s.doi})
     dois_str = "; ".join(dois) if dois else "unknown source"
     return [
-        f"{len(truncated_priors)} additional prior(s) met the confidence threshold "
+        f"{len(truncated_priors)} additional prior(s) passed all quality checks "
         f"but were excluded by max_priors={max_priors}; source DOIs: {dois_str}"
     ]
 
@@ -524,9 +527,11 @@ def _build_priors_response(
         )
 
     try:
-        all_priors, filtered_material_count = extract_priors(query, evidence_table, trace=trace)
+        kept_priors, filtered_material_count, review_priors = extract_priors(
+            query, evidence_table, trace=trace
+        )
         if trace is not None:
-            trace.all_priors = all_priors
+            trace.all_priors = kept_priors
     except ExtractionError as e:
         relevance_matched = _match_params_to_evidence(
             below_threshold_evidence, sorted(GEOMETRY_FREE_NAMES)
@@ -549,15 +554,17 @@ def _build_priors_response(
             0,
         )
 
-    strong_priors, weak_priors = _split_by_confidence(all_priors)
-    returned_priors, truncated_priors = _cap_priors(strong_priors, max_priors)
+    returned_priors, truncated_priors = _cap_priors(kept_priors, max_priors)
+    all_kept_priors = kept_priors + [rp.prior for rp in review_priors]
 
-    unexplained = sorted(GEOMETRY_FREE_NAMES - _covered_params(returned_priors) - _drafted_params(all_priors))
+    unexplained = sorted(
+        GEOMETRY_FREE_NAMES - _covered_params(returned_priors) - _drafted_params(all_kept_priors)
+    )
     relevance_matched = _match_params_to_evidence(below_threshold_evidence, unexplained)
 
-    gaps = _build_gaps(weak_priors, total_hits=len(contexts))
+    gaps = _build_gaps(review_priors, total_hits=len(contexts))
     gaps += _build_max_priors_gap(truncated_priors, max_priors)
-    gaps += _build_geometry_gaps(all_priors, returned_priors, relevance_matched)
+    gaps += _build_geometry_gaps(all_kept_priors, returned_priors, relevance_matched)
 
     return (
         _augment_with_external(
