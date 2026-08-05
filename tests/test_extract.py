@@ -4,6 +4,7 @@ litellm.completion is monkeypatched — no real API calls, no cost.
 """
 
 import json
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -24,6 +25,22 @@ from sciencerag.priors.extract import (
 
 def _fake_llm_response(content: str):
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+
+
+def _is_semantic_judge_call(kwargs) -> bool:
+    return kwargs["messages"][0]["content"] == extract_mod.SEMANTIC_SUPPORT_RUBRIC
+
+
+def _fake_keep_all_verdicts(kwargs) -> SimpleNamespace:
+    """Semantic judge stub: KEEP every prior_id the judge prompt lists — the
+    extract_priors tests below are testing the schema/numeric-groundedness
+    retry loop, not the semantic judge itself (see test_semantic_judge.py),
+    so this always approves whatever drafts made it this far."""
+    user_prompt = kwargs["messages"][1]["content"]
+    ids = re.findall(r"id: (\S+)", user_prompt)
+    return _fake_llm_response(
+        json.dumps({"verdicts": [{"prior_id": i, "verdict": "KEEP", "reason": "ok"} for i in ids]})
+    )
 
 
 def _evidence_table():
@@ -376,6 +393,8 @@ def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):
     calls = {"n": 0}
 
     def fake_completion(**kwargs):
+        if _is_semantic_judge_call(kwargs):
+            return _fake_keep_all_verdicts(kwargs)
         calls["n"] += 1
         if calls["n"] == 1:
             return _fake_llm_response("not valid json")
@@ -396,7 +415,7 @@ def test_extract_priors_retries_on_invalid_output_then_succeeds(monkeypatch):
 
     monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
 
-    priors, filtered_material_count = extract_priors("test query", _evidence_table())
+    priors, filtered_material_count, _review_priors = extract_priors("test query", _evidence_table())
     assert calls["n"] == 2
     assert len(priors) == 1
     assert priors[0].kind == "caution"
@@ -410,6 +429,8 @@ def test_extract_priors_retries_on_numeric_check_failure_then_succeeds(monkeypat
     calls = {"n": 0}
 
     def fake_completion(**kwargs):
+        if _is_semantic_judge_call(kwargs):
+            return _fake_keep_all_verdicts(kwargs)
         calls["n"] += 1
         typical = 999 if calls["n"] == 1 else 60
         return _fake_llm_response(
@@ -429,7 +450,7 @@ def test_extract_priors_retries_on_numeric_check_failure_then_succeeds(monkeypat
 
     monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
 
-    priors, _filtered_material_count = extract_priors("test query", _evidence_table())
+    priors, _filtered_material_count, _review_priors = extract_priors("test query", _evidence_table())
     assert calls["n"] == 2
     assert len(priors) == 1
     assert priors[0].value.typical == 60
@@ -474,6 +495,8 @@ def test_extract_priors_filters_out_material_property_drafts(monkeypatch):
     must never surface as a Prior (spec §3.6: 'filtered/not adopted')."""
 
     def fake_completion(**kwargs):
+        if _is_semantic_judge_call(kwargs):
+            return _fake_keep_all_verdicts(kwargs)
         return _fake_llm_response(
             json.dumps(
                 {
@@ -497,7 +520,7 @@ def test_extract_priors_filters_out_material_property_drafts(monkeypatch):
 
     monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
 
-    priors, filtered_material_count = extract_priors("test query", _evidence_table())
+    priors, filtered_material_count, _review_priors = extract_priors("test query", _evidence_table())
     assert len(priors) == 1
     assert priors[0].kind == "parameter_range"
     assert priors[0].field == "leg_length"

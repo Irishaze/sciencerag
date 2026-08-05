@@ -6,13 +6,26 @@ extraction pipeline:
   evidence contexts -> numbered evidence table -> prompt -> LLM JSON output
   -> Pydantic validation (retry, feeding the error back to the LLM on
   failure) -> evidence labels resolved back to real DOI/span by our own
-  code -> confidence computed by a deterministic formula.
+  code -> numeric groundedness gate (deterministic, numeric_check.py) ->
+  batched semantic support judge (KEEP/REVIEW/DROP, an independent model) ->
+  confidence computed by a deterministic formula.
 
 The LLM never outputs a DOI directly (a hallucination vector) — it only
 picks which numbered evidence snippets support each prior; we look up the
-real source ourselves. Confidence is not LLM-scored; it's derived from
-distinct-paper count + PaperQA2's own relevance score, per spec's "don't
-fake a calibrated probability" principle (see README's priors section).
+real source ourselves.
+
+Confidence is NOT the gate that decides whether a prior survives into the
+response — that job now belongs to the numeric + semantic checks above.
+Confidence is a purely deterministic, source-count/relevance-derived
+ranking signal (never LLM-scored, per spec's "don't fake a calibrated
+probability" principle — see README's priors section), used only to order
+survivors and decide what gets cut when there are more than max_priors.
+This split happened after real-data comparison (k/relevance/confidence plan
+Part 2, 2026-08-04) found no confidence formula variant — including having
+an LLM score it directly — actually separated KEEP from DROP; the signals
+confidence is built from measure "how much evidence backs this," not "is
+this specific claim actually correct," which is a different question a
+formula over source-count/relevance structurally can't answer.
 """
 
 import json
@@ -231,10 +244,12 @@ class PipelineTrace(BaseModel):
     # which only holds the survivors. Needed to see what the threshold
     # discards, and with what content (not just a bare score).
     all_evidence: list[EvidenceItem] = Field(default_factory=list)
-    # Every extracted Prior BEFORE CONFIDENCE_THRESHOLD splits them into
-    # strong/weak (see retrieval.py's _split_by_confidence) — full kind/
-    # field/value/notes/sources, not just the numbers in confidence_breakdown.
-    # Needed to judge whether a low-confidence prior was correctly discarded.
+    # Every prior that survived numeric + semantic checks (i.e. KEEP-verdict
+    # only — REVIEW/DROP never reach here) — full kind/field/value/notes/
+    # sources, not just the numbers in confidence_breakdown. Confidence no
+    # longer gates what's in here (see module docstring); this is now
+    # exactly what `priors` in the final response contains, before
+    # max_priors capping.
     all_priors: list[Prior] = Field(default_factory=list)
     # Phase B3: every numeric-groundedness rejection (see _to_prior), one
     # entry per unmatched number, format "{field}: {number} not found in
@@ -242,6 +257,15 @@ class PipelineTrace(BaseModel):
     # accepted on a later retry attempt, so a false-positive rejection is
     # visible in trace even though it didn't affect the final response.
     numeric_check_failures: list[str] = Field(default_factory=list)
+    # Semantic support judge (see _judge_semantic_support): one entry per
+    # DROP verdict, format "{field}: {reason}" — same "visible even if a
+    # later retry attempt fixes it" semantics as numeric_check_failures.
+    semantic_check_failures: list[str] = Field(default_factory=list)
+    # One entry per REVIEW verdict (plausible-but-not-literal support, e.g.
+    # a standard domain-knowledge translation the evidence doesn't spell
+    # out verbatim) — these priors are excluded from the final response but
+    # aren't "wrong" the way a DROP is, so tracked separately for visibility.
+    semantic_reviews: list[str] = Field(default_factory=list)
 
 
 def _build_evidence_block(evidence_table: dict[str, EvidenceItem]) -> str:
@@ -375,6 +399,154 @@ def _to_prior(
     return prior
 
 
+# Deliberately NOT get_llm_model()/SCIENCERAG_LLM_MODEL: this judge exists to
+# check the production model's own output, so it must be a different model
+# than whatever's currently doing extraction — judging output with the same
+# model that produced it is grading its own homework (see module docstring).
+# Picked via Phase C's judge shootout (data/judge_shootout_results.json) and
+# cross-validated against a real independent GPT-4o judge on 22 real
+# production priors (2026-08-04, k/relevance/confidence plan Part 2):
+# 81.8% agreement, caught 2 real hallucinations GPT-4o itself missed, with
+# its disagreements concentrated in exactly the "standard domain-knowledge
+# translation, not literal evidence wording" pattern the REVIEW tier below
+# is meant to absorb instead of forcing a binary call.
+SEMANTIC_JUDGE_MODEL = "gpt-5.6-luna"
+
+SEMANTIC_SUPPORT_RUBRIC = """You are a strict quality judge for structured scientific priors extracted
+from TEC (thermoelectric cooler) literature. You verify each prior against
+its OWN cited evidence snippets only — other snippets in the evidence block
+may be irrelevant to a given prior.
+
+You will be given a research query, a set of labeled evidence snippets, and
+a list of drafted priors — each with its own id, kind, field/related_fields,
+value, notes, and which evidence labels it cites.
+
+For EACH prior, judge SUPPORTED, then USEFUL:
+
+SUPPORTED — three levels:
+- KEEP-level: every claim/number the prior makes is directly and literally
+  stated in its cited evidence text.
+- REVIEW-level: the prior applies a standard, textbook domain translation
+  from the evidence's own wording onto our fixed parameter names (example:
+  evidence says "high aspect ratio", prior maps that to leg_length/
+  leg_width — aspect ratio IS length/width, a definitional mapping, not an
+  invented claim). The underlying finding is real and grounded, just not
+  phrased with the exact parameter names in the source text.
+- DROP-level: the prior asserts something its cited evidence does not
+  state or contradicts, invents a causal relationship the evidence never
+  makes, or cites evidence about a different topic/device than the prior's
+  claim (e.g. citing a thermoelectric GENERATOR study to support a
+  thermoelectric COOLER claim), or states a number absent from the
+  evidence text.
+
+USEFUL (only matters if SUPPORTED is KEEP-level or REVIEW-level): the prior
+must carry actionable information (a value, range, direction, configuration,
+or concrete caveat) — a vague restatement with no real content is not
+useful regardless of how well "supported" it looks.
+
+Final verdict per prior:
+- "KEEP": SUPPORTED at KEEP-level AND USEFUL.
+- "REVIEW": SUPPORTED at REVIEW-level (reasonable inference, not literal)
+  AND USEFUL — genuinely uncertain, not wrong.
+- "DROP": SUPPORTED is DROP-level, OR not USEFUL.
+
+`notes` is the extracting LLM's own free clarifying remark — context only.
+Do NOT treat it as a claim requiring its own verification, and do NOT let
+information found only in `notes` (not in the prior's structured `value`)
+count as grounding for anything.
+
+Output JSON only, no markdown fences:
+{"verdicts": [
+  {"prior_id": "<id>", "verdict": "KEEP" | "REVIEW" | "DROP", "reason": "<one sentence>"}
+]}
+One entry per prior given, in any order."""
+
+
+class SemanticVerdict(NamedTuple):
+    verdict: Literal["KEEP", "REVIEW", "DROP"]
+    reason: str
+
+
+class ReviewedPrior(NamedTuple):
+    prior: Prior
+    reason: str
+
+
+def _evidence_labels_for(prior: Prior, evidence_table: dict[str, EvidenceItem]) -> list[str]:
+    """Prior only keeps resolved doi/span in `sources`, not the E-labels
+    used during extraction — reconstruct them by matching back into
+    evidence_table, same approach used (and validated against real data) in
+    scripts/confidence_formula_probe.py."""
+    return [
+        label
+        for label, item in evidence_table.items()
+        if any((item.doi or "") == s.doi and item.span == s.span for s in prior.sources)
+    ]
+
+
+def _judge_semantic_support(
+    query: str,
+    priors: list[Prior],
+    evidence_table: dict[str, EvidenceItem],
+) -> dict[str, SemanticVerdict]:
+    """One batched call (not one per prior — spec §8's per-query latency
+    budget) that judges every drafted prior's SUPPORTED+USEFUL status at
+    once, returning a KEEP/REVIEW/DROP verdict per prior_id. Any failure
+    (API error, malformed output, a missing verdict) is raised as
+    ValueError so it flows into extract_priors' existing retry path exactly
+    like a numeric-groundedness or schema-validation failure — a transient
+    judge hiccup shouldn't crash a request that already extracted validly.
+    """
+    prior_descs = []
+    for p in priors:
+        labels = _evidence_labels_for(p, evidence_table)
+        prior_descs.append(
+            f"- id: {p.prior_id}\n"
+            f"  kind: {p.kind}\n"
+            f"  field: {p.field}\n"
+            f"  related_fields: {p.related_fields}\n"
+            f"  value: {json.dumps(p.value.model_dump())}\n"
+            f"  notes: {p.notes}\n"
+            f"  cites: {', '.join(labels) if labels else '(no evidence label matched)'}"
+        )
+    user_prompt = (
+        f"Query: {query}\n\n"
+        f"Evidence:\n{_build_evidence_block(evidence_table)}\n\n"
+        f"Priors to judge:\n" + "\n".join(prior_descs)
+    )
+    messages = [
+        {"role": "system", "content": SEMANTIC_SUPPORT_RUBRIC},
+        {"role": "user", "content": user_prompt},
+    ]
+    try:
+        try:
+            response = litellm.completion(
+                model=SEMANTIC_JUDGE_MODEL,
+                messages=messages,
+                temperature=0,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except litellm.BadRequestError as e:
+            if "temperature" not in str(e):
+                raise
+            response = litellm.completion(
+                model=SEMANTIC_JUDGE_MODEL, messages=messages, timeout=REQUEST_TIMEOUT_SECONDS
+            )
+        raw = response.choices[0].message.content
+        parsed = json.loads(_strip_code_fences(raw))
+        verdicts = {
+            v["prior_id"]: SemanticVerdict(verdict=v["verdict"], reason=v.get("reason", ""))
+            for v in parsed["verdicts"]
+        }
+    except Exception as e:  # noqa: BLE001 - any failure here retries the whole attempt, same as any other validation failure, rather than crashing the request
+        raise ValueError(f"semantic support judge failed: {type(e).__name__}: {e}") from e
+
+    missing = [p.prior_id for p in priors if p.prior_id not in verdicts]
+    if missing:
+        raise ValueError(f"semantic support judge omitted verdicts for: {missing}")
+    return verdicts
+
+
 class ExtractionResult(NamedTuple):
     priors: list[Prior]
     # Count of material_property drafts the LLM emitted anyway (against the
@@ -382,6 +554,14 @@ class ExtractionResult(NamedTuple):
     # Prior — surfaced so the caller can note it in coverage.gaps rather
     # than have it vanish with no trace (spec §3.6).
     filtered_material_count: int
+    # Priors the semantic judge marked REVIEW (plausible domain-standard
+    # inference, not literal evidence wording) — excluded from `priors` but
+    # not discarded silently; the caller surfaces these in coverage.gaps
+    # rather than lumping them in with "confidence too low" or "not found".
+    # No default — NamedTuple defaults are shared mutable state across every
+    # instance that doesn't override them, and this always has a real value
+    # to pass (see extract_priors' single construction site).
+    review_priors: list[ReviewedPrior]
 
 
 def extract_priors(
@@ -450,16 +630,54 @@ def extract_priors(
             kept = [d for d in output.priors if d.kind != "material_property"]
             filtered_material_count = len(output.priors) - len(kept)
             priors = [_to_prior(draft, evidence_table, trace) for draft in kept]
+
+            # Semantic support judge: runs once per attempt, batched over
+            # every draft that already passed schema + numeric groundedness.
+            # A DROP verdict fails the WHOLE attempt (same as a numeric or
+            # schema failure below) — retrying re-drafts everything, not
+            # just the bad one, but that's the existing retry granularity
+            # this whole loop already has (see numeric groundedness above),
+            # not something new introduced here. A REVIEW verdict does NOT
+            # fail the attempt: the evidence isn't going to get more literal
+            # on another retry, so there's nothing a retry would fix — it's
+            # excluded from `priors` directly and reported via review_priors.
+            review_priors: list[ReviewedPrior] = []
+            if priors:
+                verdicts = _judge_semantic_support(query, priors, evidence_table)
+                dropped = [p for p in priors if verdicts[p.prior_id].verdict == "DROP"]
+                if dropped:
+                    reasons = [
+                        f"{p.field or '/'.join(p.related_fields) or p.kind}: "
+                        f"{verdicts[p.prior_id].reason}"
+                        for p in dropped
+                    ]
+                    if trace is not None:
+                        trace.semantic_check_failures.extend(reasons)
+                    raise ValueError("semantic support check failed: " + "; ".join(reasons))
+
+                review_priors = [
+                    ReviewedPrior(prior=p, reason=verdicts[p.prior_id].reason)
+                    for p in priors
+                    if verdicts[p.prior_id].verdict == "REVIEW"
+                ]
+                if trace is not None:
+                    trace.semantic_reviews.extend(
+                        f"{rp.prior.field or '/'.join(rp.prior.related_fields) or rp.prior.kind}: "
+                        f"{rp.reason}"
+                        for rp in review_priors
+                    )
+                review_ids = {rp.prior.prior_id for rp in review_priors}
+                priors = [p for p in priors if p.prior_id not in review_ids]
         except (json.JSONDecodeError, ValidationError, ValueError) as e:
-            # _to_prior (numeric groundedness gate included) runs inside this
-            # try too, on purpose — a single attempt/trace entry per loop
-            # iteration whether the failure came from parsing, per-kind
-            # schema validation, or here. Recording success before calling
-            # _to_prior used to double up trace.attempts (one "success" entry
-            # already appended, then this except block's own entry for the
-            # same attempt_num) on any _to_prior failure — silent since
-            # _to_prior essentially never failed before the numeric check
-            # existed.
+            # _to_prior (numeric groundedness gate included) and the semantic
+            # judge both run inside this try too, on purpose — a single
+            # attempt/trace entry per loop iteration whether the failure
+            # came from parsing, per-kind schema validation, numeric
+            # groundedness, or semantic support. Recording success before
+            # calling these used to double up trace.attempts (one "success"
+            # entry already appended, then this except block's own entry for
+            # the same attempt_num) on any downstream failure — silent since
+            # these checks essentially never failed before they existed.
             last_error = e
             if trace is not None:
                 trace.attempts.append(
@@ -477,6 +695,6 @@ def extract_priors(
 
         if trace is not None:
             trace.attempts.append(PipelineAttempt(attempt=attempt_num, raw_output=raw))
-        return ExtractionResult(priors, filtered_material_count)
+        return ExtractionResult(priors, filtered_material_count, review_priors)
 
     raise ExtractionError(f"failed after {MAX_RETRIES} attempts: {last_error}")
