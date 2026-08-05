@@ -176,6 +176,24 @@ def test_extract_numbers_scaling_relationship_has_no_numbers():
     assert extract_numbers(prior) == []
 
 
+def test_extract_numbers_scaling_relationship_functional_form_and_validity_range_are_scanned():
+    prior = Prior(
+        prior_id="pr_5b",
+        kind="scaling_relationship",
+        related_fields=["leg_length", "cop"],
+        value=ScalingRelationshipValue(
+            x="leg_length",
+            y="cop",
+            direction="convex",
+            functional_form="COP peaks near L = 2.0 mm",
+            validity_range="valid for L > 0.5 mm",
+        ),
+        confidence=0.6,
+        sources=SOURCES,
+    )
+    assert sorted(extract_numbers(prior)) == [0.5, 2.0]
+
+
 def test_extract_numbers_candidate_config_parameters_and_performance():
     prior = Prior(
         prior_id="pr_6",

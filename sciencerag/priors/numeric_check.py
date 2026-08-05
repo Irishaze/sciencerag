@@ -97,8 +97,10 @@ def extract_numbers(prior: Prior) -> list[float]:
     """Every number `prior` actually asserts, per its kind:
       - parameter_range: min/max/typical + any numeric `conditions` values
       - material_property: magnitude + any numeric `conditions` values
-      - scaling_relationship: none (x/y/direction/functional_form/
-        validity_range are all names/labels/prose, not asserted numbers)
+      - scaling_relationship: x/y/direction are names/labels, not numbers,
+        but `functional_form`/`validity_range` are free text and can smuggle
+        in a fabricated equation or bound (e.g. "valid for L > 5 mm") same as
+        caution's prose fields below — scanned the same way.
       - candidate_config: numeric `parameters` + `reported_performance` values
       - caution: `statement`/`applicability_scope` ARE prose, but prose can
         still smuggle in a specific fabricated number (e.g. a `statement`
@@ -125,7 +127,10 @@ def extract_numbers(prior: Prior) -> list[float]:
             numbers.append(value.magnitude)
         numbers.extend(_numeric_dict_values(value.conditions))
     elif isinstance(value, ScalingRelationshipValue):
-        pass
+        if value.functional_form:
+            numbers.extend(extract_numbers_from_text(value.functional_form))
+        if value.validity_range:
+            numbers.extend(extract_numbers_from_text(value.validity_range))
     elif isinstance(value, CandidateConfigValue):
         numbers.extend(_numeric_dict_values(value.parameters))
         numbers.extend(_numeric_dict_values(value.reported_performance))
