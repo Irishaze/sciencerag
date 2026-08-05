@@ -1,0 +1,134 @@
+{
+  "method": "greedy_maximin_from_scrambled_sobol_pool",
+  "seed": 20260716,
+  "candidate_pool_size": 32770,
+  "feasible_candidate_count": 22109,
+  "selected_sample_count": 50,
+  "core_sample_ids": [
+    100,
+    139
+  ],
+  "extension_sample_ids": [
+    140,
+    149
+  ],
+  "parameter_names": [
+    "length_mm",
+    "width_mm",
+    "height_mm",
+    "d_conductor_um",
+    "d_ceramics_mm",
+    "leg_length_mm",
+    "leg_width_mm",
+    "pitch_mm",
+    "Tref_K"
+  ],
+  "parameter_bounds": {
+    "length_mm": {
+      "min": 2.0,
+      "max": 7.0
+    },
+    "width_mm": {
+      "min": 1.5,
+      "max": 5.0
+    },
+    "height_mm": {
+      "min": 1.25,
+      "max": 3.75
+    },
+    "d_conductor_um": {
+      "min": 50.0,
+      "max": 150.0
+    },
+    "d_ceramics_mm": {
+      "min": 0.1,
+      "max": 0.45
+    },
+    "leg_length_mm": {
+      "min": 0.5,
+      "max": 1.2
+    },
+    "leg_width_mm": {
+      "min": 0.6,
+      "max": 1.2
+    },
+    "pitch_mm": {
+      "min": 0.25,
+      "max": 0.75
+    },
+    "Tref_K": {
+      "min": 300.0,
+      "max": 350.0
+    }
+  },
+  "selected_parameter_ranges": {
+    "length_mm": {
+      "min": 2.0388,
+      "max": 7.0
+    },
+    "width_mm": {
+      "min": 1.5189,
+      "max": 5.0
+    },
+    "height_mm": {
+      "min": 1.2536,
+      "max": 3.7497
+    },
+    "d_conductor_um": {
+      "min": 50.52,
+      "max": 148.36
+    },
+    "d_ceramics_mm": {
+      "min": 0.1001,
+      "max": 0.4488
+    },
+    "leg_length_mm": {
+      "min": 0.5,
+      "max": 1.1949
+    },
+    "leg_width_mm": {
+      "min": 0.6,
+      "max": 1.1998
+    },
+    "pitch_mm": {
+      "min": 0.25,
+      "max": 0.7497
+    },
+    "Tref_K": {
+      "min": 300.04,
+      "max": 349.65
+    }
+  },
+  "constraints": {
+    "minimum_leg_height_mm": 0.2,
+    "n_pairs": [
+      1,
+      20
+    ],
+    "dT0_K": "50 (the current UI batch runner ignores this column)",
+    "required_n_pair_coverage": {
+      "5": 2,
+      "8": 2,
+      "12": 2,
+      "16": 2,
+      "20": 2
+    }
+  },
+  "expected_n_pairs_distribution": {
+    "1": 11,
+    "2": 17,
+    "3": 4,
+    "4": 7,
+    "5": 2,
+    "6": 1,
+    "8": 2,
+    "12": 2,
+    "16": 2,
+    "20": 2
+  },
+  "normalized_distance": {
+    "minimum_selected_to_existing": 0.7224622851015162,
+    "median_selected_to_existing": 1.0036074185883952,
+    "minimum_between_selected": 0.5688430244243853
+  }
+}

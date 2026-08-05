@@ -1,0 +1,160 @@
+{
+  "training_kind": "real_COMSOL_single_geometry_current_interpolation",
+  "source_data": "D:\\world model\\tec_surrogate\\data\\component_cases\\tec_1pair_dset3.npz",
+  "steps": 600,
+  "elapsed_seconds": 26.184406699991086,
+  "seconds_per_step": 0.04364067783331848,
+  "parameter_count": 111042,
+  "train_indices": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    10
+  ],
+  "holdout_indices": [
+    4,
+    9
+  ],
+  "train_metrics": {
+    "temperature_rmse_K": 5.805116176605225,
+    "potential_rmse_V": 0.04588872939348221,
+    "by_solution": [
+      {
+        "current": 0.10000000149011612,
+        "temperature_rmse_K": 10.518611907958984,
+        "potential_rmse_V": 0.012723594903945923
+      },
+      {
+        "current": 0.20000000298023224,
+        "temperature_rmse_K": 6.65352725982666,
+        "potential_rmse_V": 0.01716272346675396
+      },
+      {
+        "current": 0.30000001192092896,
+        "temperature_rmse_K": 4.218522548675537,
+        "potential_rmse_V": 0.02469373494386673
+      },
+      {
+        "current": 0.4000000059604645,
+        "temperature_rmse_K": 2.9071311950683594,
+        "potential_rmse_V": 0.03144553303718567
+      },
+      {
+        "current": 0.6000000238418579,
+        "temperature_rmse_K": 3.4192349910736084,
+        "potential_rmse_V": 0.04404592886567116
+      },
+      {
+        "current": 0.699999988079071,
+        "temperature_rmse_K": 4.21948766708374,
+        "potential_rmse_V": 0.050148751586675644
+      },
+      {
+        "current": 0.800000011920929,
+        "temperature_rmse_K": 4.888659954071045,
+        "potential_rmse_V": 0.056004028767347336
+      },
+      {
+        "current": 0.8999999761581421,
+        "temperature_rmse_K": 5.38917875289917,
+        "potential_rmse_V": 0.0616532601416111
+      },
+      {
+        "current": 1.100000023841858,
+        "temperature_rmse_K": 6.300708293914795,
+        "potential_rmse_V": 0.07419172674417496
+      }
+    ]
+  },
+  "holdout_metrics": {
+    "temperature_rmse_K": 4.551799774169922,
+    "potential_rmse_V": 0.05467529594898224,
+    "by_solution": [
+      {
+        "current": 0.5,
+        "temperature_rmse_K": 2.769606590270996,
+        "potential_rmse_V": 0.03780120983719826
+      },
+      {
+        "current": 1.0,
+        "temperature_rmse_K": 5.810941696166992,
+        "potential_rmse_V": 0.06745254248380661
+      }
+    ]
+  },
+  "history": [
+    {
+      "step": 1,
+      "loss": 21.11522674560547,
+      "data_loss": 20.03620719909668,
+      "interface_loss": 10790.19140625
+    },
+    {
+      "step": 60,
+      "loss": 1.2580755949020386,
+      "data_loss": 1.2580755949020386,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 120,
+      "loss": 0.08682683855295181,
+      "data_loss": 0.08682683855295181,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 180,
+      "loss": 0.04723768308758736,
+      "data_loss": 0.04723768308758736,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 240,
+      "loss": 0.025887133553624153,
+      "data_loss": 0.025887133553624153,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 300,
+      "loss": 0.010390101931989193,
+      "data_loss": 0.010390101931989193,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 360,
+      "loss": 0.008569305762648582,
+      "data_loss": 0.008569305762648582,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 420,
+      "loss": 0.008543908596038818,
+      "data_loss": 0.008543908596038818,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 480,
+      "loss": 0.008007551543414593,
+      "data_loss": 0.008007551543414593,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 540,
+      "loss": 0.007651426829397678,
+      "data_loss": 0.007651426829397678,
+      "interface_loss": 0.0
+    },
+    {
+      "step": 600,
+      "loss": 0.007990540936589241,
+      "data_loss": 0.007990540936589241,
+      "interface_loss": 0.0
+    }
+  ],
+  "interface_weight": 0.0001,
+  "note": "This split tests unseen currents for one geometry. New geometry and variable PN counts require multi-geometry exports."
+}

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEC 潜空间替代模型</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; }
+.header { background: linear-gradient(135deg, #1e3a5f, #0f172a); padding: 16px 24px; border-bottom: 1px solid #334155; }
+.header h1 { font-size: 1.3em; }
+.header span { color: #94a3b8; font-size: 0.8em; }
+.container { display: flex; gap: 16px; padding: 16px 24px; max-width: 1300px; margin: 0 auto; }
+.panel { background: #1e293b; border-radius: 10px; padding: 16px; border: 1px solid #334155; }
+.panel h2 { font-size: 0.85em; margin-bottom: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+.inputs { flex: 1; min-width: 340px; max-width: 400px; }
+.outputs { flex: 2; }
+.slider-group { margin-bottom: 8px; }
+.slider-group label { display: flex; justify-content: space-between; font-size: 0.78em; margin-bottom: 2px; }
+.slider-group label .name { color: #cbd5e1; }
+.slider-group label .val { color: #38bdf8; font-weight: 600; }
+.slider-group input[type=range] { width: 100%; accent-color: #38bdf8; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.metric { background: #0f172a; border-radius: 6px; padding: 10px; text-align: center; border: 1px solid #334155; }
+.metric .value { font-size: 1.3em; font-weight: 700; }
+.metric .label { font-size: 0.7em; color: #94a3b8; margin-top: 2px; }
+.metric .unit { font-size: 0.65em; color: #64748b; }
+.latent-row { display: flex; gap: 8px; margin-top: 12px; }
+.latent-bar-group { flex: 1; text-align: center; }
+.latent-bar-group .bar { height: 40px; border-radius: 3px 3px 0 0; transition: height 0.3s; margin: 0 auto; width: 24px; }
+.latent-bar-group .lbl { font-size: 0.6em; color: #94a3b8; margin-top: 4px; }
+.loading { opacity: 0.5; pointer-events: none; }
+.error { color: #f87171; font-size: 0.75em; margin-top: 4px; }
+.status { font-size: 0.7em; color: #64748b; text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>TEC 潜空间替代模型</h1>
+  <span>PCA+SVR | 29 样本 | 潜维度 5 (99.5% 方差) | 实时 API 预测</span>
+</div>
+<div class="container">
+  <div class="panel inputs" id="inputs-panel"><h2>设计参数</h2></div>
+  <div class="panel outputs">
+    <h2>预测性能</h2>
+    <div class="metrics" id="metrics"></div>
+    <h2 style="margin-top:8px">潜空间</h2>
+    <div class="latent-row" id="latent-row"></div>
+    <div class="error" id="error-msg"></div>
+    <div class="status" id="status">就绪 - 拖动左侧滑块实时预测</div>
+  </div>
+</div>
+<script>
+const INPUT_NAMES = ['Length (mm)', 'Width (mm)', 'Height (mm)', 'Conductor (μm)', 'Ceramic (mm)', 'Leg Len (mm)', 'Leg Wid (mm)', 'Pitch (mm)', 'N pairs', 'Tref (K)'];
+const DEFAULTS = [4.0, 3.0, 2.5, 100, 0.3, 1.0, 1.2, 0.5, 1, 323.15];
+const STEPS =   [0.1, 0.1, 0.1, 5, 0.05, 0.1, 0.1, 0.05, 1, 5];
+const MINS =    [2.0, 1.5, 1.25, 50, 0.15, 0.5, 0.6, 0.25, 1, 300];
+const MAXS =    [7.0, 5.0, 3.75, 150, 0.45, 1.5, 1.8, 0.75, 6, 350];
+const METRIC_LABELS = ['ΔTmax', 'Iopt', 'Vopt', 'R', 'Qmax', 'ZT'];
+const METRIC_UNITS = ['K', 'A', 'V', 'Ω', 'W', '1/K'];
+const COLORS = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6', '#fb923c'];
+
+let inputs = [...DEFAULTS];
+let timer = null;
+
+function debounce(fn, ms) {
+  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+
+async function fetchPredict() {
+  document.getElementById('error-msg').textContent = '';
+  document.getElementById('status').textContent = '计算中...';
+  try {
+    const resp = await fetch('/api/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({inputs})
+    });
+    if (!resp.ok) throw new Error((await resp.json()).error || 'API error');
+    const data = await resp.json();
+    updateDisplay(data);
+    document.getElementById('status').textContent = '就绪';
+  } catch(e) {
+    document.getElementById('error-msg').textContent = '预测失败: ' + e.message;
+    document.getElementById('status').textContent = '错误';
+  }
+}
+
+const predict = debounce(fetchPredict, 150);
+
+function updateDisplay(data) {
+  // Update metric cards
+  const metricKeys = ['delta_T_max_K', 'optimal_current_A', 'optimal_voltage_V', 'total_resistance_ohm', 'max_heat_dissipation_W', 'figure_of_merit_1_per_K'];
+  const metrics = document.querySelectorAll('.metric .value');
+  metricKeys.forEach((key, i) => {
+    if (metrics[i] && data[key] !== undefined) {
+      const v = data[key];
+      metrics[i].textContent = i === 0 ? v.toFixed(1) : v.toFixed(4);
+      metrics[i].style.color = COLORS[i];
+    }
+  });
+
+  // Update latent bars
+  const bars = document.querySelectorAll('.latent-bar-group .bar');
+  const latent = data.latent || [];
+  const maxAbs = Math.max(...latent.map(Math.abs), 0.001);
+  bars.forEach((bar, i) => {
+    if (i < latent.length) {
+      const h = Math.abs(latent[i]) / maxAbs * 100;
+      bar.style.height = Math.max(4, h) + '%';
+      bar.style.background = latent[i] >= 0 ? '#38bdf8' : '#f97316';
+    }
+  });
+}
+
+// Build UI
+const panel = document.getElementById('inputs-panel');
+INPUT_NAMES.forEach((name, i) => {
+  const div = document.createElement('div');
+  div.className = 'slider-group';
+  div.innerHTML = `<label><span class="name">${name}</span><span><span class="val">${DEFAULTS[i]}</span></span></label>
+    <input type="range" min="${MINS[i]}" max="${MAXS[i]}" step="${STEPS[i]}" value="${DEFAULTS[i]}">`;
+  div.querySelector('input').addEventListener('input', e => {
+    inputs[i] = parseFloat(e.target.value);
+    e.target.parentElement.querySelector('.val').textContent = inputs[i].toFixed(i === 8 ? 0 : 2);
+    predict();
+  });
+  panel.appendChild(div);
+});
+
+// Build metric cards
+const grid = document.getElementById('metrics');
+METRIC_LABELS.forEach((label, i) => {
+  const div = document.createElement('div');
+  div.className = 'metric';
+  div.innerHTML = `<div class="value">--</div><div class="label">${label}</div><div class="unit">${METRIC_UNITS[i]}</div>`;
+  grid.appendChild(div);
+});
+
+// Build latent bars
+const lrow = document.getElementById('latent-row');
+for (let i = 0; i < 5; i++) {
+  const g = document.createElement('div');
+  g.className = 'latent-bar-group';
+  g.innerHTML = `<div class="bar" style="height:4%;background:#38bdf8"></div><div class="lbl">PC${i+1}</div>`;
+  lrow.appendChild(g);
+}
+
+// Initial prediction
+predict();
+</script>
+</body>
+</html>

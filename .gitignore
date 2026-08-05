@@ -31,3 +31,12 @@ data/
 
 # OS
 .DS_Store
+
+# tec_surrogate: the raw COMSOL desktop model files are 120MB each — over
+# GitHub's 100MB hard per-file limit, and not needed by the deployed
+# service (only tec_surrogate/scripts/12_export_comsol_component_case.py,
+# an offline COMSOL-desktop-dependent export script, touches them). The
+# trained artifacts the app actually loads at runtime
+# (data/models/*.joblib, data/processed/, data/component_cases/,
+# outputs/*.pt) are well under the limit and stay tracked.
+tec_surrogate/models/*.mph

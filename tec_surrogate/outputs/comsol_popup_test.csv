@@ -1,0 +1,2 @@
+sample_id,length_mm,width_mm,height_mm,leg_length_mm,leg_width_mm,pitch_mm,d_conductor_um,d_ceramics_mm,Tref_K
+999,1,1,2.5,1.2,1.2,0.75,100,0.3,323.15

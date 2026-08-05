@@ -1,0 +1,230 @@
+{
+  "source_file_count": 32,
+  "unique_sample_count": 31,
+  "duplicate_files": [
+    {
+      "file": "thermoelectric_cooler.docx",
+      "duplicate_of": "sample_31.docx"
+    }
+  ],
+  "input_count": 10,
+  "output_count": 30,
+  "scalar_output_count": 6,
+  "cop_grid_shape": [
+    3,
+    8
+  ],
+  "variance_threshold": 0.99,
+  "latent_dim": 5,
+  "retained_variance": 0.9948280321888832,
+  "explained_variance_ratio": [
+    0.7309992640677172,
+    0.14347759180802813,
+    0.06828142346025128,
+    0.04554621645356782,
+    0.006523536399318792,
+    0.004204261239936658,
+    0.0009437832772751134,
+    2.1583533005630832e-05,
+    1.9453275983474383e-06,
+    3.769661955670969e-07,
+    1.0547236673306937e-08,
+    4.1764234947383635e-09,
+    1.6732967983390571e-09,
+    4.964656352522614e-10,
+    2.861390638322462e-10,
+    1.3249392872595244e-10,
+    5.2611292036693004e-11,
+    2.691147918620789e-11,
+    2.5177565482046592e-11,
+    1.5254217540711982e-11,
+    1.2516114741182147e-11,
+    1.001242833384762e-11,
+    6.782350188158531e-12,
+    2.9446328301762145e-12,
+    1.6215481746494655e-12,
+    1.0171827762251344e-12,
+    1.3886887151030468e-13,
+    4.197922954968441e-14,
+    1.8336691022405502e-14,
+    1.6735949404731502e-15
+  ],
+  "regressor_selection": [
+    {
+      "name": "ridge_alpha_1",
+      "kind": "ridge",
+      "alpha": 1.0,
+      "normalized_rmse": 1.6187693762266924
+    },
+    {
+      "name": "ridge_alpha_10",
+      "kind": "ridge",
+      "alpha": 10.0,
+      "normalized_rmse": 1.5293705793565096
+    },
+    {
+      "name": "ridge_alpha_100",
+      "kind": "ridge",
+      "alpha": 100.0,
+      "normalized_rmse": 1.6200624278691937
+    },
+    {
+      "name": "rbf_svr_C10_gamma_0.01",
+      "kind": "rbf_svr",
+      "C": 10.0,
+      "gamma": 0.01,
+      "epsilon": 0.05,
+      "normalized_rmse": 1.3400794012580508
+    },
+    {
+      "name": "rbf_svr_C10_gamma_0.03",
+      "kind": "rbf_svr",
+      "C": 10.0,
+      "gamma": 0.03,
+      "epsilon": 0.05,
+      "normalized_rmse": 1.360370792655092
+    },
+    {
+      "name": "rbf_svr_C100_gamma_0.01",
+      "kind": "rbf_svr",
+      "C": 100.0,
+      "gamma": 0.01,
+      "epsilon": 0.05,
+      "normalized_rmse": 1.3234251847948302
+    }
+  ],
+  "selected_regressor": {
+    "name": "rbf_svr_C100_gamma_0.01",
+    "kind": "rbf_svr",
+    "C": 100.0,
+    "gamma": 0.01,
+    "epsilon": 0.05
+  },
+  "diagnostic_flags": [
+    {
+      "file": "sample_15.docx",
+      "flag": "possible_10A_current_search_boundary",
+      "optimal_current_A": 10.0
+    }
+  ],
+  "cross_validation": {
+    "scalars": {
+      "delta_T_max_K": {
+        "mae": 0.8577560659799796,
+        "rmse": 1.8123445018949658,
+        "r2": 0.8749687616084133
+      },
+      "optimal_current_A": {
+        "mae": 0.8818895826645622,
+        "rmse": 1.141537726573248,
+        "r2": 0.8082896578353573
+      },
+      "optimal_voltage_V": {
+        "mae": 0.03247189976290476,
+        "rmse": 0.04209333673181303,
+        "r2": 0.9463110523753157
+      },
+      "total_resistance_ohm": {
+        "mae": 0.07566019657696946,
+        "rmse": 0.11619073748059668,
+        "r2": 0.7750551011440207
+      },
+      "max_heat_dissipation_W": {
+        "mae": 0.17079022420054124,
+        "rmse": 0.22553796565188453,
+        "r2": 0.6706023352640518
+      },
+      "figure_of_merit_1_per_K": {
+        "mae": 1.1706893353148673e-05,
+        "rmse": 1.5392989223651823e-05,
+        "r2": 0.8465933011039383
+      }
+    },
+    "cop": {
+      "mae": 0.17938827678984343,
+      "rmse": 0.8151735682468664,
+      "r2_variance_weighted": 0.18354680164573553
+    }
+  },
+  "training_fit": {
+    "scalars": {
+      "delta_T_max_K": {
+        "mae": 0.47379250336292106,
+        "rmse": 2.031423658159032,
+        "r2": 0.8429137994799902
+      },
+      "optimal_current_A": {
+        "mae": 0.37373982019816526,
+        "rmse": 1.034798991288217,
+        "r2": 0.84246502162425
+      },
+      "optimal_voltage_V": {
+        "mae": 0.01834194443691339,
+        "rmse": 0.03427830150455796,
+        "r2": 0.9643961655489426
+      },
+      "total_resistance_ohm": {
+        "mae": 0.023201146310964073,
+        "rmse": 0.04038669011862662,
+        "r2": 0.9728224904672985
+      },
+      "max_heat_dissipation_W": {
+        "mae": 0.05315086219708261,
+        "rmse": 0.09303164644499734,
+        "r2": 0.9439542593986218
+      },
+      "figure_of_merit_1_per_K": {
+        "mae": 1.0769834459758973e-05,
+        "rmse": 1.2731427768754254e-05,
+        "r2": 0.8950572079032225
+      }
+    },
+    "cop": {
+      "mae": 0.0861158821326111,
+      "rmse": 0.6317535595771839,
+      "r2_variance_weighted": 0.5096270436980953
+    }
+  },
+  "input_ranges": {
+    "length_mm": {
+      "min": 3.1482,
+      "max": 6.7875
+    },
+    "width_mm": {
+      "min": 1.7546,
+      "max": 5.0
+    },
+    "height_mm": {
+      "min": 1.3246,
+      "max": 3.7406
+    },
+    "d_conductor_um": {
+      "min": 50.35,
+      "max": 147.63
+    },
+    "d_ceramics_mm": {
+      "min": 0.1,
+      "max": 0.4443
+    },
+    "leg_length_mm": {
+      "min": 0.5,
+      "max": 1.4637
+    },
+    "leg_width_mm": {
+      "min": 0.5,
+      "max": 1.7419
+    },
+    "pitch_mm": {
+      "min": 0.263,
+      "max": 0.75
+    },
+    "n_pairs": {
+      "min": 1.0,
+      "max": 6.0
+    },
+    "Tref_K": {
+      "min": 300.97,
+      "max": 348.59
+    }
+  }
+}

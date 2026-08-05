@@ -1,0 +1,218 @@
+{
+  "model": "D:\\world model\\tec_surrogate\\models\\tec_1pair.mph",
+  "results": {
+    "temperature_operators": [
+      {
+        "expression": "aveop1(T)",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=323.2, max=323.2, mean=323.2",
+        "error": null
+      },
+      {
+        "expression": "aveop2(T)",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=250, max=250, mean=250",
+        "error": null
+      },
+      {
+        "expression": "aveop1(T)-aveop2(T)",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=73.17, max=73.17, mean=73.17",
+        "error": null
+      }
+    ],
+    "circuit_terminals": [
+      {
+        "expression": "ec.V0_5",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "ec.I0_5",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "ec.V0_1",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=1.402, max=1.402, mean=1.402",
+        "error": null
+      },
+      {
+        "expression": "ec.I0_1",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=2.985, max=2.985, mean=2.985",
+        "error": null
+      },
+      {
+        "expression": "ec.V0_2",
+        "success": true,
+        "dataset": "研究 3：温差 vs. 电流//解 3",
+        "preview": "shape=(11,), min=0.1831, max=1.509, mean=0.8973",
+        "error": null
+      },
+      {
+        "expression": "ec.I0_2",
+        "success": true,
+        "dataset": "研究 3：温差 vs. 电流//解 3",
+        "preview": "shape=(11,), min=0.2985, max=3.283, mean=1.791",
+        "error": null
+      },
+      {
+        "expression": "ec.V0_3",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "ec.I0_3",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "ec.V0",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "ec.I0",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      }
+    ],
+    "heat_flux": [
+      {
+        "expression": "ht.ntefluxInt",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=4.186, max=4.186, mean=4.186",
+        "error": null
+      },
+      {
+        "expression": "ht.ntefluxMag",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "ht.q0",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      }
+    ],
+    "electric_field": [
+      {
+        "expression": "ec.normE",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(471840,), min=3.089e-06, max=51.38, mean=26.04",
+        "error": null
+      },
+      {
+        "expression": "ec.normJ",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(471840,), min=185.3, max=3.044e+07, mean=7.446e+06",
+        "error": null
+      },
+      {
+        "expression": "ec.Ex",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(463938,), min=-0.5073, max=0.5073, mean=2.743e-06",
+        "error": null
+      },
+      {
+        "expression": "ec.Ey",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(463631,), min=-0.0008028, max=0.424, mean=0.02193",
+        "error": null
+      },
+      {
+        "expression": "ec.Ez",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(471840,), min=-51.38, max=51.38, mean=3.641e-07",
+        "error": null
+      }
+    ],
+    "global_variables": [
+      {
+        "expression": "Iset",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "Vset",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "Ufan",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "tauI",
+        "success": false,
+        "dataset": null,
+        "preview": null,
+        "error": "Dataset \"研究 4：制冷系数//解 4\" does not exist."
+      },
+      {
+        "expression": "N",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=10, max=10, mean=10",
+        "error": null
+      },
+      {
+        "expression": "Tref",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=323.1, max=323.1, mean=323.1",
+        "error": null
+      },
+      {
+        "expression": "dT0",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=50, max=50, mean=50",
+        "error": null
+      },
+      {
+        "expression": "I0",
+        "success": true,
+        "dataset": null,
+        "preview": "shape=(1,), min=1, max=1, mean=1",
+        "error": null
+      }
+    ]
+  }
+}

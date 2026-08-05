@@ -1,0 +1,274 @@
+{
+  "training_kind": "one_pair_COMSOL_compositional_topology_model",
+  "source_data": "D:\\world model\\tec_surrogate\\data\\component_cases\\tec_1pair_dset3.npz",
+  "supported_pair_counts": [
+    1,
+    20
+  ],
+  "train_pair_counts": [
+    1,
+    2,
+    4,
+    5,
+    6,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    16,
+    17,
+    18,
+    20
+  ],
+  "holdout_pair_counts": [
+    3,
+    7,
+    13,
+    19
+  ],
+  "train_solution_indices": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8,
+    10
+  ],
+  "holdout_solution_indices": [
+    4,
+    9
+  ],
+  "steps": 1200,
+  "elapsed_seconds": 67.33374499998172,
+  "seconds_per_step": 0.056111454166651434,
+  "parameter_count": 144890,
+  "history": [
+    {
+      "step": 1,
+      "loss": 0.14193163812160492
+    },
+    {
+      "step": 100,
+      "loss": 0.03354382887482643
+    },
+    {
+      "step": 200,
+      "loss": 0.02305120788514614
+    },
+    {
+      "step": 300,
+      "loss": 0.020671142265200615
+    },
+    {
+      "step": 400,
+      "loss": 0.009017215110361576
+    },
+    {
+      "step": 500,
+      "loss": 0.0031667309813201427
+    },
+    {
+      "step": 600,
+      "loss": 0.002944291802123189
+    },
+    {
+      "step": 700,
+      "loss": 0.0056912656873464584
+    },
+    {
+      "step": 800,
+      "loss": 0.002239706227555871
+    },
+    {
+      "step": 900,
+      "loss": 0.0035579893738031387
+    },
+    {
+      "step": 1000,
+      "loss": 0.0012567021185532212
+    },
+    {
+      "step": 1100,
+      "loss": 0.0021187872625887394
+    },
+    {
+      "step": 1200,
+      "loss": 0.0009114559506997466
+    }
+  ],
+  "validation": {
+    "unseen_current": {
+      "temperature_rmse_K": 2.421706199645996,
+      "potential_rmse_V": 0.3342990577220917,
+      "cases": [
+        {
+          "n_pairs": 2,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.6701246500015259,
+          "potential_rmse_V": 0.26102498173713684
+        },
+        {
+          "n_pairs": 2,
+          "current_A": 1.0,
+          "temperature_rmse_K": 2.9846560955047607,
+          "potential_rmse_V": 0.44571101665496826
+        },
+        {
+          "n_pairs": 8,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.076934576034546,
+          "potential_rmse_V": 0.1283692717552185
+        },
+        {
+          "n_pairs": 8,
+          "current_A": 1.0,
+          "temperature_rmse_K": 3.1515157222747803,
+          "potential_rmse_V": 0.17902567982673645
+        },
+        {
+          "n_pairs": 14,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.0619693994522095,
+          "potential_rmse_V": 0.16291958093643188
+        },
+        {
+          "n_pairs": 14,
+          "current_A": 1.0,
+          "temperature_rmse_K": 3.259577751159668,
+          "potential_rmse_V": 0.3102271258831024
+        },
+        {
+          "n_pairs": 20,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.253804326057434,
+          "potential_rmse_V": 0.2904967665672302
+        },
+        {
+          "n_pairs": 20,
+          "current_A": 1.0,
+          "temperature_rmse_K": 3.226001262664795,
+          "potential_rmse_V": 0.5246886014938354
+        }
+      ]
+    },
+    "unseen_pair_count": {
+      "temperature_rmse_K": 1.7773520946502686,
+      "potential_rmse_V": 0.23659995198249817,
+      "cases": [
+        {
+          "n_pairs": 3,
+          "current_A": 0.30000001192092896,
+          "temperature_rmse_K": 1.210116982460022,
+          "potential_rmse_V": 0.12477128207683563
+        },
+        {
+          "n_pairs": 3,
+          "current_A": 0.800000011920929,
+          "temperature_rmse_K": 2.0706470012664795,
+          "potential_rmse_V": 0.25091010332107544
+        },
+        {
+          "n_pairs": 7,
+          "current_A": 0.30000001192092896,
+          "temperature_rmse_K": 1.117378830909729,
+          "potential_rmse_V": 0.1017318069934845
+        },
+        {
+          "n_pairs": 7,
+          "current_A": 0.800000011920929,
+          "temperature_rmse_K": 2.250863790512085,
+          "potential_rmse_V": 0.16588802635669708
+        },
+        {
+          "n_pairs": 13,
+          "current_A": 0.30000001192092896,
+          "temperature_rmse_K": 1.0901480913162231,
+          "potential_rmse_V": 0.13116388022899628
+        },
+        {
+          "n_pairs": 13,
+          "current_A": 0.800000011920929,
+          "temperature_rmse_K": 2.2981557846069336,
+          "potential_rmse_V": 0.3070889711380005
+        },
+        {
+          "n_pairs": 19,
+          "current_A": 0.30000001192092896,
+          "temperature_rmse_K": 1.040542721748352,
+          "potential_rmse_V": 0.1450193077325821
+        },
+        {
+          "n_pairs": 19,
+          "current_A": 0.800000011920929,
+          "temperature_rmse_K": 2.2870521545410156,
+          "potential_rmse_V": 0.35187116265296936
+        }
+      ]
+    },
+    "unseen_pair_and_current": {
+      "temperature_rmse_K": 2.408658504486084,
+      "potential_rmse_V": 0.30758729577064514,
+      "cases": [
+        {
+          "n_pairs": 3,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.2517932653427124,
+          "potential_rmse_V": 0.16468936204910278
+        },
+        {
+          "n_pairs": 3,
+          "current_A": 1.0,
+          "temperature_rmse_K": 2.9271044731140137,
+          "potential_rmse_V": 0.32902655005455017
+        },
+        {
+          "n_pairs": 7,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.1330318450927734,
+          "potential_rmse_V": 0.1370764821767807
+        },
+        {
+          "n_pairs": 7,
+          "current_A": 1.0,
+          "temperature_rmse_K": 3.157642126083374,
+          "potential_rmse_V": 0.18410979211330414
+        },
+        {
+          "n_pairs": 13,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.066917896270752,
+          "potential_rmse_V": 0.20323273539543152
+        },
+        {
+          "n_pairs": 13,
+          "current_A": 1.0,
+          "temperature_rmse_K": 3.275413990020752,
+          "potential_rmse_V": 0.3706868588924408
+        },
+        {
+          "n_pairs": 19,
+          "current_A": 0.5,
+          "temperature_rmse_K": 1.1772534847259521,
+          "potential_rmse_V": 0.23317629098892212
+        },
+        {
+          "n_pairs": 19,
+          "current_A": 1.0,
+          "temperature_rmse_K": 3.228902816772461,
+          "potential_rmse_V": 0.44815266132354736
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Only the one-pair local fields are directly calibrated by COMSOL.",
+    "Multi-pair targets assume repeated cells and series-voltage composition.",
+    "New multi-pair COMSOL exports are required for engineering accuracy claims."
+  ]
+}
