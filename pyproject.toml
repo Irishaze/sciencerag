@@ -14,6 +14,19 @@ dependencies = [
     "fhlmi==0.33.1",
     "python-dotenv",
     "sentence-transformers",
+    "httpx",
+    # sciencerag/validate/tec_bridge.py loads tec_surrogate's trained
+    # artifacts (comsol_latent_surrogate.joblib, the component-graph
+    # checkpoints) at import time — numpy/torch/joblib are used directly,
+    # scikit-learn is needed transitively to unpickle the sklearn objects
+    # (Ridge/SVR/PCA/StandardScaler) baked into that joblib file. Version
+    # floors match tec_surrogate/requirements.txt and
+    # requirements-physics-foundation.txt so both projects stay compatible
+    # with the same installed versions.
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "joblib>=1.3",
+    "torch>=2.2",
 ]
 
 [dependency-groups]
@@ -28,3 +41,17 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sciencerag"]
+
+# tec_bridge.py only ever runs torch on CPU (inference-time forward passes
+# on small component graphs, no training, no GPU in any realistic
+# deployment target) — the default PyPI torch wheel drags in several GB of
+# NVIDIA CUDA runtime packages nothing here uses. Pointing at PyTorch's
+# CPU-only index avoids that entirely (smaller image, faster/more reliable
+# installs).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

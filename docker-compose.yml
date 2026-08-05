@@ -1,0 +1,23 @@
+services:
+  sciencerag:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Same variables as .env.example (spec §9 OQ#2). Put real values in
+      # a .env file next to this compose file — compose reads it
+      # automatically and it stays gitignored like the app's own .env.
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
+      SCIENCERAG_LLM_MODEL: "${SCIENCERAG_LLM_MODEL:-deepseek/deepseek-chat}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      SCIENCERAG_EMBEDDING_MODEL: "${SCIENCERAG_EMBEDDING_MODEL:-text-embedding-3-small}"
+    volumes:
+      # Runtime-generated state (reports, the KG graph, audit logs, the
+      # PaperQA2 retrieval index) persists across container restarts
+      # instead of living only inside the ephemeral container filesystem.
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - pqa_index:/app/.pqa_index
+
+volumes:
+  pqa_index:

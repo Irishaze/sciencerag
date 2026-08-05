@@ -32,7 +32,7 @@ uv sync
 }
 ```
 
-- `allow_external`:**M1 内是显式 no-op**(spec §9 OQ#1)。传 `true` 不会真的查外部文献(Semantic Scholar/arXiv),只会在响应的 `coverage.gaps` 里加一条提示,说明外部检索要到 M6 才实现。这是刻意的范围控制,不是遗漏——原因和排期见 [docs/spec/sciencerag_spec_zh.md](docs/spec/sciencerag_spec_zh.md) §9、§10。
+- `allow_external`:**M1 阶段是显式 no-op,M6 起是真实功能**——传 `true` 且内部检索覆盖不足时,会真的查 Semantic Scholar(不含 arXiv)。细节见下文「M6」一节。
 
 ### 响应
 
@@ -49,8 +49,7 @@ uv sync
 
 ### 已知的范围边界(M1 阶段性设计,不是 bug)
 
-- **知识图谱优先分支是空实现**(`sciencerag/priors/kg.py`):spec 里 KG 查询优先级最高,但图谱要靠仿真运行积累,M1 阶段永远查询为空,自动落到文献检索,这是预期行为。
-- **`allow_external` 是 no-op**,见上文。
+- **知识图谱优先分支在 M1 阶段永远为空**(`sciencerag/priors/kg.py`):spec 里 KG 查询优先级最高,但图谱要靠仿真运行积累。M1 阶段图谱确实是空的,自动落到文献检索,是预期行为;M5 起图谱有了真实存储,见下文「M5」一节——只是从零开始积累,冷启动阶段依然经常是空的。
 - **延迟是软性护栏,不是硬限制**:目标 30 秒(spec §9),超时只记警告日志 + 审计日志里的 `elapsed_s`,不会让请求失败。
 
 ### 测试
@@ -62,6 +61,95 @@ make test-m1        # 完整:上面的 + 真实调用跑 tests/fixtures/priors_r
 
 回归 fixture 用属性断言(至少几条 prior、必须出现某些 kind、必须有真实 DOI 引用),不是精确文本匹配——LLM 抽取管线的措辞本来就不是逐字稳定的。改了提示词/检索参数/阈值/语料库之后必须重新跑一遍 `make test-m1`(spec §8)。少数几个语料库覆盖薄弱的 fixture 标了 `known_flaky`(根因是 PaperQA2 agent_llm 的检索路径运行间不稳定,试过加 `seed` 没能解决,详见 spec §8),这几条会自动跑 3 次取多数结果,不代表流水线本身不稳。
 
+## `sciencerag.validate` 契约(M2 + 基本版 M3)
+
+`POST /sciencerag/validate` —— 一次仿真跑完之后调用,做两件事:4.1 异常检查(结果在物理上可不可信)、4.2 结果评估(跟已知案例/文献先验对不对得上)。通过检查的结果才会往下走到 M3(4.3 微调建议、4.4 知识候选)。schema 见 [sciencerag/schemas/validate.schema.json](sciencerag/schemas/validate.schema.json)。
+
+### 4.1 异常检查(`sciencerag/validate/checks.py`)
+
+三项检查一起跑:
+
+| 检查项 | 测什么 | 覆盖范围 |
+|---|---|---|
+| `energy_balance` | 材料交界面(陶瓷-导体-热电臂)两侧的温度/电势/热流/电流是否守恒 | 仅 `n_pairs=1`——多对是拼接出来的虚拟结构,没有真实交界面数据可核对 |
+| `pde_residual` | 把预测场代回热电耦合偏微分方程,看残差多大 | `n_pairs` 1–20 都算,但 >1 会标注 `composed_topology_pending_multipair_comsol`(组合预测,未经验证) |
+| `ood` | 这次设计的 5 维潜空间坐标 z,离训练时见过的 31 个真实设计有多远(留一法马氏距离) | 需要请求里给 `latent_state`,不给就跳过(记 `info`,不算异常) |
+
+**severity 怎么判**:这两类检查用的是完全不同的判定方式,而且都不是绝对物理阈值——`energy_balance`/`pde_residual` 用相对量:这次残差除以 11 个已知真实解算案例里的最大值,>2 倍记 `warning`,>5 倍记 `blocking`;`ood` 用相对训练集自身分布的百分位:≥90% 记 `warning`,≥99% 记 `blocking`。**这些具体数字(2/5 倍、90/99 百分位)是工程占位符,没有真实数据校准过**,跟 M1 `MIN_EVIDENCE_RELEVANCE` 那种走过完整裁判校准流程的阈值不是一回事。
+
+任意一项 `blocking` → `update_package.blocked=true`,4.2/4.3/4.4 全部短路,不产出评估结论,也不产出微调建议或知识候选。
+
+### 4.2 结果评估(`sciencerag/validate/evaluation.py`)
+
+两条对照线合并成一个 `verdict`:
+
+- `benchmark_comparison`:跟 31 条已知 COMSOL 报告样本比——只有 `design_parameters` 跟某条样本 1% 容差内匹配,才直接比性能数字;对不上就诚实判 `insufficient_benchmark`,不瞎凑。样本库小,大多数新设计目前都会落到这一档。
+- `prior_comparison`:跟 M1 检索到的文献先验(`parameter_range` 类型)比,v1 只处理这一种 `kind`,单位不一致直接跳过(不猜换算)。
+
+`verdict` ∈ `consistent` / `deviation_found` / `insufficient_benchmark`。`deviation_found` 不代表谁错了——可能是文献范围本身有偏差、这次设计本来就要突破常规、或者仿真链路有问题,系统只负责把差异摆出来,交给人判断。
+
+### 4.3 微调建议 + 4.4 知识候选(`sciencerag/validate/finetune.py` / `kg_candidates.py`)
+
+前提:`update_package.blocked=false`。
+
+- **微调建议**:两类信号驱动——误差驱动(评估里被判 `deviation` 的条目)、不确定性驱动(warning 级异常)。两个信号都没有就返回 `None`,不硬凑建议。输出是给人审阅的建议(推荐训练样本、损失重加权方向、超参数调整方向),不会自动触发训练。
+- **知识候选**:只有 `verdict` 是 `consistent` 或 `insufficient_benchmark` 才抽取(`deviation_found` 的结果"交给人裁断",不当已确认知识)。每条候选的 `confidence` 按 `verdict` 给 0.7/0.4——**同样是启发式,未经校准**。`dedup_status` 靠查询知识图谱判断新/重复/冲突,图谱冷启动阶段基本恒为 `new`。
+
+### 测试
+
+```bash
+uv run pytest tests/test_validate_route.py tests/test_validate_schema.py tests/test_validate_regression.py tests/test_validate_m3.py -q
+```
+
+`tests/fixtures/validate_regression.json` 是按 spec §8 要求维护的回归集,覆盖"应该 blocking"和"不应误伤"两类案例(不需要真实 API 调用,跑得快)。
+
+## `sciencerag.report` 契约(M4)
+
+`POST /sciencerag/report` —— 验证完成后调用,把这次运行的设计参数、结果、M2 的完整输出(异常、评估、更新提案)、用到的先验,组装成一份带引用的报告。输出 JSON + 渲染好的 Markdown(没有 PDF 渲染器)。报告正文每一条定量论断都带行内引用(运行 ID 或文献 DOI)。
+
+报告按 `run_id + 生成时间` 存到 `data/reports/`(不进 git),供后续按运行血缘浏览:
+
+```
+GET /sciencerag/reports            # 列表
+GET /sciencerag/reports/{stem}     # 取一份
+```
+
+`key_results` 的 `confidence_label` 是定性的(`high` / `check_flagged` / `no_anomaly_data`),不是数值置信区间——tec_surrogate 没有校准过的误差模型可以画出真正的不确定度带,伪造一个数字比不给更误导人。
+
+## `sciencerag.ask` 契约(M5)
+
+`POST /sciencerag/ask` —— 类 MiroFish 模式:先查知识图谱有没有匹配的三元组,有就把子图和问题一起交给 LLM 做有据可依的答案合成;图谱没有匹配,就诚实回退到 M1 的文献检索(`fallback_used`/`coverage_note` 在响应里明确标注,不会不声不响地换一条路)。
+
+知识图谱(`sciencerag/priors/kg.py`)从 M1 阶段的空实现,升级成了真实的 JSON 文件存储(`data/kg/graph.json`):同一 subject/relation/条件的新数据,数值一致就合并来源,数值冲突就并列保留、标记冲突,绝不静默覆盖。**唯一的写入路径**是 `scripts/approve_kg_candidates.py`——读取 M2/M3 产出的知识候选,人工批准后才真正入库(spec §6.3:写入图谱只能走候选→审批这一条路)。
+
+Web 前端是单个静态页面 `sciencerag/static/workbench.html`(访问 `/workbench`),不是 spec §7 描述的完整 Vite/React 应用——跟已有的 `/demo`(M1 的检索演示页)一样的"v1 不上构建工具链"范围控制。包含问答面板(内嵌 SVG 子图可视化)和报告浏览面板;文献/知识候选审批面板按 spec §7 的明文许可,v1 用命令行脚本代替(`scripts/approve_kg_candidates.py`、`scripts/approve_external_papers.py`)。
+
+## 外部检索与批量证据(M6)
+
+`allow_external=true` 且内部检索覆盖不足时,`sciencerag/priors/external_retrieval.py` 会去查 Semantic Scholar 的免费搜索 API。范围比 spec §3.5 描述的完整入库流程窄:
+
+- 只取论文摘要当证据文本,不下载解析 PDF 全文。
+- 命中的论文标 `provenance: "external_unverified"`,置信度打折扣(0.7 倍,同样是占位值),进入待审队列(`data/external_papers/`),按重复命中次数走 spec §3.5 的"自动转正"规则;期刊白名单规则未实现。
+- Semantic Scholar 公开 API 有限流(实测遇到过 429),失败时优雅降级——跳过外部增强、正常返回内部结果,不会让整个 `priors` 请求失败。
+
+批量证据模式(spec §3.4):
+
+```
+POST /sciencerag/priors/batch_evidence
+```
+
+给定 N 个候选设计,逐一返回支持/反驳/中立的证据分类,不做排序打分——排序机制(如果要的话)留给 Hermes 那边的竞赛/排序逻辑。
+
+## Docker 部署
+
+```bash
+docker compose up --build
+```
+
+`Dockerfile`/`docker-compose.yml` 打包 FastAPI 服务本身(含 `/workbench`、`/demo` 静态页面)。真实 API key 放进 `.env`(参考 `.env.example`),`data/`、`logs/`、PaperQA2 索引通过 volume 持久化,重启容器不丢。torch 锁定 CPU-only 版本(`pyproject.toml` 的 `[tool.uv.sources]`)——这套系统的 torch 只做小图上的推理前向传播,默认版本会额外拉几个 GB 的 NVIDIA CUDA 运行库,完全用不上。
+
+**已知的部署缺口**:`tec_surrogate/` 目前完全没有提交到本仓库(是同事维护的独立项目,包含训练好的模型文件),`corpus/papers/` 也只有 6 篇种子论文进了 git(其余靠本地 `.gitignore` 排除的方式管理)。这意味着**从 GitHub 全新 `git clone` 之后直接构建镜像会失败**——M2 的物理检查、M3 的知识候选依赖 `tec_surrogate/` 的模型文件。目前只支持"本地已有完整目录 → 本地构建镜像 → 把构建好的镜像推到registry"这条路径,不支持"远程主机拉 git 仓库现场构建"。要解决这个缺口,需要决定 `tec_surrogate/` 是整个提交(可能要上 Git LFS 存二进制文件)还是作为部署时的独立步骤单独同步。
+
 ## 状态
 
-当前处于 M1(`sciencerag.priors`,仅内部文献)开发阶段。
+M1–M6(spec §10)均已实现并有真实数据跑通(见各节)。已知限制统一记录在对应小节和代码注释里,不是隐藏的坑;`docs/spec/sciencerag_spec_zh.md` §9 记录了哪些开放问题现在有具体实现可以复核、哪些仍然开放。
