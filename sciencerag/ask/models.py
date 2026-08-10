@@ -16,6 +16,8 @@ class AskRequest(BaseModel):
 class SubgraphNode(BaseModel):
     id: str
     kind: Literal["entity", "value"]
+    label: str
+    entity_type: str | None = None
 
 
 class SubgraphEdge(BaseModel):
