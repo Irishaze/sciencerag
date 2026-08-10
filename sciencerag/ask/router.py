@@ -6,11 +6,12 @@ import time
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from sciencerag.ask.models import AskRequest, AskResponse
+from sciencerag.ask.models import AskRequest, AskResponse, Subgraph
 from sciencerag.ask.pipeline import answer_question
 from sciencerag.common.audit import log_audit_entry
 from sciencerag.common.errors import ErrorDetail, ErrorResponse
 from sciencerag.common.trace import new_trace_id
+from sciencerag.priors.kg import full_graph
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -65,3 +66,14 @@ def post_ask(request: AskRequest) -> AskResponse | JSONResponse:
         elapsed_s=round(elapsed_s, 1),
     )
     return response
+
+
+@router.get("/sciencerag/graph", response_model=Subgraph)
+def get_graph() -> Subgraph:
+    """Read-only listing for the frontend's standalone graph-browsing page
+    — not itself a spec-numbered endpoint, just the HTTP surface over
+    kg.full_graph() (same pattern as GET /sciencerag/reports over
+    report/store.py). Returns every triple currently in the graph, not
+    scoped to any one question — spec §6.3's write-path constraint is
+    untouched, this only reads."""
+    return Subgraph(**full_graph())

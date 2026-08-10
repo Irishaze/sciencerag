@@ -218,6 +218,15 @@ def subgraph_from_triples(triples: list[KGTriple]) -> dict:
     return {"nodes": list(nodes.values()), "edges": edges}
 
 
+def full_graph() -> dict:
+    """subgraph_from_triples() over every stored triple — the whole
+    accumulated graph, not scoped to one question. Backs the frontend's
+    standalone graph-browsing page (GET /sciencerag/graph); read-only, same
+    as every other graph access path (spec §6.3's write-path constraint is
+    untouched by this — it only reads)."""
+    return subgraph_from_triples(_load_triples())
+
+
 def get_subgraph(entities: list[str]) -> dict:
     """subgraph_from_triples(), scoped to triples touching any of
     `entities` by subject match."""

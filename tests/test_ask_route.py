@@ -86,3 +86,39 @@ def test_empty_graph_falls_back_to_document_retrieval(monkeypatch):
 def test_missing_question_is_rejected():
     response = client.post("/sciencerag/ask", json={})
     assert response.status_code == 422
+
+
+def test_graph_endpoint_empty_graph():
+    response = client.get("/sciencerag/graph")
+    assert response.status_code == 200
+    assert response.json() == {"nodes": [], "edges": []}
+
+
+def test_graph_endpoint_returns_every_triple_not_just_one_question():
+    kg.add_triple(
+        subject="Bi2Te3 single-stage TEC",
+        relation="achieves_delta_T_max_K",
+        object_value=71.7,
+        object_unit="K",
+        conditions={},
+        confidence=0.7,
+        run_id="run_1",
+        sources=[],
+    )
+    kg.add_triple(
+        subject="Bi2Te3 single-stage TEC",
+        relation="achieves_optimal_current_A",
+        object_value=0.5,
+        object_unit="A",
+        conditions={},
+        confidence=0.7,
+        run_id="run_1",
+        sources=[],
+    )
+    response = client.get("/sciencerag/graph")
+    body = response.json()
+    assert len(body["edges"]) == 2
+    assert {edge["relation"] for edge in body["edges"]} == {
+        "achieves_delta_T_max_K",
+        "achieves_optimal_current_A",
+    }

@@ -1,4 +1,4 @@
-import type { AskResponse, ErrorResponse, ReportDetail, ReportListEntry } from "./types";
+import type { AskResponse, ErrorResponse, ReportDetail, ReportListEntry, Subgraph } from "./types";
 
 // Same-origin in production (this app is built and served by the FastAPI
 // app itself, see sciencerag/app.py); Vite's dev server proxies /sciencerag
@@ -47,4 +47,8 @@ export function listReports(): Promise<ReportListEntry[]> {
 
 export function getReport(stem: string): Promise<ReportDetail> {
   return getJson<ReportDetail>(`/sciencerag/reports/${encodeURIComponent(stem)}`);
+}
+
+export function getFullGraph(): Promise<Subgraph> {
+  return getJson<Subgraph>("/sciencerag/graph");
 }

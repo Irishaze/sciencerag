@@ -5,6 +5,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
+from starlette.types import Scope
 
 from sciencerag.ask.router import router as ask_router
 from sciencerag.priors.router import router as priors_router
@@ -42,6 +44,32 @@ def workbench_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "workbench.html")
 
 
+class SPAStaticFiles(StaticFiles):
+    """Plain StaticFiles 404s on any sub-path that isn't a literal file —
+    fine for asset requests (/app/assets/...) but breaks the frontend's
+    client-side routes (/app/ask, /app/graph, ...): those only exist in the
+    browser via react-router, so a real HTTP request for them (a page
+    refresh, a typed/bookmarked/shared URL) has no matching file and 404s
+    before React ever loads to handle the route itself. Falls back to
+    index.html for anything not found, same standard pattern every SPA
+    host uses, so react-router's basename-scoped routes resolve correctly
+    regardless of how the browser arrived at them.
+
+    Starlette's StaticFiles *raises* HTTPException(404) in the not-found
+    case (see staticfiles.py's get_response) rather than returning a 404
+    Response — an override that only checked a returned status code would
+    silently never trigger. Confirmed by testing an actual 404 request
+    against both versions of this override, not just reading the source."""
+
+    async def get_response(self, path: str, scope: Scope):
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as exc:
+            if exc.status_code != 404:
+                raise
+            return await super().get_response("index.html", scope)
+
+
 if FRONTEND_DIST.exists():
     # Real spec §7 Vite/React frontend (frontend/), built separately
     # (`npm run build`) and served as static files from this same process —
@@ -50,7 +78,7 @@ if FRONTEND_DIST.exists():
     # service, since there's no session state to manage in v1. Mounted at
     # /app, not "/", so it doesn't shadow /demo, /workbench, or the JSON
     # API routes above.
-    app.mount("/app", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+    app.mount("/app", SPAStaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
     @app.get("/")
     def root_redirect() -> RedirectResponse:

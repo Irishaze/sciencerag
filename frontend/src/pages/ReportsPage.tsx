@@ -9,7 +9,7 @@ const SEVERITY_LABEL: Record<string, string> = {
   blocking: "阻断",
 };
 
-export function ReportsPanel() {
+export function ReportsPage() {
   const [entries, setEntries] = useState<ReportListEntry[]>([]);
   const [selectedStem, setSelectedStem] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReportDetail | null>(null);
