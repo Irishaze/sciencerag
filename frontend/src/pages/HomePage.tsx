@@ -78,7 +78,7 @@ export function HomePage() {
 
           <div className="hero-question-panel">
             <div className="hero-question-label">
-              <span>02 / 研究问题</span>
+              <span>01 / 研究问题</span>
               <span className="muted">接口 · sciencerag.ask</span>
             </div>
             <textarea

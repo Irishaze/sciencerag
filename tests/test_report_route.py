@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import jsonschema
+import pytest
 from fastapi.testclient import TestClient
 
 from sciencerag.app import app
@@ -15,6 +16,14 @@ SCHEMA_PATH = (
 RESPONSE_SCHEMA = json.loads(SCHEMA_PATH.read_text())["ReportResponse"]
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_reports_dir(tmp_path, monkeypatch):
+    """Without this, every test run writes real report files into
+    data/reports/ — the same directory the live app's Reports page lists
+    from — leaving hundreds of run_report_test_* fixtures behind."""
+    monkeypatch.setattr(store, "REPORTS_DIR", tmp_path)
 
 _BASE_PAYLOAD = {
     "run_id": "run_report_test",
