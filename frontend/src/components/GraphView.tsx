@@ -70,7 +70,7 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
               <dd>{selectedEdge.source}</dd>
               <dt>关系</dt>
               <dd>{selectedEdge.relation}</dd>
-              <dt>取值</dt>
+              <dt>数值</dt>
               <dd>{selectedEdge.target}</dd>
               <dt>置信度</dt>
               <dd>{selectedEdge.confidence.toFixed(2)}</dd>
@@ -82,7 +82,7 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
         {selectedNodeId && (
           <>
             <div className="graph-inspector-title">{selectedNodeId}</div>
-            <p className="muted">与这个节点相关的 {edgesForSelectedNode.length} 条三元组：</p>
+            <p className="muted">与该节点相关的三元组，共 {edgesForSelectedNode.length} 条：</p>
             <ul className="node-edge-list">
               {edgesForSelectedNode.map((e) => (
                 <li key={e.triple_id} onClick={() => setSelectedEdge(e)}>
@@ -94,7 +94,7 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
           </>
         )}
         {!selectedEdge && !selectedNodeId && (
-          <div className="graph-inspector-hint">点击节点看它相关的三元组，点击连线看单条三元组的详情。</div>
+          <div className="graph-inspector-hint">点击节点查看相关的全部三元组，点击连线查看单条详情。</div>
         )}
       </div>
     </div>

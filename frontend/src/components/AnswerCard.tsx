@@ -18,17 +18,17 @@ export function AnswerCard({ result }: { result: AskResponse }) {
         {result.sources.map((s, i) =>
           s.type === "paper" ? (
             <li key={i}>
-              论文 DOI: {s.doi}
+              论文 DOI：{s.doi}
               {s.span ? ` (${s.span})` : ""}
             </li>
           ) : (
-            <li key={i}>知识图谱三元组: {s.triple_id}</li>
+            <li key={i}>知识图谱三元组：{s.triple_id}</li>
           )
         )}
       </ul>
       {!result.fallback_used && result.subgraph.nodes.length > 0 && (
         <p className="muted" style={{ marginTop: 10 }}>
-          这次命中的三元组也在<Link to="/graph">知识图谱</Link>里，去那边可以看到完整的图并点击浏览。
+          这次命中的三元组也能在<Link to="/graph">知识图谱</Link>页面看到完整的图，并支持点击浏览。
         </p>
       )}
     </div>

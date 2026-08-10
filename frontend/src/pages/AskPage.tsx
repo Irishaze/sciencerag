@@ -33,7 +33,7 @@ export function AskPage() {
     <div className="panel">
       <div className="row">
         <textarea
-          placeholder="向知识图谱提问，例如：Bi2Te3 单级 TEC 的 delta_T_max_K 是多少？"
+          placeholder="向知识图谱提问，例如：Bi2Te3 单级 TEC 的 delta_T_max_K 大概是多少？"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {

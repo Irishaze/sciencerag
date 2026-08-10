@@ -29,7 +29,7 @@ export function GraphPage() {
     <div className="panel">
       <div className="row">
         <p className="muted" style={{ flex: 1, margin: 0 }}>
-          知识图谱里目前累积的全部三元组（spec §6.3：只读，写入唯一路径是 <code>scripts/approve_kg_candidates.py</code> 审批入库）。
+          知识图谱里目前累积的全部三元组，仅支持只读浏览——新的结论需要先经过审批才能写入。
         </p>
         <button onClick={refresh} disabled={loading}>
           {loading ? "加载中…" : "刷新"}
@@ -38,7 +38,7 @@ export function GraphPage() {
       {error && <div className="card error-card">{error}</div>}
       {graph && (
         <div className="card">
-          <GraphView subgraph={graph} height={520} emptyMessage="知识图谱现在是空的——还没有知识候选被批准入库，或者是冷启动阶段。" />
+          <GraphView subgraph={graph} height={520} emptyMessage="知识图谱目前是空的——还没有知识候选通过审批入库。" />
         </div>
       )}
     </div>
