@@ -8,11 +8,14 @@ project's index doesn't mix with unrelated projects.
 """
 
 import json
+import logging
 from pathlib import Path
 
 import litellm
 from paperqa import Settings, ask
 from paperqa.agents.main import AnswerResponse
+
+logger = logging.getLogger(__name__)
 
 from sciencerag.common.config import get_embedding_model, get_llm_model
 from sciencerag.common.trace import new_trace_id
@@ -25,8 +28,10 @@ from sciencerag.priors.extract import (
     _strip_code_fences,
     extract_priors,
 )
+from sciencerag.priors.arxiv_retrieval import search_arxiv
 from sciencerag.priors.external_retrieval import (
-    record_pending_papers,
+    ExternalPaper,
+    download_new_papers,
     search_semantic_scholar,
 )
 from sciencerag.priors.kg import query_kg
@@ -103,6 +108,40 @@ def build_settings() -> Settings:
         paper_directory=str(CORPUS_DIR),
     )
     settings.answer.evidence_k = EVIDENCE_K
+    # Only sciencerag.ask's fallback path (run_query -> response.session.answer)
+    # ever shows this narrative text to a person — sciencerag.priors only reads
+    # response.session.contexts (see extract.py), never .answer, so this has no
+    # effect on prior extraction. Default answer_length produces one dense
+    # paragraph with citations stacked mid-sentence; ask for markdown structure
+    # instead so the frontend (react-markdown, see AnswerCard.tsx) can actually
+    # render short paragraphs and bullet points instead of a wall of text.
+    settings.answer.answer_length = (
+        "about 200-300 words, written entirely in Chinese (中文，非英文). "
+        "Follow Zinsser's four principles of good writing from 'On Writing "
+        "Well': 清晰 clarity, 简洁 simplicity, 简明 brevity (no clutter, no "
+        "word wasted), and 人性化 humanity (warm and direct, like explaining "
+        "to a friend, not a stiff academic register). A reader with no "
+        "physics background should be able to read it start to finish and "
+        "come away understanding the main point. Prefer describing what "
+        "something DOES in plain words over naming what it's CALLED — you "
+        "do not need to name or define a technical term (Seebeck "
+        "coefficient, figure of merit, Joule heating, etc.) just because "
+        "the source paper uses it; if the underlying idea can be said in "
+        "everyday words instead, do that and skip the term entirely. Use "
+        "at most one equation total, and only if a number genuinely adds "
+        "something the words didn't already say — never open with an "
+        "equation. Format as markdown: short paragraphs (2-4 sentences) "
+        "separated by blank lines, and a bullet list ('- ...') when "
+        "presenting multiple examples or findings side by side. If you do "
+        "include an equation, the renderer supports KaTeX — wrap it in "
+        "\\( \\) inline or \\[ \\] on its own line; never use a bare $ for "
+        "anything (not currency, not math), it is misread as a math "
+        "delimiter. This does not change the citation rules above: still "
+        "cite sources exactly as instructed, each citation key on its own "
+        "inside its own parentheses at the end of the sentence it supports, "
+        "e.g. (pqac-d79ef6fa) — never drop the parentheses and never merge "
+        "a citation with an equation's \\( \\)."
+    )
     # paper-qa defaults summary_llm/agent_llm to OpenAI's gpt-4o independently
     # of the top-level `llm` field. summary_llm=DeepSeek works fine, but
     # agent_llm=DeepSeek gets stuck: it never emits a "complete" tool call and
@@ -398,56 +437,118 @@ def _build_max_priors_gap(truncated_priors: list[Prior], max_priors: int) -> lis
     ]
 
 
-# M1-15 / spec §9 OQ#1 ("外部检索:是否需要?用哪些 API?"): decided as an
-# explicit no-op for M1 — external retrieval (Semantic Scholar/arXiv) is
-# deferred to M6 ("外部检索回退 + 批量证据模式"). `allow_external` is a real,
-# validated request field (not silently dropped), but in M1 it can only ever
-# make the response note that it was requested-but-unavailable — it never
-# changes retrieval behavior or `external_hits` (always 0 until M6).
+# spec §9 OQ#1 ("外部检索:是否需要?用哪些 API?"): M6 implements Semantic
+# Scholar + arXiv. `allow_external` only changes behavior when internal
+# coverage is thin (see the `coverage.gaps` check below).
 def _augment_with_external(
     response: PriorsResponse, query: str, allow_external: bool
 ) -> PriorsResponse:
-    """M6 (spec §3.2/§3.5): supplement with Semantic Scholar when internal
-    coverage is insufficient (any `coverage.gaps`) and the caller opted in.
-    Results are tagged `provenance="external_unverified"` so callers can
-    still tell the source apart; trust is upgraded only through
-    scripts/approve_external_papers.py's promotion queue, not through a
-    confidence multiplier here."""
+    """M6 (spec §3.2/§3.5): supplement with Semantic Scholar + arXiv when
+    internal coverage is insufficient (any `coverage.gaps`) and the caller
+    opted in.
+
+    Hits with a real downloadable PDF (all arXiv hits; Semantic Scholar
+    hits with an open-access PDF) get their full text pulled straight into
+    corpus/papers/ (external_retrieval.download_new_papers) and re-indexed
+    by PaperQA2 on a second query — from then on they're ordinary internal
+    evidence, `provenance="internal"`, no approval step. Semantic Scholar
+    hits with no open-access PDF fall back to abstract-only evidence,
+    tagged `provenance="external_unverified"` — that tag reflects "this is
+    a thin abstract snippet", not a trust judgment, since there's no way
+    to obtain full text for a paywalled paper."""
     if not allow_external or not response.coverage.gaps:
         return response
 
-    papers = search_semantic_scholar(query)
-    if not papers:
+    semantic_scholar_papers = search_semantic_scholar(query)
+    arxiv_papers = search_arxiv(query)
+
+    # The same paper can legitimately turn up in both searches (e.g. an
+    # arXiv preprint that Semantic Scholar also indexes under the same
+    # DOI) — dedup by DOI so external_hits reflects distinct papers found,
+    # not search hits, and so it isn't downloaded/extracted twice. When a
+    # DOI appears from both sources, prefer whichever copy has a pdf_url
+    # so a paper doesn't lose its full-text eligibility just because the
+    # abstract-only source happened to be deduped in second.
+    all_papers_by_doi: dict[str, ExternalPaper] = {}
+    for paper in semantic_scholar_papers + arxiv_papers:
+        existing = all_papers_by_doi.get(paper.doi)
+        if existing is None or (not existing.pdf_url and paper.pdf_url):
+            all_papers_by_doi[paper.doi] = paper
+    all_papers = list(all_papers_by_doi.values())
+
+    if not all_papers:
         response.coverage.gaps.append(
             "allow_external=true and internal coverage was insufficient, but "
-            "Semantic Scholar search returned no usable results (no hits, or "
-            "none had both an abstract and a DOI)"
+            "Semantic Scholar and arXiv search both returned no usable results"
         )
         return response
 
-    record_pending_papers(papers)
+    full_text_candidates = [p for p in all_papers if p.pdf_url]
+    abstract_only = [p for p in all_papers if not p.pdf_url]
+    newly_downloaded = download_new_papers(full_text_candidates)
 
-    evidence_table = {
-        f"EXT{i + 1}": EvidenceItem(
-            text=paper.abstract, doi=paper.doi, span="abstract", notes=paper.title, relevance=1.0
-        )
-        for i, paper in enumerate(papers)
-    }
-    try:
-        external_priors, _filtered_material_count = extract_priors(query, evidence_table, trace=None)
-    except ExtractionError as e:
+    external_priors: list[Prior] = []
+    extraction_errors: list[str] = []
+
+    if newly_downloaded:
+        newly_downloaded_dois = {p.doi for p in newly_downloaded}
+        try:
+            # This re-query is the one place in the augmentation path that
+            # wasn't previously guarded: run_query hits a real LLM/PaperQA2
+            # pipeline a second time, and a transient failure here (a
+            # timeout, a provider error, an unparseable file that just
+            # landed on disk) must not take down a request whose *first*
+            # pass may already have produced perfectly good internal
+            # priors — external augmentation is explicitly best-effort
+            # (module docstring), and the router's catch-all turns any
+            # uncaught exception here into a 502 for the whole response,
+            # discarding those results. Broad except is deliberate: this
+            # boundary needs to swallow whatever a third-party retrieval
+            # pipeline can throw, not just the extraction-specific error.
+            full_text_contexts = run_query(query).session.contexts
+            full_text_evidence, _below_threshold = _build_evidence_table(full_text_contexts)
+            full_text_evidence = {
+                label: item
+                for label, item in full_text_evidence.items()
+                if item.doi in newly_downloaded_dois
+            }
+            if full_text_evidence:
+                full_text_priors, _filtered_material_count, _review_priors = extract_priors(
+                    query, full_text_evidence, trace=None
+                )
+                external_priors += full_text_priors
+        except ExtractionError as e:
+            extraction_errors.append(str(e))
+        except Exception as e:  # noqa: BLE001 - best-effort augmentation, see comment above
+            logger.warning("Full-text external augmentation query failed: %s", e)
+            extraction_errors.append(f"full-text re-query failed: {e}")
+
+    if abstract_only:
+        evidence_table = {
+            f"EXT{i + 1}": EvidenceItem(
+                text=paper.abstract, doi=paper.doi, span="abstract", notes=paper.title, relevance=1.0
+            )
+            for i, paper in enumerate(abstract_only)
+        }
+        try:
+            abstract_priors, _filtered_material_count, _review_priors = extract_priors(
+                query, evidence_table, trace=None
+            )
+            for prior in abstract_priors:
+                prior.provenance = "external_unverified"
+            external_priors += abstract_priors
+        except ExtractionError as e:
+            extraction_errors.append(str(e))
+
+    if extraction_errors and not external_priors:
         response.coverage.gaps.append(
-            f"external retrieval found {len(papers)} paper(s) via Semantic Scholar, "
-            f"but LLM extraction failed schema validation after retries: {e}"
+            f"external retrieval found {len(all_papers)} paper(s), but LLM "
+            f"extraction failed schema validation after retries: "
+            f"{'; '.join(extraction_errors)}"
         )
-        response.coverage.external_hits = len(papers)
-        return response
-
-    for prior in external_priors:
-        prior.provenance = "external_unverified"
 
     response.priors = response.priors + external_priors
-    response.coverage.external_hits = len(papers)
+    response.coverage.external_hits = len(all_papers)
     return response
 
 

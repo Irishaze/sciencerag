@@ -15,7 +15,7 @@ Full design spec: [docs/spec/sciencerag_spec_zh.md](docs/spec/sciencerag_spec_zh
 - Each prior is one of five kinds (`parameter_range` / `material_property` / `scaling_relationship` / `candidate_config` / `caution`), each with its own fixed `value` schema — not a free-form dict.
 - Every number in `value`/`notes` must be traceable back to the cited evidence text (exact match or ≤2% relative error); if it can't be traced, the prior is rejected and retried.
 - `confidence` is a heuristic ranking score, not a gate — what actually decides whether a prior survives is numeric traceability (deterministic) plus an independent LLM semantic judgment (KEEP/REVIEW/DROP).
-- When `allow_external=true` and internal coverage is insufficient, it queries Semantic Scholar abstracts (no full text, no arXiv); hits are tagged `external_unverified` and queued for review.
+- When `allow_external=true` and internal coverage is insufficient, it queries Semantic Scholar and arXiv. Any hit with a downloadable PDF (arXiv always; Semantic Scholar when open-access) gets its full text pulled straight into `corpus/papers/` and is trusted immediately — no approval queue. Semantic Scholar hits with no open-access PDF fall back to abstract-only evidence, tagged `provenance="external_unverified"`.
 - `POST /sciencerag/priors/batch_evidence`: given N candidate designs, returns supporting/contradicting/neutral evidence for each, unranked.
 
 ### `sciencerag.validate` — simulation result validation and learning

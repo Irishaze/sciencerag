@@ -39,6 +39,17 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# Root-relative default so `uv run pytest` only collects sciencerag's own
+# suite. Without this, a bare `pytest -q` also picks up
+# tec_surrogate/tests/ — a separate subproject with its own `tests`
+# package (own __init__.py) — and the two same-named `tests` packages
+# collide during collection (ModuleNotFoundError for every test module,
+# not just tec_surrogate's). tec_surrogate's suite still runs fine on its
+# own via `uv run pytest tec_surrogate/tests -q`, just not bundled into
+# this project's default invocation.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["sciencerag"]
 
