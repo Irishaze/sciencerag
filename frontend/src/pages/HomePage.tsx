@@ -1,6 +1,19 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { AnswerCard } from "../components/AnswerCard";
 import { TecDiagram } from "../components/TecDiagram";
+import { useAsk } from "../hooks/useAsk";
+import { Link } from "react-router-dom";
+
+const STATS = [
+  { label: "可溯源", body: "每条回答、每份报告的每个数字都能点回它的来源" },
+  { label: "物理校验优先", body: "仿真结果先过守恒 / 残差检查，通过了才进知识图谱" },
+];
+
+const WORKFLOW = [
+  { n: "01", title: "先验检索", body: "从内部文献与知识图谱找依据，图谱优先，覆盖不足再查文献" },
+  { n: "02", title: "仿真验证", body: "守恒检查、PDE 残差、跟已知案例/文献对比，不可信的结果到此为止" },
+  { n: "03", title: "知识积累", body: "通过检查的结果才会成为候选知识，人工审批后写入图谱" },
+  { n: "04", title: "问答与报告", body: "有据可依的回答、可追溯运行血缘的报告" },
+];
 
 const FEATURES = [
   {
@@ -27,14 +40,7 @@ const FEATURES = [
 ];
 
 export function HomePage() {
-  const [question, setQuestion] = useState("");
-  const navigate = useNavigate();
-
-  function handleSubmit() {
-    const trimmed = question.trim();
-    if (!trimmed) return;
-    navigate("/ask", { state: { initialQuestion: trimmed } });
-  }
+  const { question, setQuestion, maxHits, setMaxHits, loading, error, result, submit } = useAsk();
 
   return (
     <div>
@@ -45,13 +51,79 @@ export function HomePage() {
             <h1 className="hero-title">让每一条关于 TEC 的结论都能查到它的来源</h1>
             <p className="hero-sub">
               仿真结果先过一遍物理一致性检查——冷热两侧的能量守恒、偏微分方程残差都对得上，
-              才有资格成为知识图谱里的一条结论。问答、报告里的每个数字，都能一路点回它的出处。
+              才有资格成为知识图谱里的一条结论。
             </p>
+
+            <div className="stat-row">
+              {STATS.map((s) => (
+                <div key={s.label} className="stat">
+                  <strong>{s.label}</strong>
+                  <span>{s.body}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="workflow">
+              <div className="workflow-label">工作流程</div>
+              <ol className="workflow-list">
+                {WORKFLOW.map((w) => (
+                  <li key={w.n}>
+                    <span className="workflow-num">{w.n}</span>
+                    <div>
+                      <strong>{w.title}</strong>
+                      <p>{w.body}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
-          <div className="hero-diagram-wrap">
-            <TecDiagram />
+
+          <div className="hero-question-panel">
+            <div className="hero-question-label">
+              <span>02 / 研究问题</span>
+              <span className="muted">引擎：sciencerag.ask</span>
+            </div>
+            <textarea
+              className="hero-question-input"
+              placeholder="输入你想问的问题，例如：Bi2Te3 单级 TEC 的 delta_T_max_K 是多少？规律是什么？"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+              }}
+            />
+            <div className="hero-question-meta">
+              <label htmlFor="max-hits">图谱检索条数上限（{maxHits}）</label>
+              <input
+                id="max-hits"
+                type="range"
+                min={1}
+                max={20}
+                value={maxHits}
+                onChange={(e) => setMaxHits(Number(e.target.value))}
+              />
+            </div>
+            <button className="hero-question-submit" onClick={() => submit()} disabled={loading}>
+              {loading ? "查询中…" : "提问"} {!loading && "→"}
+            </button>
           </div>
         </div>
+      </section>
+
+      <section className="page results-section">
+        {error && <div className="card error-card">请求失败：{error}</div>}
+
+        {result ? (
+          <AnswerCard result={result} />
+        ) : (
+          <div className="results-placeholder">
+            <div className="results-placeholder-diagram">
+              <TecDiagram />
+            </div>
+            <p className="muted">{loading ? "查询中…" : "问一个问题，回答和依据会显示在这里。"}</p>
+          </div>
+        )}
       </section>
 
       <section className="page feature-section">
@@ -64,26 +136,6 @@ export function HomePage() {
               <span className="feature-metric">{f.metric}</span>
             </Link>
           ))}
-        </div>
-      </section>
-
-      <section className="ask-cta">
-        <div className="ask-cta-inner">
-          <div className="ask-cta-copy">
-            <h2>有问题，直接问</h2>
-            <p className="muted">回车换行，⌘/Ctrl + 回车 或点击按钮提交，会跳到问答页面查看回答。</p>
-          </div>
-          <div className="ask-cta-form">
-            <textarea
-              placeholder="例如：Bi2Te3 单级 TEC 的 delta_T_max_K 是多少？"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmit();
-              }}
-            />
-            <button onClick={handleSubmit}>提问 →</button>
-          </div>
         </div>
       </section>
     </div>

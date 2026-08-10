@@ -317,17 +317,87 @@ button:disabled {
 }
 
 .hero-inner {
-  max-width: 980px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 72px 20px 56px;
+  padding: 56px 20px 48px;
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 40px;
-  align-items: center;
+  grid-template-columns: 0.95fr 1.1fr;
+  gap: 36px;
+  align-items: start;
 }
 
 .hero-copy {
   animation: hero-rise 0.5s ease-out both;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin: 28px 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat strong {
+  font-size: 15px;
+}
+
+.stat span {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.workflow-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.workflow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workflow-list li {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+}
+
+.workflow-num {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  padding-top: 2px;
+}
+
+.workflow-list strong {
+  display: block;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+}
+
+.workflow-list p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.55;
 }
 
 .hero-eyebrow {
@@ -366,8 +436,89 @@ button:disabled {
   max-width: 46ch;
 }
 
-.hero-diagram-wrap {
+/* ---- homepage: question panel (right column of hero) ---- */
+
+.hero-question-panel {
   animation: hero-rise 0.6s 0.1s ease-out both;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.hero-question-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.hero-question-label .muted {
+  font-size: 11px;
+}
+
+.hero-question-input {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+.hero-question-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hero-question-meta label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.hero-question-meta input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.hero-question-submit {
+  width: 100%;
+  padding: 13px 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---- homepage: results area, below the hero ---- */
+
+.results-section {
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+
+.results-placeholder {
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.results-placeholder-diagram {
+  max-width: 380px;
+  margin: 0 auto 14px;
+  opacity: 0.85;
 }
 
 .tec-diagram {
@@ -433,13 +584,16 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .hero-copy,
-  .hero-diagram-wrap {
+  .hero-question-panel {
     animation: none;
   }
 }
 
 @media (max-width: 760px) {
   .hero-inner {
+    grid-template-columns: 1fr;
+  }
+  .stat-row {
     grid-template-columns: 1fr;
   }
 }
@@ -499,51 +653,6 @@ button:disabled {
   border-top: 1px solid var(--line);
   padding-top: 10px;
   margin-top: 4px;
-}
-
-/* ---- homepage: bottom ask CTA ---- */
-
-.ask-cta {
-  background: var(--surface-2);
-  border-top: 1px solid var(--line);
-  margin-top: 64px;
-}
-
-.ask-cta-inner {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 48px 20px 64px;
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 32px;
-  align-items: start;
-}
-
-.ask-cta-copy h2 {
-  margin: 0 0 6px;
-  font-size: 21px;
-}
-
-.ask-cta-form {
-  display: flex;
-  gap: 10px;
-}
-
-.ask-cta-form textarea {
-  flex: 1;
-  min-height: 64px;
-}
-
-@media (max-width: 760px) {
-  .ask-cta-inner {
-    grid-template-columns: 1fr;
-  }
-  .ask-cta-form {
-    flex-direction: column;
-  }
-  .ask-cta-form button {
-    align-self: flex-start;
-  }
 }
 
 .node-edge-list {
