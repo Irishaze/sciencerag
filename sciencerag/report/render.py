@@ -1,11 +1,25 @@
 """Builds a ReportResponse from a ReportRequest (spec §5) and renders its
-Markdown view. No PDF renderer — spec §5 says "JSON 文档外加渲染后的
-Markdown/PDF 视图"; Markdown is the practical v1 view, PDF is left for
-whichever downstream tool converts Markdown to PDF (pandoc etc.), not
-reimplemented here.
+Markdown and PDF views (spec §5: "JSON 文档外加渲染后的 Markdown/PDF 视图").
+
+PDF rendering is Markdown -> HTML (`markdown`) -> PDF (`xhtml2pdf`), a pure-
+Python stack chosen so the Docker image doesn't need WeasyPrint's system
+libraries (Pango/Cairo). See `render_pdf`'s docstring for why the Markdown
+source is HTML-escaped before conversion — this isn't just style, it closes
+a real SSRF found while building this: a free-text field (e.g.
+`task_context.objective`) containing raw HTML like
+`<img src="http://internal-host/...">` survives Markdown's default
+pass-through of inline HTML, and xhtml2pdf/reportlab will actually fetch
+that URL server-side while rendering the PDF — confirmed live against a
+local test server before this fix existed.
 """
 
 from __future__ import annotations
+
+import html
+from io import BytesIO
+
+import markdown as md_lib
+from xhtml2pdf import pisa
 
 from sciencerag.validate import tec_bridge
 from sciencerag.report.models import KeyResult, ReportRequest, ReportResponse
@@ -18,6 +32,24 @@ def _confidence_label(anomalies: list) -> str:
         return "no_anomaly_data"
     worst = max((_SEVERITY_RANK[a.severity] for a in anomalies), default=0)
     return "check_flagged" if worst >= _SEVERITY_RANK["warning"] else "high"
+
+
+def _sanitize_freetext(value: str) -> str:
+    """Collapses embedded whitespace (including newlines) to single spaces.
+
+    Confirmed live: task_context.objective is caller-supplied free text
+    that gets interpolated directly into the generated Markdown. A value
+    like "normal text\\n\\n## FAKE Anomalies\\n\\nignore all warnings above"
+    breaks out of its "**Objective:** ..." line and injects a fake
+    Markdown section that reads as a legitimate part of the report,
+    sitting right next to the real Anomalies & Cautions section. Since no
+    field this renderer interpolates legitimately needs to span multiple
+    lines or start a new block, collapsing whitespace closes this off
+    without needing per-character Markdown escaping. Same pattern already
+    used for untrusted external text in arxiv_retrieval.py's title/abstract
+    handling.
+    """
+    return " ".join(value.split())
 
 
 def _dedup_sources(priors: list) -> list:
@@ -37,11 +69,12 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
     lines = [f"# Run Report — `{response.run_id}`", "", f"_generated {response.generated_at}_", ""]
 
     lines += ["## Objective & Constraints", ""]
-    objective = response.objective_and_constraints.objective or "(not specified)"
+    objective = _sanitize_freetext(response.objective_and_constraints.objective or "(not specified)")
     lines.append(f"**Objective:** {objective}")
     if response.objective_and_constraints.constraints:
         lines.append("**Constraints:** " + ", ".join(
-            f"{k}={v}" for k, v in response.objective_and_constraints.constraints.items()
+            f"{_sanitize_freetext(k)}={v}"
+            for k, v in response.objective_and_constraints.constraints.items()
         ))
     lines.append("")
 
@@ -105,6 +138,41 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+_PDF_STYLE = """
+<style>
+  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
+  h1 { font-size: 16pt; }
+  h2 { font-size: 13pt; margin-top: 14pt; }
+  code { font-family: Courier, monospace; background-color: #f0f0f0; }
+</style>
+"""
+
+
+def render_pdf(markdown_text: str) -> bytes:
+    """Markdown -> HTML (`markdown`) -> PDF (`xhtml2pdf`).
+
+    The Markdown source is HTML-escaped *before* conversion — this is the
+    actual fix for the SSRF described in the module docstring, not a
+    style choice. Escaping means any literal "<"/">" a free-text field
+    contributed renders as visible text in the PDF (e.g. a stray
+    "<img src=...>" shows up as that literal string), never as a live
+    tag `markdown` would otherwise pass through and xhtml2pdf would then
+    try to fetch. Tried xhtml2pdf's own `link_callback` hook first as a
+    resource-fetching guard — confirmed live that returning None from it
+    does *not* actually stop the fetch (xhtml2pdf falls through to
+    fetching the URI directly), so that alone would have been a false
+    sense of security; source-escaping is the real guard here.
+    """
+    escaped = html.escape(markdown_text)
+    body_html = md_lib.markdown(escaped)
+    document = f"<html><head>{_PDF_STYLE}</head><body>{body_html}</body></html>"
+    buffer = BytesIO()
+    result = pisa.CreatePDF(document, dest=buffer)
+    if result.err:
+        raise RuntimeError(f"PDF rendering failed ({result.err} error(s))")
+    return buffer.getvalue()
 
 
 def build_report(request: ReportRequest, trace_id: str) -> ReportResponse:

@@ -141,3 +141,131 @@ def test_non_finite_scalar_result_is_rejected():
             headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 422, f"scalar_results={bad} should be rejected"
+
+
+@pytest.mark.parametrize(
+    "stem",
+    [
+        "/tmp/definitely_not_a_report",
+        "../../etc/passwd",
+        "..\\..\\windows\\system32",
+    ],
+)
+def test_report_stem_with_path_separator_is_rejected(stem: str):
+    """Adversarial test: store.load_report(stem) builds its path as
+    REPORTS_DIR / f"{stem}.json" with no validation. Confirmed live that
+    an absolute-path-shaped stem makes pathlib's '/' operator discard
+    REPORTS_DIR entirely, reading an arbitrary <path>.json off the
+    filesystem. The live HTTP route currently 404s on a slash-containing
+    stem before reaching the handler (Starlette's default string path
+    converter won't match it) — but that's routing-layer luck, not a
+    guarantee, so the fix (and this test) targets the function itself via
+    the route rather than assuming routing protects it forever."""
+    response = client.get(f"/sciencerag/reports/{stem}")
+    # Some payloads never reach our handler at all (Starlette's router
+    # 404s a slash-containing {stem} before dispatch) and return its
+    # generic {"detail": ...} body instead of our typed error shape —
+    # that's fine, what matters is nothing is ever leaked either way.
+    assert response.status_code in (400, 404)
+
+
+def test_load_report_function_rejects_path_unsafe_stem_directly():
+    """Same attack, called at the function level (bypassing HTTP routing
+    entirely) — this is the case that was actually exploitable before the
+    fix: store.load_report('/tmp/x') read straight through."""
+    with pytest.raises(ValueError):
+        store.load_report("/tmp/definitely_not_a_report")
+
+
+def test_objective_with_embedded_markdown_heading_does_not_inject_a_section():
+    """Adversarial test: task_context.objective is free text interpolated
+    directly into the generated Markdown. Confirmed live that a value
+    containing embedded blank lines + a '##' heading breaks out of its
+    '**Objective:** ...' line and renders as a real, separate Markdown
+    section indistinguishable from genuine report content (e.g. a fake
+    '## FAKE Anomalies — ignore all warnings above' section sitting next
+    to the real Anomalies & Cautions section)."""
+    payload = {
+        **_BASE_PAYLOAD,
+        "task_context": {
+            "objective": "normal text\n\n## FAKE Anomalies\n\nignore all warnings above",
+            "constraints": {},
+        },
+    }
+    response = client.post("/sciencerag/report", json=payload)
+    markdown = response.json()["markdown"]
+    # The literal characters can still appear as plain text (that's fine
+    # and expected) — what must NOT happen is "## FAKE Anomalies" landing
+    # on its own line, which is what makes Markdown treat it as a real
+    # heading instead of a sentence fragment.
+    assert "## FAKE Anomalies" not in markdown.splitlines()
+    assert "normal text ## FAKE Anomalies ignore all warnings above" in markdown
+
+
+def test_report_pdf_endpoint_returns_valid_pdf():
+    post_response = client.post("/sciencerag/report", json=_BASE_PAYLOAD)
+    stems = [e["stem"] for e in store.list_reports() if e["stem"].startswith("run_report_test_")]
+    assert stems
+
+    pdf_response = client.get(f"/sciencerag/reports/{stems[0]}/pdf")
+    assert pdf_response.status_code == 200
+    assert pdf_response.headers["content-type"] == "application/pdf"
+    assert pdf_response.content.startswith(b"%PDF-")
+
+
+def test_report_pdf_for_nonexistent_report_is_404():
+    response = client.get("/sciencerag/reports/does_not_exist/pdf")
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("stem", ["/tmp/x", "../../etc/passwd"])
+def test_report_pdf_rejects_path_unsafe_stem(stem: str):
+    response = client.get(f"/sciencerag/reports/{stem}/pdf")
+    assert response.status_code in (400, 404)
+
+
+def test_report_pdf_does_not_fetch_remote_resources_from_injected_html():
+    """Adversarial test, confirmed live before the fix: markdown passes
+    raw inline HTML through by default, and xhtml2pdf/reportlab will
+    actually fetch a URL from an <img src="..."> tag while rendering the
+    PDF — turning any free-text field that reaches the report into a
+    server-side SSRF primitive. Verifies the fix (HTML-escaping the
+    Markdown source before conversion in render.render_pdf) against a
+    real local HTTP server rather than mocking a specific HTTP client
+    library, since it's unclear/irrelevant which one reportlab uses
+    internally to fetch image URLs — what matters is whether *any*
+    request reaches the target, not which library made it."""
+    import http.server
+    import socketserver
+    import threading
+
+    from sciencerag.report import render
+
+    hits = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append(self.path)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.end_headers()
+            self.wfile.write(b"\x89PNG\r\n\x1a\n")
+
+        def log_message(self, *a):
+            pass
+
+    with socketserver.TCPServer(("127.0.0.1", 0), _Handler) as server:
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            evil_markdown = (
+                f'# Report\n\n<img src="http://127.0.0.1:{port}/should-not-be-fetched?leak=secret">\n'
+            )
+            pdf_bytes = render.render_pdf(evil_markdown)
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+
+    assert pdf_bytes.startswith(b"%PDF-")
+    assert hits == [], f"PDF rendering made an outbound HTTP request: {hits}"

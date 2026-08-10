@@ -28,11 +28,12 @@ Full design spec: [docs/spec/sciencerag_spec_zh.md](docs/spec/sciencerag_spec_zh
 
 ### `sciencerag.report` — report generation
 
-`POST /sciencerag/report`: assembles design parameters, validation results, and the priors used into a cited report (JSON + Markdown), stored under `data/reports/` (not committed to git).
+`POST /sciencerag/report`: assembles design parameters, validation results, and the priors used into a cited report (JSON + Markdown), stored under `data/reports/` (not committed to git). PDF is rendered on demand from the stored Markdown (`markdown` → HTML → `xhtml2pdf`, pure Python, no system libraries needed) rather than stored — free-text fields that reach the report are HTML-escaped before PDF conversion, closing an SSRF found during review where raw `<img src="...">` in a field like `task_context.objective` made the PDF renderer fetch that URL server-side.
 
 ```
 GET /sciencerag/reports            # list
-GET /sciencerag/reports/{stem}     # fetch one
+GET /sciencerag/reports/{stem}     # fetch one (JSON)
+GET /sciencerag/reports/{stem}/pdf # fetch one (PDF, rendered on demand)
 ```
 
 ### `sciencerag.ask` — knowledge-graph Q&A

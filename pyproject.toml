@@ -27,6 +27,11 @@ dependencies = [
     "scikit-learn>=1.4",
     "joblib>=1.3",
     "torch>=2.2",
+    # sciencerag/report — Markdown -> PDF rendering (spec §5 wants both a
+    # Markdown and a PDF view). Pure-Python stack (no system libs like
+    # WeasyPrint needs) so the Dockerfile doesn't need Pango/Cairo added.
+    "markdown",
+    "xhtml2pdf",
 ]
 
 [dependency-groups]
