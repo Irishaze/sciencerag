@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { TecDiagram } from "../components/TecDiagram";
 
 const FEATURES = [
   {
@@ -39,12 +40,17 @@ export function HomePage() {
     <div>
       <section className="hero">
         <div className="hero-inner">
-          <p className="hero-eyebrow">TEC 科学 RAG 系统</p>
-          <h1 className="hero-title">从文献先验到验证学习，再到可追溯的问答</h1>
-          <p className="hero-sub">
-            每一次仿真运行都经过物理一致性检查，通过检查的结果才会成为可信的知识；
-            每一条回答、每一份报告都能追到它的来源。
-          </p>
+          <div className="hero-copy">
+            <p className="hero-eyebrow">热电制冷器 · 科学 RAG</p>
+            <h1 className="hero-title">让每一条关于 TEC 的结论都能查到它的来源</h1>
+            <p className="hero-sub">
+              仿真结果先过一遍物理一致性检查——冷热两侧的能量守恒、偏微分方程残差都对得上，
+              才有资格成为知识图谱里的一条结论。问答、报告里的每个数字，都能一路点回它的出处。
+            </p>
+          </div>
+          <div className="hero-diagram-wrap">
+            <TecDiagram />
+          </div>
         </div>
       </section>
 

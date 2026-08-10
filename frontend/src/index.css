@@ -1,12 +1,20 @@
 :root {
-  --bg: #f6f2ea;
+  /* Cool, lab-neutral ground (not the warm-cream-paper default) — this is
+     a physics/simulation tool, not an editorial site. --accent (teal) is
+     the cold side of a TEC module, --hot (rust) is the hot side; the pair
+     does real thermal duty in the hero diagram, not just decoration. */
+  --bg: #eef1ef;
   --surface: #ffffff;
-  --surface-2: #efe9dd;
-  --text: #221f1c;
-  --text-dim: #6b6058;
-  --line: rgba(34, 31, 28, 0.14);
-  --accent: #1f6e78;
-  --accent-soft: #d9ecec;
+  --surface-2: #e4e9e7;
+  --text: #131a18;
+  --text-dim: #5c6864;
+  --line: rgba(19, 26, 24, 0.12);
+
+  --accent: #1f6f78;
+  --accent-soft: #dcebe9;
+  --hot: #a15c2e;
+  --hot-soft: #f1e3d5;
+
   --warn: #b5541f;
   --warn-soft: #f1ded0;
   --info: #6b7672;

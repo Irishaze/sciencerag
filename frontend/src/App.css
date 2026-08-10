@@ -313,38 +313,135 @@ button:disabled {
 .hero {
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
+  overflow: hidden;
 }
 
 .hero-inner {
-  max-width: 780px;
+  max-width: 980px;
   margin: 0 auto;
-  padding: 76px 20px 64px;
-  text-align: center;
+  padding: 72px 20px 56px;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 40px;
+  align-items: center;
+}
+
+.hero-copy {
+  animation: hero-rise 0.5s ease-out both;
 }
 
 .hero-eyebrow {
   font-family: var(--mono);
   font-size: 12px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--accent);
-  margin: 0 0 14px;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-eyebrow::before {
+  content: "";
+  width: 22px;
+  height: 1px;
+  background: var(--accent);
 }
 
 .hero-title {
-  font-size: clamp(26px, 4vw, 38px);
-  line-height: 1.25;
-  margin: 0 0 16px;
+  font-size: clamp(28px, 3.6vw, 42px);
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  margin: 0 0 18px;
   font-weight: 700;
   text-wrap: balance;
 }
 
 .hero-sub {
-  font-size: 16px;
+  font-size: 15.5px;
   color: var(--text-dim);
-  line-height: 1.7;
-  margin: 0 auto;
-  max-width: 56ch;
+  line-height: 1.75;
+  margin: 0;
+  max-width: 46ch;
+}
+
+.hero-diagram-wrap {
+  animation: hero-rise 0.6s 0.1s ease-out both;
+}
+
+.tec-diagram {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.tec-diagram-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  fill: var(--text-dim);
+}
+
+.tec-diagram-label.cold {
+  fill: var(--accent);
+}
+
+.tec-diagram-label.hot {
+  fill: var(--hot);
+}
+
+.tec-plate {
+  fill: var(--text);
+  opacity: 0.85;
+}
+
+.tec-leg {
+  stroke: none;
+}
+
+.tec-leg.n {
+  fill: var(--accent);
+}
+
+.tec-leg.p {
+  fill: var(--hot);
+}
+
+.tec-leg-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--surface);
+}
+
+.tec-bridge {
+  fill: var(--text-dim);
+  opacity: 0.6;
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-copy,
+  .hero-diagram-wrap {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero-inner {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---- homepage: feature showcase ---- */
