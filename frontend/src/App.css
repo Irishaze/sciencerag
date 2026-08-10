@@ -323,7 +323,7 @@ button:disabled {
   display: grid;
   grid-template-columns: 1fr minmax(360px, 440px);
   gap: 64px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .hero-copy {
@@ -447,6 +447,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  height: 100%;
 }
 
 .hero-question-label {
@@ -467,6 +468,7 @@ button:disabled {
 .hero-question-input {
   width: 100%;
   min-height: 220px;
+  flex: 1;
   resize: vertical;
   padding: 14px 16px;
   border-radius: 8px;
