@@ -16,6 +16,7 @@ from sciencerag.common.trace import new_trace_id
 from sciencerag.validate.checks import run_anomaly_checks
 from sciencerag.validate.evaluation import evaluate
 from sciencerag.validate.finetune import suggest_surrogate_update
+from sciencerag.validate.kg_candidate_store import store_pending_candidates
 from sciencerag.validate.kg_candidates import extract_kg_candidates
 from sciencerag.validate.models import UpdatePackage, ValidateRequest, ValidateResponse
 
@@ -45,11 +46,17 @@ def post_validate(request: ValidateRequest) -> ValidateResponse | JSONResponse:
         if blocked:
             update_package = UpdatePackage(surrogate_update=None, kg_candidates=[], blocked=True)
         else:
+            kg_candidates = extract_kg_candidates(request, evaluation)
             update_package = UpdatePackage(
                 surrogate_update=suggest_surrogate_update(request, anomalies, evaluation),
-                kg_candidates=extract_kg_candidates(request, evaluation),
+                kg_candidates=kg_candidates,
                 blocked=False,
             )
+            # Queue for scripts/approve_kg_candidates.py --list-pending; the
+            # approval step itself stays a deliberate human action (spec
+            # §6.3), this only removes the "manually copy the response body
+            # into a file" busywork in front of it.
+            store_pending_candidates(request.run_id, kg_candidates)
         response = ValidateResponse(
             anomalies=anomalies,
             evaluation=evaluation,

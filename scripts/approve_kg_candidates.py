@@ -1,14 +1,24 @@
 """Command-line KG candidate approval (spec §7: "v1 可用命令行脚本替代页面";
 §6.3: the only path into the graph is candidate -> approval -> registration).
 
-Input is a JSON file holding a list of KGCandidate-shaped objects — e.g.
-`update_package.kg_candidates` saved from a real /sciencerag/validate
-response. Nothing is written to the graph unless --approve-all or
---approve is passed; with neither, this only previews what's in the file.
+Every /sciencerag/validate call that produces candidates queues them to
+data/kg_candidates/pending/ automatically (see
+sciencerag/validate/kg_candidate_store.py) — pick one from there instead of
+hand-assembling a file:
 
-    uv run python scripts/approve_kg_candidates.py --file candidates.json --list
-    uv run python scripts/approve_kg_candidates.py --file candidates.json --approve 0,2
+    uv run python scripts/approve_kg_candidates.py --list-pending
+    uv run python scripts/approve_kg_candidates.py --pending run_123_2026... --list
+    uv run python scripts/approve_kg_candidates.py --pending run_123_2026... --approve 0,2
+    uv run python scripts/approve_kg_candidates.py --pending run_123_2026... --approve-all
+
+A manually-assembled file still works the same as before via --file:
+
     uv run python scripts/approve_kg_candidates.py --file candidates.json --approve-all
+
+Nothing is written to the graph unless --approve-all or --approve is
+passed; with neither, this only previews. Approving from a --pending file
+archives it (data/kg_candidates/archive/) afterward so it stops showing up
+in --list-pending; --file input is left untouched either way.
 """
 
 from __future__ import annotations
@@ -21,6 +31,7 @@ from pathlib import Path
 from sciencerag.common.audit import log_audit_entry
 from sciencerag.common.trace import new_trace_id
 from sciencerag.priors.kg import KGSource, add_triple
+from sciencerag.validate import kg_candidate_store
 from sciencerag.validate.models import KGCandidate
 
 
@@ -60,8 +71,10 @@ def approve(candidate: KGCandidate, operator: str, reason: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--file", type=Path, required=True)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--list-pending", action="store_true", help="list queued candidate batches and exit")
+    parser.add_argument("--pending", type=str, default=None, help="stem of a queued batch (see --list-pending)")
+    parser.add_argument("--file", type=Path, default=None, help="manually-assembled candidates JSON file")
     parser.add_argument("--list", action="store_true", help="preview only, default if no approval flag given")
     parser.add_argument("--approve", type=str, default=None, help="comma-separated 0-based indices")
     parser.add_argument("--approve-all", action="store_true")
@@ -69,9 +82,25 @@ def main() -> None:
     parser.add_argument("--reason", type=str, default="", help="recorded in the audit log")
     args = parser.parse_args()
 
-    candidates = load_candidates(args.file)
+    if args.list_pending:
+        pending = kg_candidate_store.list_pending()
+        if not pending:
+            print("no pending candidate batches")
+            return
+        for entry in pending:
+            print(f"{entry['stem']}  ({entry['count']} candidate(s))")
+        return
+
+    if args.pending and args.file:
+        print("pass only one of --pending or --file", file=sys.stderr)
+        sys.exit(1)
+    if not args.pending and not args.file:
+        print("pass --pending <stem> (see --list-pending) or --file <path>", file=sys.stderr)
+        sys.exit(1)
+
+    candidates = kg_candidate_store.load_pending(args.pending) if args.pending else load_candidates(args.file)
     if not candidates:
-        print("no candidates in file")
+        print("no candidates in batch")
         return
 
     for index, candidate in enumerate(candidates):
@@ -89,6 +118,9 @@ def main() -> None:
             print(f"skipping out-of-range index {index}", file=sys.stderr)
             continue
         approve(candidates[index], args.operator, args.reason)
+
+    if args.pending:
+        kg_candidate_store.archive_pending(args.pending)
 
 
 if __name__ == "__main__":

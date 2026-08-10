@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from sciencerag.app import app
 from sciencerag.priors import kg
-from sciencerag.validate import tec_bridge
+from sciencerag.validate import kg_candidate_store, tec_bridge
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parent.parent / "sciencerag" / "schemas" / "validate.schema.json"
@@ -33,6 +33,10 @@ def _tmp_graph(tmp_path, monkeypatch):
     real approval run) has ever written to it. Same isolation test_ask_route.py
     and test_kg_graph.py already use."""
     monkeypatch.setattr(kg, "GRAPH_PATH", tmp_path / "graph.json")
+    # Same reasoning for the pending-candidates queue: without this, every
+    # run here would drop a real file into data/kg_candidates/pending/.
+    monkeypatch.setattr(kg_candidate_store, "PENDING_DIR", tmp_path / "kg_candidates_pending")
+    monkeypatch.setattr(kg_candidate_store, "ARCHIVE_DIR", tmp_path / "kg_candidates_archive")
 
 
 def _report_row(index: int) -> tuple[dict[str, float], dict[str, float]]:
@@ -94,6 +98,12 @@ def test_matching_benchmark_case_is_consistent() -> None:
     assert {c["relation"] for c in candidates} == {f"achieves_{name}" for name in scalar_results}
     assert all(c["dedup_status"] == "new" for c in candidates)
     assert all(c["confidence"] == pytest.approx(0.7) for c in candidates)
+    # Non-empty kg_candidates should be queued for approve_kg_candidates.py
+    # --list-pending, not just returned in the response body.
+    pending = kg_candidate_store.list_pending()
+    assert any(entry["stem"].startswith("run_benchmark_match_") for entry in pending)
+    matching_entry = next(e for e in pending if e["stem"].startswith("run_benchmark_match_"))
+    assert matching_entry["count"] == len(candidates)
 
 
 def test_benchmark_deviation_is_flagged() -> None:
