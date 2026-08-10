@@ -1,3 +1,11 @@
+:root {
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
 .page {
   max-width: 980px;
   margin: 0 auto;
@@ -9,37 +17,54 @@ h1 {
   margin: 0 0 6px;
 }
 
-.eyebrow {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+/* ---- top nav (persistent across all pages, no spec/explanatory copy) ---- */
+
+.site-nav {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.lede {
-  color: var(--text-dim);
-  font-size: 14px;
-  margin: 0 0 28px;
+.site-nav-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
 }
 
-.lede code {
-  background: var(--surface-2);
-  padding: 1px 5px;
-  border-radius: 4px;
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.wordmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--line);
+  gap: 4px;
 }
 
 .tab {
-  padding: 10px 16px;
+  padding: 8px 14px;
   cursor: pointer;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 13.5px;
   border: none;
   background: none;
   border-bottom: 2px solid transparent;
@@ -283,32 +308,145 @@ button:disabled {
   gap: 14px;
 }
 
-.home-card {
-  display: block;
+/* ---- homepage: hero ---- */
+
+.hero {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.hero-inner {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 76px 20px 64px;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 14px;
+}
+
+.hero-title {
+  font-size: clamp(26px, 4vw, 38px);
+  line-height: 1.25;
+  margin: 0 0 16px;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+.hero-sub {
+  font-size: 16px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin: 0 auto;
+  max-width: 56ch;
+}
+
+/* ---- homepage: feature showcase ---- */
+
+.feature-section {
+  padding-top: 56px;
+}
+
+.feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 18px 20px;
+  border-radius: 12px;
+  padding: 22px 22px 20px;
   text-decoration: none;
   color: var(--text);
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
-.home-card:hover {
+.feature-card:hover {
   border-color: var(--accent);
+  transform: translateY(-2px);
 }
 
-.home-card h2 {
-  margin: 0 0 6px;
-  font-size: 16px;
+.feature-tag {
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--accent);
+  background: var(--accent-soft);
+  padding: 2px 9px;
+  border-radius: 999px;
 }
 
-.home-card p {
+.feature-card h2 {
+  margin: 4px 0 0;
+  font-size: 17px;
+}
+
+.feature-card p {
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-dim);
-  line-height: 1.6;
+  line-height: 1.65;
+  flex: 1;
+}
+
+.feature-metric {
+  font-size: 12px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+
+/* ---- homepage: bottom ask CTA ---- */
+
+.ask-cta {
+  background: var(--surface-2);
+  border-top: 1px solid var(--line);
+  margin-top: 64px;
+}
+
+.ask-cta-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.ask-cta-copy h2 {
+  margin: 0 0 6px;
+  font-size: 21px;
+}
+
+.ask-cta-form {
+  display: flex;
+  gap: 10px;
+}
+
+.ask-cta-form textarea {
+  flex: 1;
+  min-height: 64px;
+}
+
+@media (max-width: 760px) {
+  .ask-cta-inner {
+    grid-template-columns: 1fr;
+  }
+  .ask-cta-form {
+    flex-direction: column;
+  }
+  .ask-cta-form button {
+    align-self: flex-start;
+  }
 }
 
 .node-edge-list {

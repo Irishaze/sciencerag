@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError, ask } from "../api";
 import type { AskResponse } from "../types";
+
+type LocationState = { initialQuestion?: string } | null;
 
 export function AskPage() {
   const [question, setQuestion] = useState("");
@@ -9,12 +11,16 @@ export function AskPage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AskResponse | null>(null);
 
-  async function handleAsk() {
-    if (!question.trim()) return;
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  async function handleAsk(questionOverride?: string) {
+    const q = (questionOverride ?? question).trim();
+    if (!q) return;
     setLoading(true);
     setError(null);
     try {
-      const response = await ask(question.trim());
+      const response = await ask(q);
       setResult(response);
     } catch (e) {
       setError(e instanceof ApiError ? `${e.category}: ${e.message}` : String(e));
@@ -22,6 +28,21 @@ export function AskPage() {
       setLoading(false);
     }
   }
+
+  // Homepage's bottom Q&A box lands here with the question pre-filled via
+  // router state (navigate("/ask", { state: { initialQuestion } })) —
+  // fires the same query automatically instead of making the user retype
+  // and click again. Clears the state afterward (replace, no new history
+  // entry) so a later page refresh on /ask doesn't silently re-ask it.
+  useEffect(() => {
+    const state = location.state as LocationState;
+    const initial = state?.initialQuestion;
+    if (!initial) return;
+    setQuestion(initial);
+    handleAsk(initial);
+    navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="panel">
@@ -34,7 +55,7 @@ export function AskPage() {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAsk();
           }}
         />
-        <button onClick={handleAsk} disabled={loading}>
+        <button onClick={() => handleAsk()} disabled={loading}>
           {loading ? "查询中…" : "提问"}
         </button>
       </div>

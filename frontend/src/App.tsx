@@ -14,34 +14,54 @@ const NAV_ITEMS = [
 
 export default function App() {
   return (
-    <div className="page">
-      <header className="top">
-        <div className="eyebrow">sciencerag</div>
-        <h1>ScienceRAG Workbench</h1>
-        <p className="lede">
-          spec §7 v1 web 前端。文献/知识候选审批面板按 spec §7 规定以命令行脚本形式提供
-          （<code>scripts/approve_kg_candidates.py</code>），不在本站内。
-        </p>
-      </header>
-
-      <nav className="tabs">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) => (isActive ? "tab active" : "tab")}
-          >
-            {item.label}
+    <div className="app-shell">
+      <nav className="site-nav">
+        <div className="site-nav-inner">
+          <NavLink to="/" className="wordmark">
+            <span className="wordmark-dot" />
+            ScienceRAG
           </NavLink>
-        ))}
+          <div className="tabs">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => (isActive ? "tab active" : "tab")}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
       </nav>
 
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/ask" element={<AskPage />} />
-        <Route path="/graph" element={<GraphPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route
+          path="/ask"
+          element={
+            <div className="page">
+              <AskPage />
+            </div>
+          }
+        />
+        <Route
+          path="/graph"
+          element={
+            <div className="page">
+              <GraphPage />
+            </div>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <div className="page">
+              <ReportsPage />
+            </div>
+          }
+        />
       </Routes>
     </div>
   );
