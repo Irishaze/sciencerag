@@ -61,6 +61,27 @@ def _to_float(raw: str) -> float:
     return float(raw.replace(",", ""))
 
 
+# Chemical formulas (Bi2Te3) and citation labels this corpus's evidence
+# spans are tagged with (Uglah2025, hasan2024influenceofleg) are letters
+# directly followed by digits, no space. _COMBINED_RE's (?<![A-Za-z]) guard
+# only blocks the match position right after the letter — the regex engine
+# just retries one character later, and a retry starting mid-digit-run
+# (e.g. right after "Uglah2" in "Uglah2025") isn't preceded by a letter
+# anymore, so it happily matches the tail "025" as if it were a standalone
+# number (-> 25.0). Found via a real production trace: an LLM-written
+# `caution.statement` citing "Uglah2025 (E2) observed..." got a fabricated
+# 25.0 added to what the prior "asserts", which of course isn't in any
+# evidence text, and a legitimate prior was rejected over it. Masking the
+# whole identifier out before matching (rather than only guarding one
+# position) closes the gap instead of leaving it for the next retry offset
+# to slip through.
+_IDENTIFIER_RE = re.compile(r"[A-Za-z]+\d[\w.]*")
+
+
+def _mask_identifiers(text: str) -> str:
+    return _IDENTIFIER_RE.sub(lambda m: " " * len(m.group()), text)
+
+
 def extract_numbers_from_text(text: str) -> list[float]:
     """Every number mentioned in `text`, including numbers implied by
     compound expressions:
@@ -72,6 +93,7 @@ def extract_numbers_from_text(text: str) -> list[float]:
         both endpoints)
       - "60±5" / "60+/-5" -> 60.0 and 5.0 (base value and deviation)
     """
+    text = _mask_identifiers(text)
     numbers: list[float] = []
     for m in _COMBINED_RE.finditer(text):
         if m.group("plusminus"):

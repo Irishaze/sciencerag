@@ -58,6 +58,22 @@ def test_extract_numbers_from_text_still_matches_number_abutting_unit():
     assert extract_numbers_from_text("COP peaks at 60um leg length.") == [60.0]
 
 
+def test_extract_numbers_from_text_ignores_citation_label_digits():
+    """Found via a real /sciencerag/priors/_debug trace: this corpus's
+    evidence spans are labeled like "Uglah2025 pages 4-5", and the LLM
+    naturally echoes that label in free-text fields (a caution's
+    `statement`, `notes`) when explaining which source said what. The old
+    single-position (?<![A-Za-z]) guard only blocked matching right after
+    the "h" in "Uglah" — the regex engine just retried one character later,
+    inside the digit run, and picked up the tail "025" as if it were a
+    real standalone number (-> 25.0), fabricating an assertion that then
+    correctly-for-the-wrong-reason failed groundedness against real
+    evidence text. A real number elsewhere in the same sentence (the "7"
+    in "peak at 7 mm") must still come through."""
+    text = "Uglah2025 (E2) observed cold side temperature peak at 7 mm."
+    assert extract_numbers_from_text(text) == [7.0]
+
+
 def test_extract_numbers_from_text_thousands_comma():
     assert extract_numbers_from_text("Tested over 1,200 cycles.") == [1200.0]
 
