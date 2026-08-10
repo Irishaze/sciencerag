@@ -63,7 +63,7 @@ def test_allow_external_true_but_no_gaps_is_a_no_op(monkeypatch):
     assert called == []
 
 
-def test_augments_priors_with_downweighted_external_provenance(monkeypatch):
+def test_augments_priors_with_external_provenance_and_unweighted_confidence(monkeypatch):
     monkeypatch.setattr(retrieval, "search_semantic_scholar", lambda query: [_fake_paper()])
     monkeypatch.setattr(
         retrieval, "extract_priors", lambda query, evidence_table, trace=None: ([_fake_prior(0.8)], 0)
@@ -73,7 +73,10 @@ def test_augments_priors_with_downweighted_external_provenance(monkeypatch):
     assert len(response.priors) == 1
     prior = response.priors[0]
     assert prior.provenance == "external_unverified"
-    assert prior.confidence == round(0.8 * retrieval.EXTERNAL_CONFIDENCE_DOWNWEIGHT, 3)
+    # provenance alone marks the source as unverified — trust is upgraded
+    # only through scripts/approve_external_papers.py, not a confidence
+    # multiplier, so this should be the same 0.8 extract_priors produced.
+    assert prior.confidence == 0.8
 
     pending = external_retrieval._load_pending()
     assert "10.1/ext" in pending

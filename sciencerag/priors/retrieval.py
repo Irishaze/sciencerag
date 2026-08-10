@@ -26,7 +26,6 @@ from sciencerag.priors.extract import (
     extract_priors,
 )
 from sciencerag.priors.external_retrieval import (
-    EXTERNAL_CONFIDENCE_DOWNWEIGHT,
     record_pending_papers,
     search_semantic_scholar,
 )
@@ -410,9 +409,10 @@ def _augment_with_external(
 ) -> PriorsResponse:
     """M6 (spec §3.2/§3.5): supplement with Semantic Scholar when internal
     coverage is insufficient (any `coverage.gaps`) and the caller opted in.
-    Results are tagged `provenance="external_unverified"` and their
-    confidence downweighted — never merged into "trusted" internal
-    priors — per spec §3.5's two-tier trust model."""
+    Results are tagged `provenance="external_unverified"` so callers can
+    still tell the source apart; trust is upgraded only through
+    scripts/approve_external_papers.py's promotion queue, not through a
+    confidence multiplier here."""
     if not allow_external or not response.coverage.gaps:
         return response
 
@@ -445,7 +445,6 @@ def _augment_with_external(
 
     for prior in external_priors:
         prior.provenance = "external_unverified"
-        prior.confidence = round(prior.confidence * EXTERNAL_CONFIDENCE_DOWNWEIGHT, 3)
 
     response.priors = response.priors + external_priors
     response.coverage.external_hits = len(papers)

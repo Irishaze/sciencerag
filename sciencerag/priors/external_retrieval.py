@@ -40,13 +40,6 @@ DEFAULT_LIMIT = 5
 PENDING_PATH = Path("data/external_papers/pending.json")
 APPROVED_PATH = Path("data/external_papers/approved.json")
 
-# spec §3.5: "外部结果标记为 provenance: external_unverified,以便下游按可信
-# 度加权处理" — the actual downweight factor isn't specified there, so this
-# is a documented starting value or 0.7, not a calibrated one (same honesty
-# convention as sciencerag/validate/finetune.py's heuristic constants).
-EXTERNAL_CONFIDENCE_DOWNWEIGHT = 0.7
-
-
 class ExternalPaper(BaseModel):
     title: str
     abstract: str
