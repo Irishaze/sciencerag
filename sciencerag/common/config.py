@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEFAULT_LLM_MODEL = "deepseek/deepseek-chat"
+DEFAULT_LLM_MODEL = "deepseek/deepseek-v4-pro"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 
 

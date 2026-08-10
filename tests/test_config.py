@@ -5,7 +5,7 @@ from sciencerag.common import config
 
 def test_default_llm_model_is_deepseek(monkeypatch):
     monkeypatch.delenv("SCIENCERAG_LLM_MODEL", raising=False)
-    assert config.get_llm_model() == "deepseek/deepseek-chat"
+    assert config.get_llm_model() == "deepseek/deepseek-v4-pro"
 
 
 def test_default_embedding_model_is_openai(monkeypatch):
