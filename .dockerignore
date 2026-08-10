@@ -17,3 +17,10 @@ tec_surrogate/data/raw/
 .env
 .env.*
 !.env.example
+
+# frontend build artifacts — the Dockerfile's frontend-build stage runs its
+# own `npm install`/`npm run build` inside the container; copying the
+# host's node_modules/dist in would risk platform-mismatched native
+# binaries and stale output.
+frontend/node_modules/
+frontend/dist/

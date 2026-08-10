@@ -122,7 +122,22 @@ GET /sciencerag/reports/{stem}     # 取一份
 
 知识图谱(`sciencerag/priors/kg.py`)从 M1 阶段的空实现,升级成了真实的 JSON 文件存储(`data/kg/graph.json`):同一 subject/relation/条件的新数据,数值一致就合并来源,数值冲突就并列保留、标记冲突,绝不静默覆盖。**唯一的写入路径**是 `scripts/approve_kg_candidates.py`——读取 M2/M3 产出的知识候选,人工批准后才真正入库(spec §6.3:写入图谱只能走候选→审批这一条路)。
 
-Web 前端是单个静态页面 `sciencerag/static/workbench.html`(访问 `/workbench`),不是 spec §7 描述的完整 Vite/React 应用——跟已有的 `/demo`(M1 的检索演示页)一样的"v1 不上构建工具链"范围控制。包含问答面板(内嵌 SVG 子图可视化)和报告浏览面板;文献/知识候选审批面板按 spec §7 的明文许可,v1 用命令行脚本代替(`scripts/approve_kg_candidates.py`、`scripts/approve_external_papers.py`)。
+Web 前端有两个:`sciencerag/static/workbench.html`(访问 `/workbench`)是最初的单页静态版本(纯 HTML + vanilla JS,不需要构建),`frontend/` 是后来按 spec §7 补的真正 Vite/React 工程(访问 `/app`,构建产物由后端同进程托管,见下文「前端开发」一节)。两者功能等价——问答面板(含真正的力导向图谱可视化)、报告浏览面板;文献/知识候选审批面板按 spec §7 的明文许可,两个前端都不做,v1 用命令行脚本代替(`scripts/approve_kg_candidates.py`、`scripts/approve_external_papers.py`)。`workbench.html` 保留作为不需要 Node 环境时的轻量参考实现。
+
+## 前端开发(`frontend/`)
+
+spec §7 描述的完整 Vite/React 前端,构建后由 FastAPI 同进程托管(不是独立的 Node 服务;`sciencerag/app.py` 在 `frontend/dist/` 存在时挂载到 `/app`,访问根路径 `/` 会重定向过去)。
+
+```bash
+cd frontend
+npm install
+npm run dev     # 开发模式:http://localhost:5173,API 请求通过 Vite 的 proxy 转给 http://127.0.0.1:8000(需要后端另开一个终端跑 uv run uvicorn sciencerag.app:app --port 8000)
+npm run build   # 生产构建 → frontend/dist/,之后后端自己起来就能在 /app 访问,不需要额外的 Node 进程
+```
+
+`vite.config.ts` 里 `base: '/app/'` 是关键配置——因为这个前端不是挂在域名根路径,构建产物里的资源引用必须带上 `/app/` 前缀,不然浏览器会去请求不存在的根路径资源(这个坑真的踩过,修的时候还专门加了 `tests/test_static_pages.py` 里两个断言资源路径的测试防止再犯)。
+
+图谱可视化用的是 `react-force-graph-2d`(真正的力导向布局,不是之前 workbench.html 里手搓的圆形排列),报告 Markdown 渲染用 `react-markdown`。
 
 ## 外部检索与批量证据(M6)
 
@@ -146,9 +161,11 @@ POST /sciencerag/priors/batch_evidence
 docker compose up --build
 ```
 
-`Dockerfile`/`docker-compose.yml` 打包 FastAPI 服务本身(含 `/workbench`、`/demo` 静态页面)。真实 API key 放进 `.env`(参考 `.env.example`),`data/`、`logs/`、PaperQA2 索引通过 volume 持久化,重启容器不丢。torch 锁定 CPU-only 版本(`pyproject.toml` 的 `[tool.uv.sources]`)——这套系统的 torch 只做小图上的推理前向传播,默认版本会额外拉几个 GB 的 NVIDIA CUDA 运行库,完全用不上。
+`Dockerfile` 是两阶段构建:第一阶段 `node:22-slim` 编译 `frontend/`(`npm install && npm run build`),第二阶段 `python:3.12-slim` 跑 FastAPI 服务,只把第一阶段的构建产物(`frontend/dist/`)拷进来,Node 本身不进最终镜像。真实 API key 放进 `.env`(参考 `.env.example`),`data/`、`logs/`、PaperQA2 索引通过 volume 持久化,重启容器不丢。torch 锁定 CPU-only 版本(`pyproject.toml` 的 `[tool.uv.sources]`)——这套系统的 torch 只做小图上的推理前向传播,默认版本会额外拉几个 GB 的 NVIDIA CUDA 运行库,完全用不上。
 
-**已知的部署缺口**:`tec_surrogate/` 目前完全没有提交到本仓库(是同事维护的独立项目,包含训练好的模型文件),`corpus/papers/` 也只有 6 篇种子论文进了 git(其余靠本地 `.gitignore` 排除的方式管理)。这意味着**从 GitHub 全新 `git clone` 之后直接构建镜像会失败**——M2 的物理检查、M3 的知识候选依赖 `tec_surrogate/` 的模型文件。目前只支持"本地已有完整目录 → 本地构建镜像 → 把构建好的镜像推到registry"这条路径,不支持"远程主机拉 git 仓库现场构建"。要解决这个缺口,需要决定 `tec_surrogate/` 是整个提交(可能要上 Git LFS 存二进制文件)还是作为部署时的独立步骤单独同步。
+**部署缺口已解决**:`tec_surrogate/` 现在完整提交在本仓库里(排除了两个 120MB 的 COMSOL `.mph` 源文件,超过 GitHub 单文件 100MB 限制,而且部署不需要它们——见 `.gitignore` 里的说明)。已经用真正的全新 `git clone` + `docker build` 验证过端到端能跑通,不是只在本地已填好数据的目录里测过。踩过一个坑记录一下:根目录 `.gitignore` 一开始有条不带前导 `/` 的 `data/` 规则,git 的通配符语义下这条规则会匹配任意深度的 `data/` 目录,结果第一次提交 `tec_surrogate/` 时把 `tec_surrogate/data/`(含运行时要加载的模型文件)整个静默排除了——只有从全新 clone 构建才会暴露这个问题,本地一直"能跑"是因为本地目录本来就有这些文件,不代表 git 里真的有。现在已锚定成 `/data/`,只匹配仓库根目录。
+
+`corpus/papers/` 目前仍只有 6 篇种子论文进了 git,其余靠本地 `.gitignore` 规则管理,不在这次修复范围内(不影响服务能否启动,只影响 `priors` 检索能看到多少论文)。
 
 ## 状态
 
