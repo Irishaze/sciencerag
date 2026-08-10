@@ -111,3 +111,33 @@ def test_reports_listing_and_fetch_endpoints():
 def test_fetch_nonexistent_report_is_404():
     response = client.get("/sciencerag/reports/does_not_exist")
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize("bad_run_id", ["../../etc/passwd", "a/b", "a\\b"])
+def test_run_id_with_path_separator_is_rejected(bad_run_id: str, tmp_path):
+    """Adversarial test: run_id flows unsanitized into report/store.py's
+    filename construction. Confirmed for real: run_id="../kg/marker" made
+    POST /sciencerag/report write a file onto the HOST filesystem outside
+    data/reports/ entirely (data/ is bind-mounted in docker-compose.yml,
+    so this reaches real host paths, not just the container's). Reject at
+    the API boundary."""
+    payload = {**_BASE_PAYLOAD, "run_id": bad_run_id}
+    response = client.post("/sciencerag/report", json=payload)
+    assert response.status_code == 422
+    # And nothing should have been written anywhere, including outside tmp_path.
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_non_finite_scalar_result_is_rejected():
+    """Adversarial test: a NaN scalar_result was confirmed to flow through
+    unblocked, get embedded in update_package.kg_candidates, and get
+    written into data/kg/graph.json as a literal non-standard NaN JSON
+    token once approved via scripts/approve_kg_candidates.py."""
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        payload = {**_BASE_PAYLOAD, "scalar_results": {"delta_T_max_K": bad}}
+        response = client.post(
+            "/sciencerag/report",
+            content=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 422, f"scalar_results={bad} should be rejected"

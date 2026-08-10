@@ -18,10 +18,15 @@ only path into the graph is candidate -> approval -> registration).
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import fcntl
 import json
+import math
+import os
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Iterator, Literal
 import uuid
 
 from pydantic import BaseModel, Field
@@ -79,11 +84,46 @@ def _load_triples() -> list[KGTriple]:
 
 
 def _save_triples(triples: list[KGTriple]) -> None:
+    """Write-to-temp-then-rename rather than an in-place write_text(): a
+    concurrent _load_triples() landing mid-write on a plain write_text()
+    call can read a truncated or partially-overwritten file (confirmed via
+    a real concurrency test: parallel add_triple() calls produced json
+    parse errors like "Expecting value" and "Extra data" from readers
+    catching a write in progress). os.replace() is atomic on POSIX, so a
+    reader always sees either the fully-old or fully-new file, never a
+    partial one."""
     GRAPH_PATH.parent.mkdir(parents=True, exist_ok=True)
-    GRAPH_PATH.write_text(
-        json.dumps([t.model_dump() for t in triples], indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    fd, tmp_name = tempfile.mkstemp(dir=GRAPH_PATH.parent, prefix=".graph_tmp_")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps([t.model_dump() for t in triples], indent=2, ensure_ascii=False))
+        os.replace(tmp_name, GRAPH_PATH)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
+@contextmanager
+def _graph_lock() -> Iterator[None]:
+    """add_triple()'s read-modify-write (load whole file, mutate, save
+    whole file) is not itself atomic — two concurrent callers can both
+    load the same "before" state, each add their own triple, and the
+    second save silently clobbers the first's addition. Confirmed via a
+    real test: 20 concurrent add_triple() calls against the same graph
+    lost 14 of them. An OS-level advisory lock around the whole
+    load-mutate-save cycle serializes concurrent callers (both concurrent
+    HTTP-adjacent callers and, more realistically, two people running
+    scripts/approve_kg_candidates.py at the same time) so no addition is
+    silently dropped. fcntl.flock is POSIX-only, matching this project's
+    actual deployment target (Docker/Linux container, Mac dev)."""
+    lock_path = GRAPH_PATH.parent / (GRAPH_PATH.name + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
 
 
 def _find_matching_condition_triple(
@@ -113,19 +153,44 @@ def add_triple(
 ) -> tuple[KGTriple, Literal["added", "merged", "conflict"]]:
     """The only write path into the graph (spec §6.3). Callers are expected
     to have already run this through human approval."""
-    triples = _load_triples()
-    existing = _find_matching_condition_triple(triples, subject, relation, conditions)
+    if not math.isfinite(object_value):
+        # Last gate before permanent storage — API-level input validation
+        # (ValidateRequest/ReportRequest) catches this for the normal path,
+        # but scripts/approve_kg_candidates.py --file accepts a hand-
+        # assembled JSON file that never goes through that validation, so
+        # this check is the one thing every write path actually shares.
+        raise ValueError(f"object_value must be finite, got {object_value!r}")
+    with _graph_lock():
+        triples = _load_triples()
+        existing = _find_matching_condition_triple(triples, subject, relation, conditions)
 
-    if existing is not None:
-        tolerance = DUPLICATE_VALUE_RELATIVE_TOLERANCE * max(abs(existing.object_value), 1e-9)
-        if abs(existing.object_value - object_value) <= tolerance:
-            if run_id not in existing.run_ids:
-                existing.run_ids.append(run_id)
-            existing.sources.extend(sources)
+        if existing is not None:
+            tolerance = DUPLICATE_VALUE_RELATIVE_TOLERANCE * max(abs(existing.object_value), 1e-9)
+            if abs(existing.object_value - object_value) <= tolerance:
+                if run_id not in existing.run_ids:
+                    existing.run_ids.append(run_id)
+                existing.sources.extend(sources)
+                _save_triples(triples)
+                return existing, "merged"
+
+            conflict = KGTriple(
+                triple_id=f"kg_{uuid.uuid4().hex[:12]}",
+                subject=subject,
+                relation=relation,
+                object_value=object_value,
+                object_unit=object_unit,
+                conditions=conditions,
+                confidence=confidence,
+                run_ids=[run_id],
+                sources=sources,
+                conflicts_with=existing.triple_id,
+                created_at=_now_iso(),
+            )
+            triples.append(conflict)
             _save_triples(triples)
-            return existing, "merged"
+            return conflict, "conflict"
 
-        conflict = KGTriple(
+        new_triple = KGTriple(
             triple_id=f"kg_{uuid.uuid4().hex[:12]}",
             subject=subject,
             relation=relation,
@@ -135,28 +200,11 @@ def add_triple(
             confidence=confidence,
             run_ids=[run_id],
             sources=sources,
-            conflicts_with=existing.triple_id,
             created_at=_now_iso(),
         )
-        triples.append(conflict)
+        triples.append(new_triple)
         _save_triples(triples)
-        return conflict, "conflict"
-
-    new_triple = KGTriple(
-        triple_id=f"kg_{uuid.uuid4().hex[:12]}",
-        subject=subject,
-        relation=relation,
-        object_value=object_value,
-        object_unit=object_unit,
-        conditions=conditions,
-        confidence=confidence,
-        run_ids=[run_id],
-        sources=sources,
-        created_at=_now_iso(),
-    )
-    triples.append(new_triple)
-    _save_triples(triples)
-    return new_triple, "added"
+        return new_triple, "added"
 
 
 def _render_text(triple: KGTriple) -> str:

@@ -1,9 +1,13 @@
 """ScienceRAG FastAPI app: a single process, one router per endpoint (§2/§7)."""
 
+import math
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 from starlette.types import Scope
@@ -21,6 +25,33 @@ app.include_router(priors_router)
 app.include_router(validate_router)
 app.include_router(report_router)
 app.include_router(ask_router)
+
+
+def _sanitize_non_finite(value: Any) -> Any:
+    """Starlette's JSONResponse.render() hardcodes allow_nan=False (real
+    RFC 8259 compliance), but Pydantic's RequestValidationError echoes the
+    raw rejected input back in each error's "input" field — so a request
+    that our own reject_non_finite_values validator correctly rejects with
+    a NaN/Infinity float in it crashes FastAPI's *own* default 422 handler
+    while it tries to build the error response, surfacing an unhandled 500
+    instead of the clean typed error every endpoint here otherwise
+    guarantees. Recursively swap any non-finite float for its str() before
+    handing the error body to JSONResponse."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _sanitize_non_finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_non_finite(v) for v in value]
+    return value
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": _sanitize_non_finite(jsonable_encoder(exc.errors()))},
+    )
 
 
 @app.get("/demo")

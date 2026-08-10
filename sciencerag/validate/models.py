@@ -10,8 +10,9 @@ because this run must not feed downstream learning".
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from sciencerag.common.validators import reject_non_finite_values, reject_path_unsafe_id
 from sciencerag.priors.models import Prior, Source
 
 
@@ -28,6 +29,10 @@ class ValidateRequest(BaseModel):
     # benchmark comparison. Empty => benchmark check reports
     # insufficient_benchmark rather than guessing.
     scalar_results: dict[str, float] = Field(default_factory=dict)
+
+    _validate_run_id = field_validator("run_id")(reject_path_unsafe_id)
+    _validate_design_parameters = field_validator("design_parameters")(reject_non_finite_values)
+    _validate_scalar_results = field_validator("scalar_results")(reject_non_finite_values)
     # Which of the 11 solved one-pair COMSOL operating points (index into
     # tec_1pair_dset3.npz) this run's geometry/current corresponds to. Only
     # real solved field data we have — None skips 4.1.1/4.1.2 with an info

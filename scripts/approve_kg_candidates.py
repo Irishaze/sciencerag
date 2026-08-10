@@ -98,7 +98,18 @@ def main() -> None:
         print("pass --pending <stem> (see --list-pending) or --file <path>", file=sys.stderr)
         sys.exit(1)
 
-    candidates = kg_candidate_store.load_pending(args.pending) if args.pending else load_candidates(args.file)
+    try:
+        candidates = (
+            kg_candidate_store.load_pending(args.pending) if args.pending else load_candidates(args.file)
+        )
+    except FileNotFoundError:
+        source = f"pending batch {args.pending!r}" if args.pending else f"file {args.file}"
+        print(f"no such {source} — check --list-pending or the --file path", file=sys.stderr)
+        sys.exit(1)
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"couldn't read candidates: {e}", file=sys.stderr)
+        sys.exit(1)
+
     if not candidates:
         print("no candidates in batch")
         return
@@ -109,7 +120,11 @@ def main() -> None:
     if args.approve_all:
         indices = list(range(len(candidates)))
     elif args.approve:
-        indices = [int(item) for item in args.approve.split(",") if item.strip()]
+        try:
+            indices = [int(item) for item in args.approve.split(",") if item.strip()]
+        except ValueError:
+            print(f"--approve must be comma-separated integers, got {args.approve!r}", file=sys.stderr)
+            sys.exit(1)
     else:
         return  # preview-only
 
@@ -117,7 +132,13 @@ def main() -> None:
         if not 0 <= index < len(candidates):
             print(f"skipping out-of-range index {index}", file=sys.stderr)
             continue
-        approve(candidates[index], args.operator, args.reason)
+        try:
+            approve(candidates[index], args.operator, args.reason)
+        except ValueError as e:
+            # A single bad candidate (e.g. a non-finite object_value —
+            # add_triple's own last-gate check) shouldn't abort the rest
+            # of an otherwise-good batch.
+            print(f"  -> REJECTED [{index}]: {e}", file=sys.stderr)
 
     if args.pending:
         kg_candidate_store.archive_pending(args.pending)

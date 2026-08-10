@@ -55,6 +55,7 @@ def main() -> None:
         mark = "KEEP" if kept else "cut "
         doi = e["doi"] or "(no doi)"
         print(f"  [{mark}] relevance={e['relevance']:.3f}  {doi}  {e['span']}")
+        print(f"        {e['text']}")
     print(f"\n  total retrieved: {len(all_evidence)}")
 
     # ---------------------------------------------------------- step 2/5
@@ -66,6 +67,7 @@ def main() -> None:
     for label, item in zip(trace["evidence_labels"], survivors):
         doi = item["doi"] or "(no doi)"
         print(f"  {label}: relevance={item['relevance']:.3f}  {doi}  {item['span']}")
+        print(f"       {item['text']}")
 
     # ---------------------------------------------------------- step 3/5
     _rule("3/5  numeric-groundedness check")

@@ -250,3 +250,46 @@ def test_field_case_index_out_of_range_is_rejected() -> None:
         json={"run_id": "run_bad_index", "field_case_index": 99, "priors": []},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("bad_run_id", ["../../etc/passwd", "a/b", "a\\b"])
+def test_run_id_with_path_separator_is_rejected(bad_run_id: str) -> None:
+    """Adversarial test: run_id flows unsanitized into a filename in both
+    report/store.py and validate/kg_candidate_store.py — confirmed a
+    crafted run_id like "../kg/marker" made POST /sciencerag/report write
+    a file onto the host filesystem outside data/reports/ entirely (data/
+    is bind-mounted in docker-compose.yml). Reject at the API boundary."""
+    response = client.post(
+        "/sciencerag/validate",
+        json={"run_id": bad_run_id, "design_parameters": {}, "n_pairs": 1, "priors": []},
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("field", ["design_parameters", "scalar_results"])
+def test_non_finite_numeric_values_are_rejected(field: str) -> None:
+    """Adversarial test: NaN/Infinity are valid Python floats, so Pydantic
+    accepts them by default. A NaN scalar_result was confirmed to flow
+    unblocked into a KG candidate, get auto-queued for approval, and get
+    written into data/kg/graph.json as a literal non-standard NaN JSON
+    token by scripts/approve_kg_candidates.py. Reject at the API boundary
+    instead of letting a non-finite number reach permanent storage."""
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        payload = {
+            "run_id": "run_non_finite",
+            "design_parameters": {},
+            "n_pairs": 1,
+            "priors": [],
+            field: {"leg_length": bad},
+        }
+        # httpx's own JSON encoder refuses to even serialize a NaN/Infinity
+        # float client-side (unlike the real curl-based attack, which sent
+        # raw bytes with no client-side validation at all) — build the
+        # request body with stdlib json.dumps (allow_nan=True by default)
+        # to reproduce the real wire format instead.
+        response = client.post(
+            "/sciencerag/validate",
+            content=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 422, f"{field}={bad} should be rejected"

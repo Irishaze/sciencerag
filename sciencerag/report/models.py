@@ -11,8 +11,9 @@ not a re-computation of it.
 from datetime import UTC, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from sciencerag.common.validators import reject_non_finite_values, reject_path_unsafe_id
 from sciencerag.priors.models import Prior, Source, TaskContext
 from sciencerag.validate.models import Anomaly, Evaluation, UpdatePackage
 
@@ -27,6 +28,10 @@ class ReportRequest(BaseModel):
     anomalies: list[Anomaly] = Field(default_factory=list)
     evaluation: Evaluation
     update_package: UpdatePackage
+
+    _validate_run_id = field_validator("run_id")(reject_path_unsafe_id)
+    _validate_design_parameters = field_validator("design_parameters")(reject_non_finite_values)
+    _validate_scalar_results = field_validator("scalar_results")(reject_non_finite_values)
 
 
 class KeyResult(BaseModel):

@@ -3,6 +3,10 @@ M5). Points GRAPH_PATH at a tmp file per test so these don't touch/depend
 on the real data/kg/graph.json.
 """
 
+import threading
+
+import pytest
+
 from sciencerag.priors import kg
 
 
@@ -123,3 +127,66 @@ def test_unrelated_entity_returns_empty_subgraph(tmp_path, monkeypatch):
     )
     subgraph = kg.get_subgraph(["something else entirely"])
     assert subgraph == {"nodes": [], "edges": []}
+
+
+def test_add_triple_rejects_non_finite_object_value(tmp_path, monkeypatch):
+    """The last gate before permanent storage — found via an adversarial
+    test where a NaN scalar_result flowed unblocked all the way from
+    POST /sciencerag/validate into a queued KG candidate that
+    scripts/approve_kg_candidates.py then happily wrote into graph.json as
+    a literal (non-standard, RFC-8259-violating) NaN JSON token. API-level
+    validation now catches the normal path (ValidateRequest/ReportRequest),
+    but add_triple() itself is the one check every write path shares,
+    including a hand-assembled --file passed straight to the CLI."""
+    _reset_graph_path(tmp_path, monkeypatch)
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError, match="finite"):
+            kg.add_triple(
+                subject="Bi2Te3 single-stage TEC",
+                relation="achieves_delta_T_max_K",
+                object_value=bad,
+                object_unit="K",
+                conditions={},
+                confidence=0.7,
+                run_id="run_bad",
+                sources=[],
+            )
+    assert kg._load_triples() == []
+
+
+def test_concurrent_add_triple_does_not_lose_writes(tmp_path, monkeypatch):
+    """Regression test for a real, reproduced bug: 20 concurrent
+    add_triple() calls against the same graph, before the fix, resulted in
+    only 6 surviving triples (14 silently lost to an unlocked
+    read-modify-write race) plus several JSON parse errors from readers
+    catching a writer's write_text() mid-write. The fix adds an
+    fcntl.flock around the whole load-mutate-save cycle plus an atomic
+    (write-temp-then-rename) save, so every concurrent addition must
+    survive and no reader should ever see a partially-written file."""
+    _reset_graph_path(tmp_path, monkeypatch)
+    n = 20
+    errors: list[tuple[int, str]] = []
+
+    def add_one(i: int) -> None:
+        try:
+            kg.add_triple(
+                subject="Bi2Te3 single-stage TEC",
+                relation=f"race_test_relation_{i}",
+                object_value=float(i),
+                object_unit="K",
+                conditions={},
+                confidence=0.7,
+                run_id=f"race_run_{i}",
+                sources=[],
+            )
+        except Exception as e:  # noqa: BLE001 - captured for the assertion below
+            errors.append((i, str(e)))
+
+    threads = [threading.Thread(target=add_one, args=(i,)) for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert len(kg._load_triples()) == n
