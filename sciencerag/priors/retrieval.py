@@ -34,8 +34,15 @@ from sciencerag.priors.external_retrieval import (
     download_new_papers,
     search_semantic_scholar,
 )
-from sciencerag.priors.kg import query_kg
-from sciencerag.priors.models import Coverage, Prior, PriorsResponse
+from sciencerag.priors.kg import KGEntityGroup, query_kg_entities
+from sciencerag.priors.models import (
+    CandidateConfigValue,
+    Coverage,
+    ParameterRangeValue,
+    Prior,
+    PriorsResponse,
+    SourceKGTriple,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 CORPUS_DIR = REPO_ROOT / "corpus" / "papers"
@@ -254,6 +261,98 @@ def _drafted_params(all_priors: list[Prior]) -> set[str]:
     return {f for p in all_priors for f in _prior_geometry_fields(p)}
 
 
+def _kg_priors_from_group(group: KGEntityGroup) -> list[Prior]:
+    """One matched design (all triples sharing one entity_id) can produce
+    up to two kinds of Prior — the two triple shapes actually written into
+    the graph (sciencerag/validate/kg_candidates.py for simulation results,
+    scripts/seed_kg_from_corpus.py for literature-seeded ranges) don't mix
+    within one entity_id in practice, but nothing stops both from firing
+    if they ever did.
+
+    - `achieves_<field>` triples (a real sciencerag.validate run's
+      results for this design) become one candidate_config Prior:
+      `conditions` holds that run's design_parameters *plus* an injected
+      "n_pairs" key (kg_candidates.py) which isn't a contract field —
+      filtered out here rather than left in, since CandidateConfigValue's
+      `parameters` must match `related_fields` against the sim_params.json
+      contract exactly.
+    - `literature_range_<field>` triples (seeded from a past priors
+      extraction — literally the reverse of this function) become a
+      parameter_range Prior each. Skipped if the field isn't a real
+      contract name or object_unit is missing — no guessing a unit.
+    """
+    priors: list[Prior] = []
+
+    achieves = [t for t in group.triples if t.relation.startswith("achieves_") and t.object_value is not None]
+    if achieves:
+        conditions = achieves[0].conditions
+        parameters: dict[str, float] = {
+            k: v for k, v in conditions.items() if k in GEOMETRY_FREE_NAMES
+        }
+        if len(parameters) >= 2:
+            related_fields = sorted(parameters)
+            reported_performance = {
+                t.relation.removeprefix("achieves_"): t.object_value for t in achieves
+            }
+            priors.append(
+                Prior(
+                    prior_id=f"pr_kg_{group.entity_id}",
+                    kind="candidate_config",
+                    related_fields=related_fields,
+                    value=CandidateConfigValue(
+                        parameters=parameters, reported_performance=reported_performance
+                    ),
+                    confidence=sum(t.confidence for t in achieves) / len(achieves),
+                    sources=[SourceKGTriple(triple_id=t.triple_id) for t in achieves],
+                    provenance="internal",
+                )
+            )
+
+    for triple in group.triples:
+        if not triple.relation.startswith("literature_range_"):
+            continue
+        field = triple.relation.removeprefix("literature_range_")
+        if field not in GEOMETRY_FREE_NAMES or triple.object_value is None or not triple.object_unit:
+            continue
+        priors.append(
+            Prior(
+                prior_id=f"pr_kg_{triple.triple_id}",
+                kind="parameter_range",
+                field=field,
+                value=ParameterRangeValue(
+                    field_name=field, typical=triple.object_value, unit=triple.object_unit
+                ),
+                confidence=triple.confidence,
+                sources=[SourceKGTriple(triple_id=triple.triple_id)],
+                provenance="internal",
+            )
+        )
+
+    return priors
+
+
+def _kg_priors_for_query(query: str) -> list[Prior]:
+    """Step 1 of spec §3.2's query order: the knowledge graph, before
+    literature. Always additive, never a substitute for the literature
+    retrieval that follows (see _build_priors_response) — a matched
+    design's simulation results don't tell you what the literature says,
+    and deciding per-field whether a literature_range_* hit makes the
+    literature check redundant would require already knowing which
+    contract field the query is about, which is exactly what literature
+    retrieval itself resolves.
+
+    query_kg_entities (not query_kg) deliberately — query_kg's flat,
+    row-capped results can slice a matched design's data mid-entity (see
+    its own docstring for the real bug that caused: an LLM concluding "no
+    other data exists" from a partial slice). query_kg_entities returns
+    every triple of a matched entity together."""
+    result = query_kg_entities(query)
+    priors: list[Prior] = []
+    for group in result.groups:
+        priors.extend(_kg_priors_from_group(group))
+    return priors
+
+
 # Fallback only (see _match_params_to_evidence's docstring for the primary,
 # LLM-based path) — used if that real call errors out, so a transient
 # failure degrades coverage.gaps' precision rather than the whole request.
@@ -429,11 +528,26 @@ def _build_max_priors_gap(truncated_priors: list[Prior], max_priors: int) -> lis
     rather than silently vanish (same spec principle as the REVIEW cut)."""
     if not truncated_priors:
         return []
-    dois = sorted({s.doi for p in truncated_priors for s in p.sources if s.doi})
-    dois_str = "; ".join(dois) if dois else "unknown source"
+    # Source is SourcePaper (has .doi) or SourceKGTriple (has .triple_id,
+    # no .doi at all) — accessing .doi unconditionally crashed with
+    # AttributeError the first time a KG-sourced prior (see
+    # _kg_priors_for_query) actually reached this function; every prior
+    # before that had only ever carried SourcePaper sources, so this path
+    # was never really exercised. Confirmed live: a 502 with exactly that
+    # AttributeError, from a real request whose truncated priors included
+    # a candidate_config prior sourced from the graph.
+    identifiers = sorted(
+        {
+            s.doi if s.type == "paper" else f"kg_triple:{s.triple_id}"
+            for p in truncated_priors
+            for s in p.sources
+        }
+        - {None, ""}
+    )
+    identifiers_str = "; ".join(identifiers) if identifiers else "unknown source"
     return [
         f"{len(truncated_priors)} additional prior(s) passed all quality checks "
-        f"but were excluded by max_priors={max_priors}; source DOIs: {dois_str}"
+        f"but were excluded by max_priors={max_priors}; source DOIs: {identifiers_str}"
     ]
 
 
@@ -570,26 +684,27 @@ def _build_priors_response(
     since it's not something missing from coverage — it's something
     correctly excluded).
     """
-    # Query priority per spec §3.2: KG first, literature second. Through
-    # M1-M4 the graph is an empty stub (see kg.py) — this always returns
-    # [], so the fall-through to PaperQA2 below is the only real path for
-    # now. Kept as an explicit call (not dead code) so M2+ only has to
-    # replace query_kg's internals, not restructure this function.
-    query_kg(query)
+    # Query priority per spec §3.2: KG first, literature second. Always
+    # additive to whatever literature retrieval below finds, never a
+    # short-circuit — see _kg_priors_for_query's docstring for why a KG
+    # hit can't safely skip the literature check that follows it.
+    kg_priors = _kg_priors_for_query(query)
 
     response = run_query(query)
     contexts = response.session.contexts
 
     if not contexts:
+        returned_kg_priors, truncated_kg_priors = _cap_priors(kg_priors, max_priors)
         return (
             _augment_with_external(
                 PriorsResponse(
-                    priors=[],
+                    priors=returned_kg_priors,
                     coverage=Coverage(
                         internal_hits=0,
                         external_hits=0,
                         gaps=["internal corpus returned no relevant evidence for this query"]
-                        + _build_geometry_gaps([], [], set()),
+                        + _build_max_priors_gap(truncated_kg_priors, max_priors)
+                        + _build_geometry_gaps(kg_priors, returned_kg_priors, set()),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -605,10 +720,11 @@ def _build_priors_response(
         relevance_matched = _match_params_to_evidence(
             below_threshold_evidence, sorted(GEOMETRY_FREE_NAMES)
         )
+        returned_kg_priors, truncated_kg_priors = _cap_priors(kg_priors, max_priors)
         return (
             _augment_with_external(
                 PriorsResponse(
-                    priors=[],
+                    priors=returned_kg_priors,
                     coverage=Coverage(
                         internal_hits=len(contexts),
                         external_hits=0,
@@ -616,7 +732,8 @@ def _build_priors_response(
                             f"{len(contexts)} evidence context(s) retrieved, but none met the "
                             f"minimum relevance ({MIN_EVIDENCE_RELEVANCE}) required to extract from"
                         ]
-                        + _build_geometry_gaps([], [], relevance_matched),
+                        + _build_max_priors_gap(truncated_kg_priors, max_priors)
+                        + _build_geometry_gaps(kg_priors, returned_kg_priors, relevance_matched),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -636,15 +753,17 @@ def _build_priors_response(
         relevance_matched = _match_params_to_evidence(
             below_threshold_evidence, sorted(GEOMETRY_FREE_NAMES)
         )
+        returned_kg_priors, truncated_kg_priors = _cap_priors(kg_priors, max_priors)
         return (
             _augment_with_external(
                 PriorsResponse(
-                    priors=[],
+                    priors=returned_kg_priors,
                     coverage=Coverage(
                         internal_hits=len(contexts),
                         external_hits=0,
                         gaps=[f"LLM extraction failed schema validation after retries: {e}"]
-                        + _build_geometry_gaps([], [], relevance_matched),
+                        + _build_max_priors_gap(truncated_kg_priors, max_priors)
+                        + _build_geometry_gaps(kg_priors, returned_kg_priors, relevance_matched),
                     ),
                     trace_id=new_trace_id(),
                 ),
@@ -654,8 +773,8 @@ def _build_priors_response(
             0,
         )
 
-    returned_priors, truncated_priors = _cap_priors(kept_priors, max_priors)
-    all_kept_priors = kept_priors + [rp.prior for rp in review_priors]
+    returned_priors, truncated_priors = _cap_priors(kg_priors + kept_priors, max_priors)
+    all_kept_priors = kg_priors + kept_priors + [rp.prior for rp in review_priors]
 
     unexplained = sorted(
         GEOMETRY_FREE_NAMES - _covered_params(returned_priors) - _drafted_params(all_kept_priors)

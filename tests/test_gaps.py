@@ -15,7 +15,7 @@ ranking key for `_cap_priors`, not a pass/fail signal.
 
 from sciencerag.priors.contract import GEOMETRY_FREE_NAMES
 from sciencerag.priors.extract import ReviewedPrior
-from sciencerag.priors.models import Prior, SourcePaper
+from sciencerag.priors.models import Prior, SourceKGTriple, SourcePaper
 from sciencerag.priors.retrieval import (
     _build_gaps,
     _build_geometry_gaps,
@@ -216,3 +216,24 @@ def test_build_max_priors_gap_notes_excluded_count_and_papers():
     assert "max_priors=3" in gaps[0]
     assert "10.1111/a" in gaps[0]
     assert "10.2222/b" in gaps[0]
+
+
+def test_build_max_priors_gap_handles_kg_sourced_prior():
+    """Regression test, confirmed live: a truncated prior whose source is
+    SourceKGTriple (not SourcePaper — see sciencerag/priors/retrieval.py's
+    _kg_priors_for_query) crashed this function with AttributeError
+    ('SourceKGTriple' object has no attribute 'doi') the first time a
+    KG-sourced prior actually reached it — every prior before that had
+    only ever carried SourcePaper sources, in a real /sciencerag/priors
+    request this surfaced as a 502."""
+    kg_prior = Prior(
+        prior_id="pr_kg_test",
+        kind="parameter_range",
+        field="general_finding",
+        value={"field_name": "general_finding", "typical": 1.0, "unit": "mm"},
+        confidence=0.5,
+        sources=[SourceKGTriple(triple_id="kg_abc123")],
+    )
+    gaps = _build_max_priors_gap([kg_prior], max_priors=1)
+    assert len(gaps) == 1
+    assert "kg_triple:kg_abc123" in gaps[0]
