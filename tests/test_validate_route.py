@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from sciencerag.app import app
 from sciencerag.priors import kg
-from sciencerag.validate import kg_candidate_store, tec_bridge
+from sciencerag.validate import kg_candidate_store, kg_candidates as kg_candidates_module, tec_bridge
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parent.parent / "sciencerag" / "schemas" / "validate.schema.json"
@@ -37,6 +37,11 @@ def _tmp_graph(tmp_path, monkeypatch):
     # run here would drop a real file into data/kg_candidates/pending/.
     monkeypatch.setattr(kg_candidate_store, "PENDING_DIR", tmp_path / "kg_candidates_pending")
     monkeypatch.setattr(kg_candidate_store, "ARCHIVE_DIR", tmp_path / "kg_candidates_archive")
+    # Regression found 2026-08-11: once a real data/kg/ontology.json
+    # existed on disk, extract_kg_candidates() started making real
+    # classify_relation/describe_relation LLM calls on every test run here
+    # — tests must not depend on incidental host filesystem state.
+    monkeypatch.setattr(kg_candidates_module, "load_ontology", lambda: None)
 
 
 def _report_row(index: int) -> tuple[dict[str, float], dict[str, float]]:
@@ -65,8 +70,8 @@ def test_minimal_request_returns_valid_schema() -> None:
     payload = response.json()
     jsonschema.validate(instance=payload, schema=RESPONSE_SCHEMA)
     assert payload["status"] == "ok"
-    assert {a["check"] for a in payload["anomalies"]} == {"energy_balance", "pde_residual", "ood"}
-    # nothing to check against without field_case_index/latent_state -> info, not blocking
+    assert {a["check"] for a in payload["anomalies"]} == {"ood"}
+    # nothing to check against without latent_state -> info, not blocking
     assert all(a["severity"] == "info" for a in payload["anomalies"])
     assert payload["update_package"]["blocked"] is False
     assert payload["update_package"]["surrogate_update"] is None
@@ -94,10 +99,18 @@ def test_matching_benchmark_case_is_consistent() -> None:
     # exactly the case spec §4.4 extracts candidate triples from.
     assert payload["update_package"]["surrogate_update"] is None  # nothing anomalous to suggest
     candidates = payload["update_package"]["kg_candidates"]
-    assert len(candidates) == len(scalar_results)
-    assert {c["relation"] for c in candidates} == {f"achieves_{name}" for name in scalar_results}
+    # len(scalar_results) numeric fact candidates + 2 structural link
+    # candidates (SimulationRun -> TECDesign, SimulationRun -> Material) —
+    # see kg_candidates.py's own comment on why those two always get
+    # appended alongside the measured-value ones.
+    assert len(candidates) == len(scalar_results) + 2
+    numeric_candidates = [c for c in candidates if c["object_value"] is not None]
+    link_candidates = [c for c in candidates if c["object_entity_id"] is not None]
+    assert {c["relation"] for c in numeric_candidates} == {f"achieves_{name}" for name in scalar_results}
+    assert {c["relation"] for c in link_candidates} == {"SIMULATION_USES_DESIGN", "SIMULATION_USES_MATERIAL"}
     assert all(c["dedup_status"] == "new" for c in candidates)
-    assert all(c["confidence"] == pytest.approx(0.7) for c in candidates)
+    assert all(c["confidence"] == pytest.approx(0.7) for c in numeric_candidates)
+    assert all(c["confidence"] == pytest.approx(1.0) for c in link_candidates)
     # Non-empty kg_candidates should be queued for approve_kg_candidates.py
     # --list-pending, not just returned in the response body.
     pending = kg_candidate_store.list_pending()
@@ -223,33 +236,26 @@ def test_wrong_latent_dimension_is_warning_not_silent() -> None:
     )
 
 
-def test_conservation_check_skips_multi_pair() -> None:
+def test_high_n_pairs_is_accepted_and_carried_into_kg_conditions() -> None:
+    """n_pairs is allowed up to 500 (real commercial multi-pair modules,
+    e.g. the "127" in a part number like TEC1-12706) — it no longer feeds
+    any physics check (energy_balance/pde_residual were removed), only
+    benchmark/prior comparison and KG candidate `conditions`."""
     response = client.post(
         "/sciencerag/validate",
         json={
-            "run_id": "run_multi_pair",
+            "run_id": "run_127_pairs",
             "design_parameters": {},
-            "n_pairs": 6,
-            "field_case_index": 0,
+            "n_pairs": 127,
+            "scalar_results": {"delta_T_max_K": 50.0},
             "priors": [],
         },
     )
     payload = response.json()
-    energy_anomaly = next(a for a in payload["anomalies"] if a["check"] == "energy_balance")
-    assert energy_anomaly["severity"] == "info"
-    assert energy_anomaly["evidence"]["skipped"] is True
-    # PDE residual, unlike conservation, does cover n_pairs > 1
-    pde_anomaly = next(a for a in payload["anomalies"] if a["check"] == "pde_residual")
-    assert pde_anomaly["evidence"].get("skipped") is not True
-    assert pde_anomaly["evidence"]["calibration"] == "composed_topology_pending_multipair_comsol"
-
-
-def test_field_case_index_out_of_range_is_rejected() -> None:
-    response = client.post(
-        "/sciencerag/validate",
-        json={"run_id": "run_bad_index", "field_case_index": 99, "priors": []},
-    )
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert {a["check"] for a in payload["anomalies"]} == {"ood"}
+    numeric = next(c for c in payload["update_package"]["kg_candidates"] if c["object_value"] is not None)
+    assert numeric["conditions"]["n_pairs"] == 127.0
 
 
 @pytest.mark.parametrize("bad_run_id", ["../../etc/passwd", "a/b", "a\\b"])

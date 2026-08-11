@@ -100,7 +100,7 @@
   {
     "id": "minimal_request_no_data",
     "category": "should_not_block",
-    "notes": "No field_case_index/latent_state/scalar_results/priors given at all — every check should degrade to an honest info-level skip, not a false anomaly.",
+    "notes": "No latent_state/scalar_results/priors given at all — the ood check should degrade to an honest info-level skip, not a false anomaly.",
     "request": {
       "run_id": "fx_minimal",
       "design_parameters": {},
@@ -110,19 +110,5 @@
     "expected_blocked": false,
     "expected_verdict": "insufficient_benchmark",
     "expected_min_severity_by_check": {}
-  },
-  {
-    "id": "known_solved_field_case_is_not_blocking",
-    "category": "should_not_block",
-    "notes": "A genuine solved COMSOL one-pair case (field_case_index=0) run through the real conservation + PDE residual checks against their own baseline — must not falsely trip warning/blocking on data the checkpoint was literally trained on.",
-    "request": {
-      "run_id": "fx_known_field_case",
-      "design_parameters": {},
-      "n_pairs": 1,
-      "field_case_index": 0,
-      "priors": []
-    },
-    "expected_blocked": false,
-    "expected_max_severity_by_check": {"energy_balance": "warning", "pde_residual": "warning"}
   }
 ]

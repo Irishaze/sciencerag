@@ -22,7 +22,9 @@ class ReportRequest(BaseModel):
     run_id: str
     task_context: TaskContext = Field(default_factory=TaskContext)
     design_parameters: dict[str, float] = Field(default_factory=dict)
-    n_pairs: int = Field(default=1, ge=1, le=20)
+    # Kept in sync with ValidateRequest.n_pairs's bound (validate/models.py)
+    # — see that field's docstring for why 500, not 20.
+    n_pairs: int = Field(default=1, ge=1, le=500)
     scalar_results: dict[str, float] = Field(default_factory=dict)
     priors: list[Prior] = Field(default_factory=list)
     anomalies: list[Anomaly] = Field(default_factory=list)

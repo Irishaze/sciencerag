@@ -22,30 +22,18 @@ from sciencerag.validate.models import (
 )
 
 # Heuristic reweighting nudge per triggering check — not derived from any
-# calibration data (tec_surrogate's loss scales aren't calibrated either,
-# see checks.py), just a documented direction-of-travel a human reviewer
+# calibration data, just a documented direction-of-travel a human reviewer
 # can accept, adjust, or reject before any retraining actually happens.
-_LOSS_REWEIGHT_BY_CHECK = {
-    "energy_balance": 1.5,
-    "pde_residual": 1.5,
-}
+# Empty for now: ood is the only check left (energy_balance/pde_residual
+# were removed, see checks.py) and it isn't a loss term to reweight, just a
+# training-coverage signal (see _HYPERPARAMETER_DIRECTION_BY_CHECK below).
+_LOSS_REWEIGHT_BY_CHECK: dict[str, float] = {}
 
 _HYPERPARAMETER_DIRECTION_BY_CHECK = {
-    "energy_balance": (
-        "energy_balance residual elevated relative to baseline — consider "
-        "increasing interface_weight (scripts/13_train_real_component_graph.py "
-        "--interface-weight) so interface conservation gets more emphasis "
-        "during retraining"
-    ),
-    "pde_residual": (
-        "pde_residual elevated relative to baseline — consider increasing "
-        "probes_per_solution / adding residual sample points near this "
-        "run's operating region"
-    ),
     "ood": (
         "OOD score in the upper tail of the training self-distance "
         "distribution — consider expanding Sobol/training coverage near "
-        "this design point (or this n_pairs, for the field model)"
+        "this design point"
     ),
 }
 

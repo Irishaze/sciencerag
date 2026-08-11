@@ -23,7 +23,14 @@ class ValidateRequest(BaseModel):
     # means not every contract name has a trained encoder behind it yet —
     # see tec_bridge.SUPPORTED_GEOMETRY_NAMES).
     design_parameters: dict[str, float] = Field(default_factory=dict)
-    n_pairs: int = Field(default=1, ge=1, le=20)
+    # Upper bound is a sanity guard against typos/unit mistakes, not a
+    # physics limit — commercial multi-pair modules (e.g. the "127" in a
+    # part number like TEC1-12706) commonly run into the low hundreds of
+    # pairs, and this field only ever feeds benchmark/prior comparison and
+    # KG candidate extraction (neither is n_pairs-sensitive beyond carrying
+    # it in `conditions`), not a physics model with a trained coverage
+    # range to stay inside.
+    n_pairs: int = Field(default=1, ge=1, le=500)
     # This run's measured scalar performance (05 standardized result). Keys
     # should be a subset of tec_bridge's SCALAR_NAMES; used for 4.2.1
     # benchmark comparison. Empty => benchmark check reports
@@ -33,13 +40,8 @@ class ValidateRequest(BaseModel):
     _validate_run_id = field_validator("run_id")(reject_path_unsafe_id)
     _validate_design_parameters = field_validator("design_parameters")(reject_non_finite_values)
     _validate_scalar_results = field_validator("scalar_results")(reject_non_finite_values)
-    # Which of the 11 solved one-pair COMSOL operating points (index into
-    # tec_1pair_dset3.npz) this run's geometry/current corresponds to. Only
-    # real solved field data we have — None skips 4.1.1/4.1.2 with an info
-    # anomaly instead of fabricating a residual against data we don't have.
-    field_case_index: int | None = Field(default=None, ge=0, le=10)
     # 06's output — produced upstream of validate (spec §4: "调用时机在...
-    # 06 潜在状态编码...之后"). None skips 4.1.3 with an info anomaly.
+    # 06 潜在状态编码...之后"). None skips the OOD check with an info anomaly.
     latent_state: list[float] | None = None
     prior_ids: list[str] = Field(default_factory=list)
     # The actual Prior objects used in planning this run, passed in-band
@@ -48,7 +50,15 @@ class ValidateRequest(BaseModel):
 
 
 class Anomaly(BaseModel):
-    check: Literal["energy_balance", "pde_residual", "ood"]
+    # energy_balance/pde_residual (formerly the other two 4.1 checks) were
+    # removed: both depended on tec_surrogate's compositional multi-pair
+    # model, which its own training script documents as "not a substitute
+    # for multi-pair COMSOL calibration data" — there was no real physics
+    # validation being done, just an approximation with a narrow trained
+    # range (1-20 pairs) that silently produced misleading confidence for
+    # anything outside it. ood needs none of that: it's a straightforward
+    # statistical distance check against the training distribution.
+    check: Literal["ood"]
     severity: Literal["info", "warning", "blocking"]
     evidence: dict[str, Any] = Field(default_factory=dict)
 
@@ -96,11 +106,36 @@ class KGCandidate(BaseModel):
 
     subject: str
     relation: str
-    object_value: float
+    # Exactly one of object_value or object_entity_id — a measured number
+    # ("achieves 71.7K") or a link to another entity ("uses this Material"),
+    # mirrors sciencerag/priors/kg.py:KGTriple's own split (see that class's
+    # docstring) and the same validator, one layer up.
+    object_value: float | None = None
     object_unit: str | None = None
+    object_entity_id: str | None = None
+    object_entity_label: str | None = None
+    object_entity_type: str | None = None
+    # AI-generated plain-Chinese phrase for what `relation` means to a
+    # non-specialist (sciencerag/priors/ontology_generator.py:
+    # describe_relation) — powers the graph UI's node/edge inspector.
+    relation_description: str | None = None
     conditions: dict[str, float] = Field(default_factory=dict)
     confidence: float = Field(ge=0, le=1)
     run_id: str
+    # AI-classified against data/kg/ontology.json (sciencerag/priors/
+    # ontology_generator.py) — which entity type `subject` belongs to.
+    # Orthogonal to subject/conditions (which individuate *which* design
+    # this is, kg.py's entity_id) — this classifies *what kind* of thing
+    # it is.
+    entity_type: str
+
+    @model_validator(mode="after")
+    def _exactly_one_object_kind(self) -> "KGCandidate":
+        has_value = self.object_value is not None
+        has_link = self.object_entity_id is not None
+        if has_value == has_link:
+            raise ValueError("exactly one of object_value or object_entity_id must be set")
+        return self
     # spec §4.4: "与图谱中现有三元组做去重与冲突检测" — kg.py's graph storage
     # is still a stub returning zero hits (spec §3.2 cold-start note), so
     # every candidate resolves "new" in practice today; the field exists so

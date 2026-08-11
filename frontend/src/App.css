@@ -70,6 +70,7 @@ h1 {
   border-bottom: 2px solid transparent;
   font-family: inherit;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .tab.active {
@@ -136,6 +137,31 @@ button:disabled {
 .answer-text {
   margin: 0;
   flex: 1;
+  min-width: 0;
+}
+
+.answer-text p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+
+.answer-text p:last-child {
+  margin-bottom: 0;
+}
+
+.answer-text ul,
+.answer-text ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+  line-height: 1.5;
+}
+
+.answer-text li {
+  margin-bottom: 4px;
+}
+
+.answer-text strong {
+  font-weight: 600;
 }
 
 .badge {
@@ -216,6 +242,25 @@ button:disabled {
   color: var(--text-dim);
 }
 
+.graph-inspector-plain {
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+
+.graph-inspector-technical {
+  margin-top: 6px;
+}
+
+.graph-inspector-technical summary {
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.graph-inspector-technical dl {
+  margin-top: 6px;
+}
+
 .mono {
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
   font-size: 12px;
@@ -277,6 +322,7 @@ button:disabled {
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .chip.warning {
@@ -328,6 +374,13 @@ button:disabled {
 
 .hero-copy {
   animation: hero-rise 0.5s ease-out both;
+  /* Grid items default to min-width: auto, i.e. their content's min-content
+     width as a floor — word-break: keep-all (index.css) raises that floor
+     for any Chinese-plus-Latin run, which was overriding the 440px max on
+     the sibling track and pushing the whole hero off the right edge of the
+     viewport at narrower widths. min-width: 0 lets this column actually
+     shrink to the track's computed width instead of forcing an overflow. */
+  min-width: 0;
 }
 
 .stat-row {
@@ -444,6 +497,8 @@ button:disabled {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 20px 22px 22px;
+  /* See .hero-copy's min-width comment — same grid-blowout fix, same cause. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -634,6 +689,7 @@ button:disabled {
   background: var(--accent-soft);
   padding: 2px 9px;
   border-radius: 999px;
+  white-space: nowrap;
 }
 
 .feature-card h2 {
@@ -674,4 +730,29 @@ button:disabled {
 
 .node-edge-list li:hover {
   color: var(--accent);
+}
+
+.node-edge-list li.conflict {
+  color: var(--blocking);
+}
+
+.graph-conflict-notice {
+  background: var(--blocking-soft);
+  color: var(--blocking);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+
+.graph-conflict-jump {
+  display: block;
+  margin-top: 6px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--blocking);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
 }

@@ -35,4 +35,14 @@ body {
   color: var(--text);
   font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   line-height: 1.6;
+  /* Chinese prose is full of embedded Latin/technical terms (delta_T_max_K,
+     TECDesign, sciencerag.ask, model names) — the default line-breaking
+     algorithm can still split one of those mid-word at a wrap point since
+     CJK text has no spaces to anchor "word" boundaries the way Latin text
+     does. keep-all stops that; break-word is only the fallback for the
+     rare token too long to fit a line at all, so it still wraps instead of
+     overflowing the container. `.mono` (opaque hash/trace ids) opts back
+     into break-all deliberately — those aren't real words either way. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }

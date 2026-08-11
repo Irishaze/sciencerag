@@ -1,9 +1,16 @@
-"""4.1 anomaly checks (spec §4.1): energy_balance, pde_residual, ood.
+"""4.1 anomaly checks (spec §4.1): ood.
 
 Each check function always returns an Anomaly — including a passing check,
 at severity="info" — rather than only reporting failures. That keeps the
 response an auditable record of what was actually checked (spec §2 "凡论断
 必有来源"), not just a silent absence when nothing went wrong.
+
+energy_balance/pde_residual used to live here too, backed by tec_surrogate's
+compositional multi-pair model — removed because that model was never a
+substitute for real multi-pair COMSOL calibration data (its own training
+script said so), so the two checks were reporting a residual against an
+approximation with no real physical grounding rather than doing anything
+"ood" doesn't already cover honestly.
 """
 
 from __future__ import annotations
@@ -12,96 +19,6 @@ import numpy as np
 
 from sciencerag.validate import tec_bridge
 from sciencerag.validate.models import Anomaly, ValidateRequest
-
-
-def _severity_from_baseline(value: float, baseline: tuple[float, ...]) -> tuple[str, dict]:
-    reference = np.asarray(baseline, dtype=float)
-    ref_mean = float(reference.mean())
-    ref_max = float(reference.max())
-    ratio = float("inf") if ref_max <= 0 and value > 0 else (value / ref_max if ref_max > 0 else 0.0)
-    if ratio > 5:
-        severity = "blocking"
-    elif ratio > 2:
-        severity = "warning"
-    else:
-        severity = "info"
-    evidence = {
-        "residual_total": value,
-        "baseline_mean": ref_mean,
-        "baseline_max": ref_max,
-        "ratio_to_baseline_max": ratio,
-        "baseline_note": (
-            "baseline = same residual computed on the 11 known solved "
-            "one-pair COMSOL operating points; absolute scale is not "
-            "calibrated (tec_surrogate PHYSICS_FOUNDATION.md), only the "
-            "ratio to this baseline is meaningful"
-        ),
-    }
-    return severity, evidence
-
-
-def check_energy_balance(request: ValidateRequest) -> Anomaly:
-    if request.field_case_index is None:
-        return Anomaly(
-            check="energy_balance",
-            severity="info",
-            evidence={
-                "skipped": True,
-                "reason": (
-                    "no field_case_index given: conservation check needs a "
-                    "solved field case with real interface data, which today "
-                    "only exists for the 11 bundled one-pair COMSOL operating "
-                    "points"
-                ),
-            },
-        )
-    if request.n_pairs != 1:
-        return Anomaly(
-            check="energy_balance",
-            severity="info",
-            evidence={
-                "skipped": True,
-                "reason": (
-                    "conservation check only covers n_pairs=1: composing to "
-                    "n_pairs>1 (compose_multi_pair_graph) invents new "
-                    "module-level interfaces with no matched real interface "
-                    "samples to check conservation against"
-                ),
-                "n_pairs": request.n_pairs,
-            },
-        )
-    value = tec_bridge.conservation_residual_total(request.field_case_index)
-    baseline = tec_bridge.conservation_baseline()
-    severity, evidence = _severity_from_baseline(value, baseline)
-    evidence["field_case_index"] = request.field_case_index
-    evidence["terms"] = tec_bridge.conservation_residual(request.field_case_index)
-    return Anomaly(check="energy_balance", severity=severity, evidence=evidence)
-
-
-def check_pde_residual(request: ValidateRequest) -> Anomaly:
-    if request.field_case_index is None:
-        return Anomaly(
-            check="pde_residual",
-            severity="info",
-            evidence={
-                "skipped": True,
-                "reason": (
-                    "no field_case_index given: PDE residual needs a solved "
-                    "one-pair operating point to compose from"
-                ),
-            },
-        )
-    value = tec_bridge.pde_residual_total(request.field_case_index, request.n_pairs)
-    baseline = tec_bridge.pde_residual_baseline(request.n_pairs)
-    severity, evidence = _severity_from_baseline(value, baseline)
-    evidence["field_case_index"] = request.field_case_index
-    evidence["n_pairs"] = request.n_pairs
-    evidence["terms"] = tec_bridge.pde_residual(request.field_case_index, request.n_pairs)
-    evidence["calibration"] = (
-        "one_pair_comsol_anchor" if request.n_pairs == 1
-        else "composed_topology_pending_multipair_comsol"
-    )
-    return Anomaly(check="pde_residual", severity=severity, evidence=evidence)
 
 
 def check_ood(request: ValidateRequest) -> Anomaly:
@@ -173,8 +90,4 @@ def check_ood(request: ValidateRequest) -> Anomaly:
 
 
 def run_anomaly_checks(request: ValidateRequest) -> list[Anomaly]:
-    return [
-        check_energy_balance(request),
-        check_pde_residual(request),
-        check_ood(request),
-    ]
+    return [check_ood(request)]

@@ -15,7 +15,6 @@ local test server before this fix existed.
 
 from __future__ import annotations
 
-import html
 from io import BytesIO
 
 import markdown as md_lib
@@ -52,6 +51,65 @@ def _sanitize_freetext(value: str) -> str:
     return " ".join(value.split())
 
 
+_EVIDENCE_KEY_LABELS = {
+    "mahalanobis_distance": "Mahalanobis distance",
+    "training_sample_count": "training sample count",
+    "training_distance_percentile": "training distance percentile",
+    "training_distance_range": "training distance range",
+}
+# Keys whose value is prose (an explanation), not a stat — rendered as a
+# separate note line rather than crammed into the stat line. "calibration"
+# is a short categorical value (e.g. "one_pair_comsol_anchor"), not a
+# sentence, so it's a labelled stat like everything else, not a note.
+_EVIDENCE_NOTE_KEYS = ("reason", "baseline_note", "error")
+
+
+def _format_evidence_value(value: object) -> str:
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, float):
+        return f"{value:.4g}"
+    if isinstance(value, list):
+        return "[" + ", ".join(_format_evidence_value(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return ", ".join(f"{k}={_format_evidence_value(v)}" for k, v in value.items())
+    return str(value)
+
+
+def _format_evidence(evidence: dict) -> list[str]:
+    """Anomaly.evidence is a free-form dict — shape varies per check (a
+    skip reason, a raw error, or numeric stats, sometimes with a nested
+    dict of residual terms). Was previously dumped as `{repr(evidence)}` —
+    Python dict syntax, single-quoted, straight into the report; readable
+    in a terminal, not in a document a person is meant to read. This
+    renders each shape as plain sentences/labelled stats instead.
+
+    Returns bare content lines (no bullet/blockquote prefix) — the caller
+    decides how to prefix them, since a plain bullet list and a blockquote
+    need different prefixes on every line.
+    """
+    if not evidence:
+        return []
+
+    stats = []
+    notes = []
+    for key, value in evidence.items():
+        if key == "skipped":
+            continue  # implied by the note that follows; not worth its own line
+        if key in _EVIDENCE_NOTE_KEYS:
+            notes.append(str(value))
+            continue
+        label = _EVIDENCE_KEY_LABELS.get(key, key.replace("_", " "))
+        stats.append(f"{label}: {_format_evidence_value(value)}")
+
+    lines = []
+    if stats:
+        lines.append(" · ".join(stats))
+    for note in notes:
+        lines.append(f"_{note}_")
+    return lines
+
+
 def _dedup_sources(priors: list) -> list:
     seen = set()
     sources = []
@@ -66,7 +124,20 @@ def _dedup_sources(priors: list) -> list:
 
 
 def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
-    lines = [f"# Run Report — `{response.run_id}`", "", f"_generated {response.generated_at}_", ""]
+    # run_id lives on its own line, not inside "# Run Report" — keeping an
+    # inline code span out of the h1 avoids it colliding with the h1's
+    # underline rule in the PDF (a `<code>` background box sitting right on
+    # top of a border-bottom renders as a visible seam/overlap).
+    lines = [
+        "# Run Report",
+        "",
+        f"`{response.run_id}`",
+        "",
+        f"_generated {response.generated_at}_",
+        "",
+        "---",
+        "",
+    ]
 
     lines += ["## Objective & Constraints", ""]
     objective = _sanitize_freetext(response.objective_and_constraints.objective or "(not specified)")
@@ -80,7 +151,7 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
 
     lines += ["## Experiment Spec Summary", ""]
     for field, value in sorted(response.spec_summary.items()):
-        lines.append(f"- `{field}` = {value}  _[run:{response.run_id}]_")
+        lines.append(f"- `{field}` = {value}")
     lines.append("")
 
     lines += ["## Key Results", ""]
@@ -90,12 +161,17 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
         unit = f" {result.unit}" if result.unit else ""
         lines.append(
             f"- **{result.field}** = {result.value}{unit} "
-            f"(confidence: {result.confidence_label}) _[run:{response.run_id}]_"
+            f"(confidence: {result.confidence_label})"
         )
     lines.append("")
 
     lines += ["## Comparison with Literature Priors", ""]
     lines.append(f"**Verdict:** {response.literature_comparison.verdict}")
+    # Markdown (this renderer, python-markdown) treats a "- " line as lazy
+    # continuation of the preceding paragraph rather than a new list unless
+    # a blank line separates them — without this, every deviation below
+    # rendered as one run-on paragraph instead of a bullet list.
+    lines.append("")
     for deviation in response.literature_comparison.deviations:
         lines.append(
             f"- `{deviation.field}` actual={deviation.actual} "
@@ -107,8 +183,28 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
     lines += ["## Anomalies & Cautions", ""]
     if not response.anomalies_and_cautions:
         lines.append("(no anomaly checks were run for this report)")
-    for anomaly in response.anomalies_and_cautions:
-        lines.append(f"- **{anomaly.check}** — {anomaly.severity}: `{anomaly.evidence}`")
+    else:
+        # A blank line must separate consecutive blocks whenever either
+        # side is a blockquote (Markdown won't otherwise tell a ">" line
+        # apart from lazy-continuation of the bullet above it) — building
+        # each anomaly as its own block and joining with blank lines
+        # handles that uniformly instead of reasoning about it per-pair.
+        blocks = []
+        for anomaly in response.anomalies_and_cautions:
+            header = f"**{anomaly.check}** — **{anomaly.severity.upper()}**"
+            evidence_lines = _format_evidence(anomaly.evidence)
+            if anomaly.severity == "info":
+                blocks.append([f"- {header}"] + [f"  - {line}" for line in evidence_lines])
+            else:
+                # warning/blocking gets a blockquote instead of a plain
+                # bullet — severity is the one field in this report that
+                # genuinely means "look here first"; a plain bullet would
+                # give it the same visual weight as a routine info line.
+                blocks.append([f"> {header}"] + [f"> {line}" for line in evidence_lines])
+        for i, block in enumerate(blocks):
+            if i > 0:
+                lines.append("")
+            lines.extend(block)
     lines.append("")
 
     lines += ["## Update Proposal Summary", ""]
@@ -140,32 +236,83 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
     return "\n".join(lines)
 
 
-_PDF_STYLE = """
+# Coloring/emphasis here only ever targets structural tags (h1/h2/code/em),
+# never a per-value class driven by request content — keeps the "escape
+# the whole Markdown source" approach in render_pdf() sufficient on its
+# own, no per-field trust bookkeeping needed to stay safe.
+# Token system — a technical/lab-notebook register, not a marketing page:
+# ink for body text, a muted steel-blue for structure (headings/rules),
+# gray for asides, amber only for the one signature device (elevated
+# anomaly severity, via blockquote — see _render_markdown). Two type
+# roles: Helvetica for prose/headings, Courier for identifiers and data
+# (run_id, field names, numeric evidence) — reportlab's built-in PDF base
+# fonts are the only ones available without bundling font files, so this
+# pairing (not a third display face) is the deliberate ceiling here.
+_INK = "#1a1a2e"
+_ACCENT = "#2a5a7c"
+_MUTED = "#6b7280"
+_HAIRLINE = "#dcdfe3"
+_CODE_BG = "#f4f5f7"
+_FLAG_BORDER = "#b45309"
+_FLAG_BG = "#fdf6ec"
+
+_PDF_STYLE = f"""
 <style>
-  body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; }
-  h1 { font-size: 16pt; }
-  h2 { font-size: 13pt; margin-top: 14pt; }
-  code { font-family: Courier, monospace; background-color: #f0f0f0; }
+  body {{ font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: {_INK}; line-height: 1.55; }}
+  h1 {{ font-size: 22pt; color: {_INK}; margin-bottom: 2px; }}
+  h2 {{ font-size: 12pt; color: {_ACCENT}; margin-top: 18pt; margin-bottom: 8px;
+        border-bottom: 1px solid {_HAIRLINE}; padding-bottom: 4px; }}
+  hr {{ border: none; border-top: 1px solid {_HAIRLINE}; margin: 8px 0 14px 0; }}
+  p {{ margin: 3px 0 10px 0; }}
+  ul {{ margin: 2px 0 10px 0; padding-left: 16px; }}
+  li {{ margin-bottom: 4px; }}
+  code {{ font-family: Courier, monospace; background-color: {_CODE_BG}; font-size: 9pt;
+          padding: 0 3px; color: {_INK}; }}
+  em {{ color: {_MUTED}; }}
+  blockquote {{ margin: 6px 0 12px 0; padding: 6px 12px; border-left: 3px solid {_FLAG_BORDER};
+                background-color: {_FLAG_BG}; }}
+  blockquote p, blockquote ul {{ margin: 2px 0; }}
 </style>
 """
+
+
+def _escape_tag_open(markdown_text: str) -> str:
+    """Neutralizes only "&" and "<" — the two characters a parser actually
+    needs to recognize a live HTML tag (an opening "<") or to be tricked
+    by a double-decode ("&amp;lt;..."). This is the real fix for the SSRF
+    described in render_pdf's docstring: "<" -> "&lt;" means
+    '<img src="...">' can never form a real tag, regardless of what
+    follows.
+
+    Deliberately narrower than `html.escape()`, which also escapes ">",
+    '"', and "'" — confirmed live that escaping ">" breaks Markdown's own
+    blockquote syntax ("> text", used for the Anomalies severity
+    highlight below) since Markdown never sees a literal ">" to key off
+    of, and escaping quotes was producing literal "&#x27;" in the
+    rendered PDF for ordinary text like "the design's optimal length"
+    (xhtml2pdf doesn't decode that entity the way a browser would). Since
+    neither ">" nor a bare quote character can open a tag on its own,
+    leaving them unescaped doesn't reopen the SSRF — confirmed live
+    against the original payload with this narrower escape.
+    """
+    return markdown_text.replace("&", "&amp;").replace("<", "&lt;")
 
 
 def render_pdf(markdown_text: str) -> bytes:
     """Markdown -> HTML (`markdown`) -> PDF (`xhtml2pdf`).
 
-    The Markdown source is HTML-escaped *before* conversion — this is the
-    actual fix for the SSRF described in the module docstring, not a
-    style choice. Escaping means any literal "<"/">" a free-text field
-    contributed renders as visible text in the PDF (e.g. a stray
-    "<img src=...>" shows up as that literal string), never as a live
-    tag `markdown` would otherwise pass through and xhtml2pdf would then
-    try to fetch. Tried xhtml2pdf's own `link_callback` hook first as a
-    resource-fetching guard — confirmed live that returning None from it
-    does *not* actually stop the fetch (xhtml2pdf falls through to
-    fetching the URI directly), so that alone would have been a false
-    sense of security; source-escaping is the real guard here.
+    See `_escape_tag_open`'s docstring for what's escaped and why.
+    Escaping means any literal "<" a free-text field contributed renders
+    as visible text in the PDF (e.g. a stray "<img src=...>" shows up as
+    that literal string), never as a live tag `markdown` would otherwise
+    pass through and xhtml2pdf would then try to fetch. Tried xhtml2pdf's
+    own `link_callback` hook first as a resource-fetching guard —
+    confirmed live that returning None from it does *not* actually stop
+    the fetch (xhtml2pdf falls through to fetching the URI directly), so
+    that alone would have been a false sense of security; source-escaping
+    is the real guard here.
     """
-    escaped = html.escape(markdown_text)
+    escaped = _escape_tag_open(markdown_text)
     body_html = md_lib.markdown(escaped)
     document = f"<html><head>{_PDF_STYLE}</head><body>{body_html}</body></html>"
     buffer = BytesIO()

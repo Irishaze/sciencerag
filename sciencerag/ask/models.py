@@ -24,8 +24,16 @@ class SubgraphEdge(BaseModel):
     source: str
     target: str
     relation: str
+    # AI-generated plain-Chinese phrase for what `relation` means (see
+    # sciencerag/priors/ontology_generator.py:describe_relation) — null for
+    # older triples written before this field existed.
+    description: str | None = None
     triple_id: str
     confidence: float
+    # triple_id of the triple this one contradicts on the same
+    # entity_id+relation (kg.py's KGTriple.conflicts_with) — null when this
+    # triple doesn't conflict with anything currently in the graph.
+    conflicts_with: str | None = None
 
 
 class Subgraph(BaseModel):

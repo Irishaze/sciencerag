@@ -95,7 +95,6 @@ def main() -> None:
             "design_parameters": design_parameters,
             "n_pairs": 1,
             "scalar_results": scalar_results,
-            "field_case_index": 0,
             "priors": [],  # isolate this case from M1's leg_length prior on purpose
         },
     )

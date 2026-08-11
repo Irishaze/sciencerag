@@ -25,8 +25,6 @@ RESPONSE_SCHEMA = SCHEMA["ValidateResponse"]
 VALID_RESPONSE = {
     "status": "ok",
     "anomalies": [
-        {"check": "energy_balance", "severity": "info", "evidence": {}},
-        {"check": "pde_residual", "severity": "warning", "evidence": {"ratio_to_baseline_max": 3.1}},
         {"check": "ood", "severity": "info", "evidence": {}},
     ],
     "evaluation": {"verdict": "consistent", "deviations": [], "sources": []},
@@ -69,7 +67,7 @@ def test_validate_request_missing_run_id_is_invalid():
         jsonschema.validate(instance={}, schema=REQUEST_SCHEMA)
 
 
-@pytest.mark.parametrize("bad_n_pairs", [0, 21, -1])
+@pytest.mark.parametrize("bad_n_pairs", [0, 501, -1])
 def test_validate_request_n_pairs_out_of_range_is_invalid(bad_n_pairs):
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(
@@ -105,6 +103,7 @@ def test_blocked_false_allows_populated_update_package():
                 "confidence": 0.7,
                 "run_id": "run_1",
                 "dedup_status": "new",
+                "entity_type": "TECDesign",
             }
         ],
         blocked=False,

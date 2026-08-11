@@ -32,6 +32,7 @@ dependencies = [
     # WeasyPrint needs) so the Dockerfile doesn't need Pango/Cairo added.
     "markdown",
     "xhtml2pdf",
+    "jieba>=0.42.1",
 ]
 
 [dependency-groups]

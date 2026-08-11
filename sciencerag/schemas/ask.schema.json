@@ -105,6 +105,18 @@
             "title": "Relation",
             "type": "string"
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
           "triple_id": {
             "title": "Triple Id",
             "type": "string"
@@ -112,6 +124,18 @@
           "confidence": {
             "title": "Confidence",
             "type": "number"
+          },
+          "conflicts_with": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Conflicts With"
           }
         },
         "required": [
@@ -137,11 +161,28 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Entity Type"
           }
         },
         "required": [
           "id",
-          "kind"
+          "kind",
+          "label"
         ],
         "title": "SubgraphNode",
         "type": "object"

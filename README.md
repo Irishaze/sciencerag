@@ -22,9 +22,24 @@ Full design spec: [docs/spec/sciencerag_spec_zh.md](docs/spec/sciencerag_spec_zh
 
 `POST /sciencerag/validate`: called after a simulation run completes. Schema: [validate.schema.json](sciencerag/schemas/validate.schema.json).
 
-1. **Anomaly checks** — `energy_balance` (interface conservation, `n_pairs=1` only), `pde_residual` (PDE residual), `ood` (out-of-distribution latent-space check, requires `latent_state`). Any `blocking` result short-circuits everything downstream.
+1. **Anomaly checks** — `ood` (out-of-distribution latent-space check, requires `latent_state`). A `blocking` result short-circuits everything downstream. (`energy_balance`/`pde_residual` were removed — both depended on tec_surrogate's compositional multi-pair model, which was never a substitute for real multi-pair COMSOL calibration data and only covered up to 20 pairs.)
 2. **Result evaluation** — compares against 31 known COMSOL samples and against priors from `sciencerag.priors`, yielding `consistent` / `deviation_found` / `insufficient_benchmark`.
 3. **Fine-tune suggestions** (error/uncertainty-driven, omitted if signal is weak) + **knowledge candidate extraction** (only when verdict isn't `deviation_found`) — knowledge candidates are the **only** write path into the knowledge graph, after human approval via `scripts/approve_kg_candidates.py`.
+
+Each candidate carries an `entity_type` (which node type it belongs to — `TECDesign` / `Material` / `SimulationRun` / etc., AI-classified against an ontology generated once from the simulation contract: `scripts/generate_kg_ontology.py` → `data/kg/ontology.json`) separately from its `entity_id` (a deterministic hash of subject+geometry that individuates *which* design/run/material it is — two runs of the identical geometry resolve to the same node). A candidate's object is either a measured number (`object_value`) or a link to another entity (`object_entity_id`) — e.g. every simulation run links to the `TECDesign` it evaluated and the `Material` it used, which is what lets multiple designs actually show up connected in the graph UI instead of as disconnected clusters.
+
+#### Seeding the graph from literature (before any simulation runs exist)
+
+`scripts/seed_kg_from_corpus.py` implements the spec's documented cold-start acceleration (§3.3): instead of waiting for simulation runs to populate the graph, it runs literature-priors queries against the internal corpus and converts the results into knowledge candidates too — `parameter_range`/`material_property` priors become numeric-fact candidates, `scaling_relationship` priors (e.g. "leg_length is positively correlated with total_resistance") become **link** candidates between two parameter entities. (`candidate_config`/`caution` priors don't map onto a single-fact-or-link shape without losing what made them useful, so they're skipped — logged, not silently dropped.)
+
+This does **not** bypass approval — it queues candidates into the exact same `data/kg_candidates/pending/` directory `sciencerag.validate` does, gated by the same `scripts/approve_kg_candidates.py` human checkpoint. Literature-sourced triples get attributed to the source paper's DOI (`KGSource(type="paper", doi=...)`) rather than a simulation run.
+
+```bash
+uv run python scripts/seed_kg_from_corpus.py                 # real retrieval + LLM calls, ~1-2 min per query
+uv run python scripts/approve_kg_candidates.py --list-pending
+uv run python scripts/approve_kg_candidates.py --pending <stem> --list          # preview only
+uv run python scripts/approve_kg_candidates.py --pending <stem> --approve-all   # actually writes
+```
 
 ### `sciencerag.report` — report generation
 

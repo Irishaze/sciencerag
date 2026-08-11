@@ -6,10 +6,10 @@ Makes real API calls (DeepSeek for extraction/synthesis, PaperQA2 over the
 internal corpus) — costs a small amount and takes ~1-2 minutes, same as
 scripts/run_regression.py.
 
-Uses one of tec_surrogate's known-solved COMSOL cases (report row 0 +
-field_case_index=0) as the "simulation result" being validated, since this
-script has no live COMSOL run to draw from — every number that isn't from
-a live API call is real bundled data, not fabricated.
+Uses one of tec_surrogate's known-solved COMSOL cases (report row 0) as the
+"simulation result" being validated, since this script has no live COMSOL
+run to draw from — every number that isn't from a live API call is real
+bundled data, not fabricated.
 
     uv run python scripts/demo_end_to_end.py
 """
@@ -72,7 +72,6 @@ def main() -> None:
             "design_parameters": design_parameters,
             "n_pairs": 1,
             "scalar_results": scalar_results,
-            "field_case_index": 0,
             "latent_state": latent_state,
             "priors": priors_body["priors"],
         },

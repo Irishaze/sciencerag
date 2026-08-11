@@ -6,13 +6,30 @@ export type SourcePaper = { type: "paper"; doi: string; span: string | null };
 export type SourceKGTriple = { type: "kg_triple"; triple_id: string };
 export type Source = SourcePaper | SourceKGTriple;
 
-export type SubgraphNode = { id: string; kind: "entity" | "value" };
+// `id` is opaque (entity_id for entity nodes, a triple-scoped key for
+// value nodes) — `label` is the human-readable text to actually display.
+// See sciencerag/priors/kg.py:KGTriple.entity_id's docstring for why these
+// used to be the same field and had to be split.
+export type SubgraphNode = {
+  id: string;
+  kind: "entity" | "value";
+  label: string;
+  entity_type: string | null;
+};
 export type SubgraphEdge = {
   source: string;
   target: string;
   relation: string;
+  // AI-generated plain-Chinese phrase for what `relation` means (see
+  // sciencerag/priors/ontology_generator.py:describe_relation) — null for
+  // older triples written before this field existed.
+  description: string | null;
   triple_id: string;
   confidence: number;
+  // triple_id of the edge this one contradicts on the same subject+relation
+  // (see sciencerag/priors/kg.py:KGTriple.conflicts_with) — null when this
+  // edge doesn't conflict with anything currently in the graph.
+  conflicts_with: string | null;
 };
 export type Subgraph = { nodes: SubgraphNode[]; edges: SubgraphEdge[] };
 
@@ -35,7 +52,10 @@ export type ErrorResponse = {
 export type ReportListEntry = { filename: string; stem: string };
 
 export type Anomaly = {
-  check: "energy_balance" | "pde_residual" | "ood";
+  // energy_balance/pde_residual were removed (see sciencerag/validate/
+  // checks.py) — both depended on a compositional multi-pair model that
+  // was never a substitute for real multi-pair COMSOL calibration data.
+  check: "ood";
   severity: "info" | "warning" | "blocking";
   evidence: Record<string, unknown>;
 };

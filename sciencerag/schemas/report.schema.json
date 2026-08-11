@@ -4,11 +4,7 @@
       "Anomaly": {
         "properties": {
           "check": {
-            "enum": [
-              "energy_balance",
-              "pde_residual",
-              "ood"
-            ],
+            "const": "ood",
             "title": "Check",
             "type": "string"
           },
@@ -231,8 +227,16 @@
             "type": "string"
           },
           "object_value": {
-            "title": "Object Value",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Value"
           },
           "object_unit": {
             "anyOf": [
@@ -245,6 +249,54 @@
             ],
             "default": null,
             "title": "Object Unit"
+          },
+          "object_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Id"
+          },
+          "object_entity_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Label"
+          },
+          "object_entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Type"
+          },
+          "relation_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Relation Description"
           },
           "conditions": {
             "additionalProperties": {
@@ -261,6 +313,10 @@
           },
           "run_id": {
             "title": "Run Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "title": "Entity Type",
             "type": "string"
           },
           "dedup_status": {
@@ -281,9 +337,9 @@
         "required": [
           "subject",
           "relation",
-          "object_value",
           "confidence",
           "run_id",
+          "entity_type",
           "dedup_status"
         ],
         "title": "KGCandidate",
@@ -783,7 +839,7 @@
       },
       "n_pairs": {
         "default": 1,
-        "maximum": 20,
+        "maximum": 500,
         "minimum": 1,
         "title": "N Pairs",
         "type": "integer"
@@ -829,11 +885,7 @@
       "Anomaly": {
         "properties": {
           "check": {
-            "enum": [
-              "energy_balance",
-              "pde_residual",
-              "ood"
-            ],
+            "const": "ood",
             "title": "Check",
             "type": "string"
           },
@@ -982,8 +1034,16 @@
             "type": "string"
           },
           "object_value": {
-            "title": "Object Value",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Value"
           },
           "object_unit": {
             "anyOf": [
@@ -996,6 +1056,54 @@
             ],
             "default": null,
             "title": "Object Unit"
+          },
+          "object_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Id"
+          },
+          "object_entity_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Label"
+          },
+          "object_entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Type"
+          },
+          "relation_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Relation Description"
           },
           "conditions": {
             "additionalProperties": {
@@ -1012,6 +1120,10 @@
           },
           "run_id": {
             "title": "Run Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "title": "Entity Type",
             "type": "string"
           },
           "dedup_status": {
@@ -1032,9 +1144,9 @@
         "required": [
           "subject",
           "relation",
-          "object_value",
           "confidence",
           "run_id",
+          "entity_type",
           "dedup_status"
         ],
         "title": "KGCandidate",

@@ -25,6 +25,21 @@ def _tmp_graph(tmp_path, monkeypatch):
     monkeypatch.setattr(kg, "GRAPH_PATH", tmp_path / "graph.json")
 
 
+@pytest.fixture(autouse=True)
+def _no_ontology_by_default(monkeypatch):
+    # Regression for a real incident found 2026-08-11: once a real
+    # data/kg/ontology.json existed on disk (scripts/generate_kg_ontology.py
+    # had actually been run), these tests silently stopped being free/fast
+    # — extract_kg_candidates() started making real classify_relation/
+    # describe_relation LLM calls on every run, because load_ontology()
+    # reads that file directly with no test-side mocking. Tests must not
+    # depend on incidental host filesystem state; default every test in
+    # this file to the cold-start "no ontology yet" path, and let the
+    # specific tests below that want to exercise the ontology-present path
+    # override this with their own explicit (still-mocked) monkeypatch.
+    monkeypatch.setattr(kg_candidates_module, "load_ontology", lambda: None)
+
+
 def _request(**overrides) -> ValidateRequest:
     defaults = {"run_id": "run_unit", "design_parameters": {}, "n_pairs": 1, "priors": []}
     return ValidateRequest.model_validate({**defaults, **overrides})
@@ -40,14 +55,14 @@ def test_no_signal_returns_none():
     assert suggest_surrogate_update(request, anomalies, evaluation) is None
 
 
-def test_warning_anomaly_produces_loss_reweighting():
+def test_warning_anomaly_produces_hyperparameter_direction():
     request = _request()
-    anomalies = [Anomaly(check="energy_balance", severity="warning", evidence={"ratio": 3.0})]
+    anomalies = [Anomaly(check="ood", severity="warning", evidence={"mahalanobis_distance": 3.0})]
     evaluation = Evaluation(verdict="consistent", deviations=[], sources=[])
     suggestion = suggest_surrogate_update(request, anomalies, evaluation)
     assert suggestion is not None
-    assert suggestion.loss_reweighting == {"energy_balance": 1.5}
-    assert "interface_weight" in suggestion.hyperparameter_direction
+    assert suggestion.loss_reweighting == {}
+    assert "Sobol" in suggestion.hyperparameter_direction
 
 
 def test_deviation_without_warning_anomaly_has_no_hyperparameter_direction():
@@ -98,9 +113,16 @@ def test_insufficient_benchmark_still_extracts_at_lower_confidence():
     request = _request(scalar_results={"delta_T_max_K": 50.0})
     evaluation = Evaluation(verdict="insufficient_benchmark", deviations=[], sources=[])
     candidates = extract_kg_candidates(request, evaluation)
-    assert len(candidates) == 1
-    assert candidates[0].confidence == 0.4
-    assert candidates[0].object_unit == "K"
+    # 1 numeric fact (achieves_delta_T_max_K) + 2 structural link candidates
+    # (SimulationRun -> TECDesign, SimulationRun -> Material) — see
+    # kg_candidates.py's own comment on why those two always get appended.
+    assert len(candidates) == 3
+    numeric = next(c for c in candidates if c.object_value is not None)
+    assert numeric.confidence == 0.4
+    assert numeric.object_unit == "K"
+    links = [c for c in candidates if c.object_entity_id is not None]
+    assert len(links) == 2
+    assert {c.relation for c in links} == {"SIMULATION_USES_DESIGN", "SIMULATION_USES_MATERIAL"}
 
 
 def test_high_relevance_kg_hit_marks_duplicate(monkeypatch):
@@ -125,3 +147,29 @@ def test_low_relevance_kg_hit_stays_new(monkeypatch):
     evaluation = Evaluation(verdict="consistent", deviations=[], sources=[])
     candidates = extract_kg_candidates(request, evaluation)
     assert candidates[0].dedup_status == "new"
+
+
+def test_no_ontology_falls_back_to_default_entity_type(monkeypatch):
+    # No data/kg/ontology.json in this tmp-isolated test env — must not
+    # error or trigger a real LLM call, just fall back gracefully (same
+    # default add_triple() itself uses when no entity_type is supplied).
+    monkeypatch.setattr(kg_candidates_module, "load_ontology", lambda: None)
+    request = _request(scalar_results={"delta_T_max_K": 50.0})
+    evaluation = Evaluation(verdict="consistent", deviations=[], sources=[])
+    candidates = extract_kg_candidates(request, evaluation)
+    assert candidates[0].entity_type == "Unclassified"
+
+
+def test_ontology_present_uses_classification(monkeypatch):
+    monkeypatch.setattr(kg_candidates_module, "load_ontology", lambda: object())
+    monkeypatch.setattr(
+        kg_candidates_module, "classify_relation", lambda relation, ontology: "TECDesign"
+    )
+    monkeypatch.setattr(
+        kg_candidates_module, "describe_relation", lambda relation, ontology: "最大温差"
+    )
+    request = _request(scalar_results={"delta_T_max_K": 50.0})
+    evaluation = Evaluation(verdict="consistent", deviations=[], sources=[])
+    candidates = extract_kg_candidates(request, evaluation)
+    assert candidates[0].entity_type == "TECDesign"
+    assert candidates[0].relation_description == "最大温差"
