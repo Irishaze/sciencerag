@@ -38,10 +38,16 @@
 - ScienceRAG 本体（代码仓库、corpus\papers 语料、LLM/embedding API key 的 .env）：与 TEC/COMSOL 不同，ScienceRAG 目前不是离线打包好的应用，需要单独部署到 D:\comsol\ScienceRAG 才能让 sciencerag_* 工具实际可用，否则 Install 脚本仍会写入 MCP 配置，但调用时会报 API 不可达。
 
 ScienceRAG 部署（首次接入需要，之后 Hermes 会自动拉起）
-1. 把 sciencerag 仓库放到 D:\comsol\ScienceRAG。
-2. 安装 Python 3.12 + uv，在该目录下运行一次 `uv sync`。
-3. 把 corpus\papers\ 语料和 .env（LLM/embedding API key）放好。
-4. 之后 sciencerag MCP 工具第一次被调用时会自动执行
+1. 把 sciencerag 仓库放到 D:\comsol\ScienceRAG（含 corpus\papers\ 语料，约 735MB，不在 git 里，需单独拷贝；理想情况下把开发机上已经建好的 .pqa_index\ 检索缓存也一起拷过来，否则第一次调用会现场对全部语料重新做 embedding，很慢且消耗 API 额度）。
+2. 装好 Python 3.12 + uv。
+3. 在 D:\comsol\ScienceRAG 下建 .env（可从 .env.example 复制），填两个 key：
+   - DEEPSEEK_API_KEY （LLM，用于文献抽取/回答生成）
+   - OPENAI_API_KEY   （embedding，用于检索索引）
+4. 右键 PowerShell 运行 D:\comsol\ScienceRAG\integrations\hermes\deploy-sciencerag-windows.ps1
+   （sciencerag 仓库整体复制过去后，这个脚本就跟着在里面；也可以单独把它拷到别处跑，
+   用 -ScienceragHome 指定 D:\comsol\ScienceRAG）
+   —— 会自动检查 uv/.env/语料/索引缓存，跑 `uv sync`，并起一次服务做探活测试。
+5. 之后 sciencerag MCP 工具第一次被调用时会自动执行
    `uv run uvicorn sciencerag.app:app --port 8000`（见 run-sciencerag-mcp-for-hermes.ps1），无需手动启动。
 
 注意
