@@ -32,7 +32,7 @@ mcp_servers:
       - -ExecutionPolicy
       - Bypass
       - -File
-      - D:\Hermes\run-comsol-mcp-for-hermes.ps1
+      - $HermesHome\run-comsol-mcp-for-hermes.ps1
 "@
 }
 if ($config -notmatch "(?m)^  tec:") {
@@ -45,7 +45,7 @@ mcp_servers:
       - -ExecutionPolicy
       - Bypass
       - -File
-      - D:\Hermes\run-tec-mcp-for-hermes.ps1
+      - $HermesHome\run-tec-mcp-for-hermes.ps1
 "@
 }
 if ($config -notmatch "(?m)^  sciencerag:") {
@@ -58,7 +58,7 @@ mcp_servers:
       - -ExecutionPolicy
       - Bypass
       - -File
-      - D:\Hermes\run-sciencerag-mcp-for-hermes.ps1
+      - $HermesHome\run-sciencerag-mcp-for-hermes.ps1
 "@
 }
 Set-Content -LiteralPath $configPath -Encoding UTF8 -Value $config
