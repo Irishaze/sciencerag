@@ -18,6 +18,13 @@ venv/
 
 # Runtime output
 logs/
+
+# Amy's Hermes/TEC/COMSOL delivery package (installers, a prebuilt Windows
+# .venv, ~9GB) — lives here as a local working copy for convenience, but
+# these are third-party binary artifacts, not this repo's source. The
+# source-of-truth code (ScienceRAG_MCP adapter, install scripts) is
+# duplicated into integrations/hermes/ and tracked from there instead.
+夸克上传文件/
 .pqa_index/
 
 # Large corpus additions stay local-only (the original 6 seed papers are
