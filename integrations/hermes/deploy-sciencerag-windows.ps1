@@ -84,7 +84,24 @@ try {
     Write-Warning "30 秒内没探测到 ScienceRAG API 就绪，检查上面几步是否都通过，或看 uv run uvicorn 的报错。"
   }
 } finally {
+  # `uv run` spawns uvicorn as a child process rather than exec'ing into
+  # it, so $proc.Id (the launcher uv.exe) can already have exited by the
+  # time we get here — Stop-Process on it alone silently no-ops and leaves
+  # the actual uvicorn process (and port 8000) orphaned. Also kill by
+  # matching command line, same WMI pattern TEC_Multiphysics_MCP already
+  # uses to find its own backend, as a fallback that doesn't depend on
+  # which PID uv happened to hand back.
   Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+  # Get-CimInstance is Windows-only — guard with Get-Command rather than
+  # relying on -ErrorAction, which doesn't catch a missing-cmdlet error
+  # (that fails at command resolution, before -ErrorAction ever applies),
+  # and with $ErrorActionPreference = "Stop" set above, an unguarded call
+  # would crash the whole script here instead of just skipping this
+  # best-effort fallback.
+  if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) {
+    Get-CimInstance Win32_Process -Filter "CommandLine like '%uvicorn%sciencerag.app%--port%8000%'" -ErrorAction SilentlyContinue |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  }
 }
 
 Write-Host ""
