@@ -12,6 +12,7 @@ approval -> registration, still human-gated, still CLI-only per spec §7)."""
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -30,10 +31,21 @@ def store_pending_candidates(run_id: str, candidates: list[KGCandidate]) -> Path
         return None
     PENDING_DIR.mkdir(parents=True, exist_ok=True)
     path = PENDING_DIR / f"{run_id}_{_safe_timestamp()}.json"
-    path.write_text(
+    # Write-to-temp-then-rename rather than a direct write_text(): confirmed
+    # live that a reader (load_pending, called by
+    # scripts/approve_kg_candidates.py) hitting a file mid-write sees a
+    # truncated JSON document and raises an uncaught JSONDecodeError —
+    # list_pending() already tolerates this (wrapped in try/except), but
+    # load_pending() didn't. os.replace() is atomic on POSIX, so a reader
+    # always sees either the fully-old (nonexistent) or fully-new file,
+    # matching the same pattern already used for data/kg/graph.json and
+    # data/reports/*.json.
+    tmp_path = path.with_suffix(f".{os.getpid()}.tmp")
+    tmp_path.write_text(
         json.dumps([c.model_dump() for c in candidates], indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
+    os.replace(tmp_path, path)
     return path
 
 

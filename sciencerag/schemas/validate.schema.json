@@ -862,13 +862,6 @@
             "title": "Recommended Training Samples",
             "type": "array"
           },
-          "loss_reweighting": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "title": "Loss Reweighting",
-            "type": "object"
-          },
           "hyperparameter_direction": {
             "title": "Hyperparameter Direction",
             "type": "string"

@@ -22,6 +22,7 @@ def _candidate(**overrides) -> KGCandidate:
         confidence=0.7,
         run_id="run_test",
         dedup_status="new",
+        entity_type="TECDesign",
     )
     base.update(overrides)
     return KGCandidate.model_validate(base)
@@ -54,3 +55,31 @@ def test_archive_removes_from_pending_list():
 
     assert kg_candidate_store.list_pending() == []
     assert (kg_candidate_store.ARCHIVE_DIR / f"{stem}.json").exists()
+
+
+def test_store_leaves_no_leftover_temp_file():
+    """Regression test for the write-to-temp-then-rename fix: confirms the
+    happy path doesn't leave a stray .tmp file behind (the atomic-rename
+    step actually completes and cleans up after itself)."""
+    path = kg_candidate_store.store_pending_candidates("run_test", [_candidate()])
+    assert list(kg_candidate_store.PENDING_DIR.glob("*.tmp")) == []
+    assert path.suffix == ".json"
+
+
+def test_load_pending_raises_cleanly_on_a_torn_write():
+    """Regression test, confirmed live before the fix: store_pending_
+    candidates wrote directly via path.write_text() (not atomically) — a
+    reader (load_pending, called by scripts/approve_kg_candidates.py)
+    landing mid-write saw a truncated JSON document and raised an uncaught
+    JSONDecodeError. Simulates the mid-write state directly (a real race
+    is timing-dependent and not worth chasing to reproduce) to confirm
+    load_pending's behavior on it is at least a clean, expected exception,
+    not a novel crash — the actual fix (os.replace()) means a real
+    concurrent reader can no longer observe this state at all."""
+    kg_candidate_store.PENDING_DIR.mkdir(parents=True, exist_ok=True)
+    partial = kg_candidate_store.PENDING_DIR / "run_torn_2026.json"
+    partial.write_text('[{"subject": "Bi2Te3 single-stage TEC", "relation": "achieves_x', encoding="utf-8")
+    import json
+
+    with pytest.raises(json.JSONDecodeError):
+        kg_candidate_store.load_pending("run_torn_2026")

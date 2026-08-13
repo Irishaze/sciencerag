@@ -55,8 +55,22 @@ def post_validate(request: ValidateRequest) -> ValidateResponse | JSONResponse:
             # Queue for scripts/approve_kg_candidates.py --list-pending; the
             # approval step itself stays a deliberate human action (spec
             # §6.3), this only removes the "manually copy the response body
-            # into a file" busywork in front of it.
-            store_pending_candidates(request.run_id, kg_candidates)
+            # into a file" busywork in front of it. Best-effort: this write
+            # is a convenience side-effect, not part of the contract the
+            # caller is waiting on — confirmed live that a disk failure
+            # here (e.g. an unwritable data/ mount) turned an otherwise
+            # fully-computed, correct response into a 502 via the blanket
+            # except below, discarding real anomaly/evaluation results over
+            # a queue file nobody had asked for synchronously. Same
+            # "best-effort must not sink the main response" principle
+            # already applied to sciencerag.report's store_report and
+            # sciencerag.priors' external augmentation.
+            try:
+                store_pending_candidates(request.run_id, kg_candidates)
+            except OSError as e:
+                logger.warning(
+                    "Failed to queue KG candidates for run_id=%s: %s", request.run_id, e
+                )
         response = ValidateResponse(
             anomalies=anomalies,
             evaluation=evaluation,

@@ -20,6 +20,26 @@ import numpy as np
 from sciencerag.validate import tec_bridge
 from sciencerag.validate.models import Anomaly, ValidateRequest
 
+# blocking used to fire at the empirical 99th percentile of the 31-sample
+# leave-one-out reference distribution. Verified against real data (2026-08)
+# that this number has no real statistical grounding at n=31:
+#   - resolving a genuine 99th percentile needs ~100 samples for even one
+#     expected point beyond it, ~500 for a stable estimate — we have 31.
+#   - the parametric alternative (treating the Mahalanobis-style statistic as
+#     chi-square, df=5, which is what the math actually assumes) predicts a
+#     99th-percentile distance of ~3.88 — but 2/31 (6.5%) of real, valid
+#     training designs already exceed that, 6x the intended 1% rate. The real
+#     latent distribution has a fatter tail than a Gaussian model predicts,
+#     so borrowing the textbook chi-square cutoff isn't safe either.
+# What n=31 *can* support: knowing the single most extreme point we've ever
+# actually validated (13.32, itself ~3x the next-most-extreme point at
+# 4.49). BLOCKING_MARGIN scales that as an honest "worse than anything we've
+# confirmed the surrogate can meaningfully represent" rule, with headroom so
+# one historical outlier point doesn't singlehandedly define the boundary.
+# Provisional: switch back to a real empirical percentile once training data
+# grows past ~100-150 samples.
+BLOCKING_MARGIN = 1.5
+
 
 def check_ood(request: ValidateRequest) -> Anomaly:
     if request.latent_state is None:
@@ -71,7 +91,9 @@ def check_ood(request: ValidateRequest) -> Anomaly:
         training_scores.append(float(score))
     training_scores.sort()
     percentile = float(np.searchsorted(training_scores, mahalanobis) / n * 100)
-    if percentile >= 99:
+    training_max = training_scores[-1]
+    blocking_threshold = training_max * BLOCKING_MARGIN
+    if mahalanobis > blocking_threshold:
         severity = "blocking"
     elif percentile >= 90:
         severity = "warning"
@@ -85,6 +107,7 @@ def check_ood(request: ValidateRequest) -> Anomaly:
             "training_sample_count": n,
             "training_distance_percentile": percentile,
             "training_distance_range": [training_scores[0], training_scores[-1]],
+            "blocking_threshold": blocking_threshold,
         },
     )
 

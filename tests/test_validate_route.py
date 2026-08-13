@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from sciencerag.app import app
 from sciencerag.priors import kg
 from sciencerag.validate import kg_candidate_store, kg_candidates as kg_candidates_module, tec_bridge
+from sciencerag.validate.checks import BLOCKING_MARGIN
 
 SCHEMA_PATH = (
     Path(__file__).resolve().parent.parent / "sciencerag" / "schemas" / "validate.schema.json"
@@ -234,6 +235,14 @@ def test_wrong_latent_dimension_is_warning_not_silent() -> None:
     assert any(
         sample["region"] == "check:ood" for sample in surrogate_update["recommended_training_samples"]
     )
+    # Regression test: a dimension mismatch means no OOD score was ever
+    # computed and there's no valid latent coordinate to speak of — confirmed
+    # live that suggest_surrogate_update previously claimed the generic "OOD
+    # score in the upper tail... near this design point" direction anyway,
+    # which is a specific, false statistical claim for a run that literally
+    # couldn't be scored. It must not appear here.
+    assert "upper tail" not in surrogate_update["hyperparameter_direction"]
+    assert "design point" not in surrogate_update["hyperparameter_direction"]
 
 
 def test_high_n_pairs_is_accepted_and_carried_into_kg_conditions() -> None:
@@ -299,3 +308,108 @@ def test_non_finite_numeric_values_are_rejected(field: str) -> None:
             headers={"Content-Type": "application/json"},
         )
         assert response.status_code == 422, f"{field}={bad} should be rejected"
+
+
+def test_non_finite_latent_state_is_rejected() -> None:
+    """Adversarial test: without this validator, a NaN in latent_state
+    didn't crash or produce invalid JSON — it silently produced a *wrong,
+    confident* answer. check_ood's np.searchsorted treats NaN as larger
+    than every real training score, so the request came back as
+    severity="blocking", training_distance_percentile=100.0 —
+    indistinguishable from a genuinely, validly extreme design."""
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        payload = {
+            "run_id": "run_non_finite_latent",
+            "design_parameters": {},
+            "n_pairs": 1,
+            "priors": [],
+            "latent_state": [0.0, bad, 0.0, 0.0, 0.0],
+        }
+        response = client.post(
+            "/sciencerag/validate",
+            content=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 422, f"latent_state containing {bad} should be rejected"
+
+
+def test_kg_candidate_queue_write_failure_does_not_sink_the_response(monkeypatch) -> None:
+    """Adversarial test, confirmed live before the fix: store_pending_
+    candidates is a best-effort side-storage convenience (spec §6.3's
+    approval queue), not part of the contract the caller is waiting on.
+    A disk failure there (e.g. an unwritable data/ mount) used to turn an
+    otherwise fully-computed, correct response into a 502 via the router's
+    blanket except, discarding real anomaly/evaluation results over a
+    queue file nobody had asked for synchronously."""
+
+    def _boom(run_id: str, candidates: list) -> None:
+        raise OSError("simulated unwritable data/ mount")
+
+    monkeypatch.setattr(
+        "sciencerag.validate.router.store_pending_candidates", _boom
+    )
+    response = client.post(
+        "/sciencerag/validate",
+        json={
+            "run_id": "run_queue_write_fails",
+            "design_parameters": {},
+            "n_pairs": 1,
+            "scalar_results": {"delta_T_max_K": 50.0},
+            "priors": [],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["update_package"]["blocked"] is False
+
+
+def test_ood_blocking_uses_margin_over_historical_max_not_bare_percentile() -> None:
+    """Regression test for the OOD blocking-threshold redesign (2026-08-13).
+    A bare 99th-percentile-of-31-samples rule was confirmed to have no real
+    statistical grounding at this sample size: resolving a genuine 99th
+    percentile needs ~100 samples for even one expected point beyond it, and
+    the parametric alternative (chi-square, df=5, the distribution this
+    statistic's math actually assumes) already misfires on 6.5% of the real
+    31 training points at its 99th-percentile cutoff -- 6x the intended 1%
+    rate, because the real latent distribution has a fatter tail than a
+    Gaussian model predicts. Replaced with an honest, sample-size-appropriate
+    rule (see checks.py's BLOCKING_MARGIN docstring): blocking now fires only
+    when a point is more than BLOCKING_MARGIN x more extreme than the single
+    most extreme point ever actually validated. This test locks in that
+    exact boundary rather than the old percentile-based one."""
+    training_z = tec_bridge.load_training_latent()
+    mean = training_z.mean(axis=0)
+    std = training_z.std(axis=0, ddof=1)
+
+    def latent_at_distance(distance: float) -> list[float]:
+        # Move purely along axis 0 so every other axis sits exactly at the
+        # mean (contributes 0) -- makes the resulting mahalanobis distance
+        # exactly `distance` by construction, regardless of the real
+        # dataset's actual mean/std values.
+        z = mean.copy()
+        z[0] += distance * std[0]
+        return z.tolist()
+
+    def severity_at(distance: float, run_id: str) -> str:
+        response = client.post(
+            "/sciencerag/validate",
+            json={
+                "run_id": run_id,
+                "design_parameters": {},
+                "n_pairs": 1,
+                "latent_state": latent_at_distance(distance),
+                "priors": [],
+            },
+        )
+        anomaly = response.json()["anomalies"][0]
+        return anomaly["severity"], anomaly["evidence"]
+
+    _, evidence = severity_at(0.0, "run_boundary_probe")
+    training_max = evidence["training_distance_range"][1]
+    threshold = training_max * BLOCKING_MARGIN
+    assert evidence["blocking_threshold"] == pytest.approx(threshold)
+
+    just_below, _ = severity_at(threshold - 0.5, "run_just_below_threshold")
+    just_above, _ = severity_at(threshold + 0.5, "run_just_above_threshold")
+    assert just_below != "blocking"
+    assert just_above == "blocking"

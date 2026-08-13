@@ -12,7 +12,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from sciencerag.common.validators import reject_non_finite_values, reject_path_unsafe_id
+from sciencerag.common.validators import (
+    reject_non_finite_list,
+    reject_non_finite_values,
+    reject_path_unsafe_id,
+)
 from sciencerag.priors.models import Prior, Source
 
 
@@ -47,6 +51,8 @@ class ValidateRequest(BaseModel):
     # The actual Prior objects used in planning this run, passed in-band
     # since validate has no priors store to resolve prior_ids against.
     priors: list[Prior] = Field(default_factory=list)
+
+    _validate_latent_state = field_validator("latent_state")(reject_non_finite_list)
 
 
 class Anomaly(BaseModel):
@@ -96,7 +102,6 @@ class SurrogateUpdateSuggestion(BaseModel):
     """spec §4.3 output — a proposal only; nothing here executes training."""
 
     recommended_training_samples: list[RecommendedSample] = Field(default_factory=list)
-    loss_reweighting: dict[str, float] = Field(default_factory=dict)
     hyperparameter_direction: str
 
 

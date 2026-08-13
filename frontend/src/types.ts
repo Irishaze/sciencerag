@@ -51,6 +51,36 @@ export type ErrorResponse = {
 
 export type ReportListEntry = { filename: string; stem: string };
 
+// Mirrors sciencerag/validate/models.py:KGCandidate and
+// sciencerag/kg_approval/models.py.
+export type KGCandidate = {
+  subject: string;
+  relation: string;
+  object_value: number | null;
+  object_unit: string | null;
+  object_entity_id: string | null;
+  object_entity_label: string | null;
+  object_entity_type: string | null;
+  relation_description: string | null;
+  conditions: Record<string, number>;
+  confidence: number;
+  run_id: string;
+  entity_type: string;
+  dedup_status: "new" | "duplicate_confirmed" | "conflict";
+  supporting_evidence: Record<string, unknown>;
+};
+
+export type PendingBatchSummary = { stem: string; count: number };
+export type PendingBatchDetail = { stem: string; candidates: KGCandidate[] };
+
+export type ApprovalResult = {
+  index: number;
+  status: "added" | "merged" | "conflict" | "error";
+  triple_id: string | null;
+  error: string | null;
+};
+export type ApproveResponse = { stem: string; results: ApprovalResult[]; archived: boolean };
+
 export type Anomaly = {
   // energy_balance/pde_residual were removed (see sciencerag/validate/
   // checks.py) — both depended on a compositional multi-pair model that
@@ -86,7 +116,6 @@ export type KeyResult = {
 export type UpdatePackage = {
   surrogate_update: {
     recommended_training_samples: { run_id: string; region: string; reason: string }[];
-    loss_reweighting: Record<string, number>;
     hyperparameter_direction: string;
   } | null;
   kg_candidates: unknown[];

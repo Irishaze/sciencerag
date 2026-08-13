@@ -61,7 +61,6 @@ def test_warning_anomaly_produces_hyperparameter_direction():
     evaluation = Evaluation(verdict="consistent", deviations=[], sources=[])
     suggestion = suggest_surrogate_update(request, anomalies, evaluation)
     assert suggestion is not None
-    assert suggestion.loss_reweighting == {}
     assert "Sobol" in suggestion.hyperparameter_direction
 
 
@@ -89,7 +88,6 @@ def test_deviation_without_warning_anomaly_has_no_hyperparameter_direction():
     )
     suggestion = suggest_surrogate_update(request, anomalies, evaluation)
     assert suggestion is not None
-    assert suggestion.loss_reweighting == {}
     assert "no specific hyperparameter direction" in suggestion.hyperparameter_direction
     assert suggestion.recommended_training_samples[0].region == "prior_comparison:leg_length"
 

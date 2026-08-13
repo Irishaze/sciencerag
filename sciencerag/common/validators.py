@@ -40,3 +40,26 @@ def reject_non_finite_values(values: dict[str, float]) -> dict[str, float]:
     if bad:
         raise ValueError(f"non-finite values are not allowed: {bad}")
     return values
+
+
+def reject_non_finite_list(values: list[float] | None) -> list[float] | None:
+    """List-shaped counterpart to reject_non_finite_values, for fields like
+    ValidateRequest.latent_state that aren't a dict. Confirmed via a real
+    adversarial test: a NaN slipped into latent_state didn't crash or
+    produce invalid JSON (FastAPI/Pydantic serialize NaN/Infinity as
+    `null`) — it silently produced a *wrong, confident* answer instead.
+    check_ood's np.searchsorted(training_scores, mahalanobis) treats a NaN
+    distance as larger than every real training score, so the request came
+    back as severity="blocking" with training_distance_percentile=100.0 —
+    indistinguishable from a genuinely, validly extreme design, when the
+    true situation is "this input is malformed, we can't score it at all"
+    (exactly the case the dimension-mismatch branch right above already
+    handles honestly, by reporting an error instead of a fabricated
+    score). Reject at the API boundary instead of silently computing a
+    plausible-looking wrong severity."""
+    if values is None:
+        return values
+    bad = [v for v in values if not math.isfinite(v)]
+    if bad:
+        raise ValueError(f"non-finite values are not allowed: {bad}")
+    return values

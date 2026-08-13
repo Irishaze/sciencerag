@@ -21,14 +21,6 @@ from sciencerag.validate.models import (
     ValidateRequest,
 )
 
-# Heuristic reweighting nudge per triggering check — not derived from any
-# calibration data, just a documented direction-of-travel a human reviewer
-# can accept, adjust, or reject before any retraining actually happens.
-# Empty for now: ood is the only check left (energy_balance/pde_residual
-# were removed, see checks.py) and it isn't a loss term to reweight, just a
-# training-coverage signal (see _HYPERPARAMETER_DIRECTION_BY_CHECK below).
-_LOSS_REWEIGHT_BY_CHECK: dict[str, float] = {}
-
 _HYPERPARAMETER_DIRECTION_BY_CHECK = {
     "ood": (
         "OOD score in the upper tail of the training self-distance "
@@ -42,7 +34,6 @@ def suggest_surrogate_update(
     request: ValidateRequest, anomalies: list[Anomaly], evaluation: Evaluation
 ) -> SurrogateUpdateSuggestion | None:
     samples: list[RecommendedSample] = []
-    loss_reweighting: dict[str, float] = {}
     directions: list[str] = []
 
     for deviation in evaluation.deviations:
@@ -70,9 +61,14 @@ def suggest_surrogate_update(
                 reason=f"{anomaly.check} flagged warning: {anomaly.evidence}",
             )
         )
-        if anomaly.check in _LOSS_REWEIGHT_BY_CHECK:
-            loss_reweighting[anomaly.check] = _LOSS_REWEIGHT_BY_CHECK[anomaly.check]
-        if anomaly.check in _HYPERPARAMETER_DIRECTION_BY_CHECK:
+        # "error" in evidence means the check couldn't be scored at all
+        # (e.g. checks.py's dimension-mismatch path) — confirmed live that
+        # this branch previously fired anyway, claiming "OOD score in the
+        # upper tail... near this design point" for a run with no computed
+        # OOD score and no valid latent coordinate to expand coverage near.
+        # Only claim a coverage-expansion direction when a real score backs
+        # it up.
+        if anomaly.check in _HYPERPARAMETER_DIRECTION_BY_CHECK and "error" not in anomaly.evidence:
             directions.append(_HYPERPARAMETER_DIRECTION_BY_CHECK[anomaly.check])
 
     if not samples:
@@ -80,9 +76,9 @@ def suggest_surrogate_update(
 
     return SurrogateUpdateSuggestion(
         recommended_training_samples=samples,
-        loss_reweighting=loss_reweighting,
         hyperparameter_direction="; ".join(directions) if directions else (
-            "no specific hyperparameter direction — signal came from "
-            "benchmark/prior deviation only, not a physics-check warning"
+            "no specific hyperparameter direction — samples came from "
+            "benchmark/prior deviation and/or a physics check that could not "
+            "be scored, not a real computed OOD/residual signal"
         ),
     )
