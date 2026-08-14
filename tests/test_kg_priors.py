@@ -175,6 +175,45 @@ def test_kg_prior_closes_the_geometry_gap_for_its_parameters(monkeypatch):
         )
 
 
+def test_ranking_notes_survive_the_full_build_priors_response_pipeline(monkeypatch):
+    # Regression for a real bug found live (2026-08-15): _build_priors_response
+    # used to compute kg_priors with an inlined copy of _kg_priors_for_query's
+    # OLD body (query_kg_entities + _kg_priors_from_group only), written
+    # before ranking annotation existed. Once ranking was added to
+    # _kg_priors_for_query, the inlined copy silently never got it — unit
+    # tests calling _kg_priors_for_query directly (see
+    # test_ranking_signal_reorders_and_annotates_kg_priors below) kept
+    # passing, but a real request through build_priors_response (the actual
+    # production entry point) returned KG priors with no rank in `notes` at
+    # all. Must be exercised through the real entry point, not just the
+    # helper function, to actually catch this class of drift.
+    _seed_design(
+        conditions={"leg_length": 0.5, "pitch": 0.2}, achieves={"optimal_current_A": 8.91}, run_id="r1"
+    )
+    _seed_design(
+        conditions={"leg_length": 0.8, "pitch": 0.2}, achieves={"optimal_current_A": 4.51}, run_id="r2"
+    )
+
+    class _FakeSession:
+        contexts = []
+
+    class _FakeResponse:
+        session = _FakeSession()
+
+    monkeypatch.setattr(retrieval, "run_query", lambda query: _FakeResponse())
+    monkeypatch.setattr(retrieval, "search_semantic_scholar", lambda query: [])
+    monkeypatch.setattr(retrieval, "search_arxiv", lambda query: [])
+    # The query is Chinese, which would otherwise trigger a real
+    # translate-before-literature-search LLM call (retrieval.py's
+    # _translate_for_literature_search) — keep this test free/fast.
+    monkeypatch.setattr(retrieval, "_translate_for_literature_search", lambda query: query)
+
+    response, _ = retrieval.build_priors_response("Bi2Te3单级热电制冷器的最优电流是多少")
+
+    assert len(response.priors) == 2
+    assert all(p.notes and "排序" in p.notes for p in response.priors), [p.notes for p in response.priors]
+
+
 def test_ranking_signal_reorders_and_annotates_kg_priors():
     # Regression for the 2026-08-14 finding: a superlative word ("最优")
     # used to be treated as a plain keyword here — every matching design

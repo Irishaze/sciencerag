@@ -804,14 +804,25 @@ def _build_priors_response(
     # short-circuit — see _kg_priors_for_query's docstring for why a KG
     # hit can't safely skip the literature check that follows it.
     #
-    # Inlined rather than calling _kg_priors_for_query (which does the same
-    # two lines internally) so the KGEntityQueryResult itself — not just
-    # the Priors derived from it — is available to capture on `trace`; this
-    # step runs before extract_priors ever does, so without this it was
-    # invisible in every trace-based demo/debug view (added 2026-08-13).
-    kg_result = query_kg_entities(query)
-    kg_priors = [p for group in kg_result.groups for p in _kg_priors_from_group(group)]
+    # Calls _kg_priors_for_query directly (not an inlined copy of its
+    # body) after a real regression (2026-08-15): an earlier version of
+    # this block *did* inline query_kg_entities + _kg_priors_from_group
+    # "because it's the same two lines" — true when it was written
+    # (2026-08-13), but _kg_priors_for_query grew real ranking logic
+    # (superlative-query reordering + notes annotation) the same day the
+    # M1-side ranking fix landed, and the inlined copy here silently never
+    # got that update. Confirmed live: a real "最优电流是多少"-style
+    # request through this endpoint returned KG priors with empty `notes`
+    # — no rank shown — while calling _kg_priors_for_query directly for
+    # the identical query produced the correct "第N名,共5个候选"
+    # annotation. query_kg_entities is called a second time here only to
+    # expose total_matching_entities/entities_returned on `trace` (which
+    # _kg_priors_for_query's return value doesn't carry) — cheap and
+    # deterministic (no LLM), and correctness here matters more than
+    # avoiding one redundant local computation.
+    kg_priors = _kg_priors_for_query(query)
     if trace is not None:
+        kg_result = query_kg_entities(query)
         trace.kg_total_matching_entities = kg_result.total_matching_entities
         trace.kg_entities_returned = kg_result.entities_returned
         trace.kg_priors = kg_priors
