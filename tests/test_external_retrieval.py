@@ -93,9 +93,19 @@ def _paper(doi: str = "10.1/x", pdf_url: str | None = "https://example.org/x.pdf
 class _FakeStreamCtx:
     """Mimics httpx.stream(...)'s context-manager return value."""
 
-    def __init__(self, chunks: list[bytes], status_code: int = 200):
+    def __init__(
+        self,
+        chunks: list[bytes],
+        status_code: int = 200,
+        is_redirect: bool = False,
+        location: str | None = None,
+        url: str = "https://example.org/x.pdf",
+    ):
         self._chunks = chunks
         self._status_code = status_code
+        self._is_redirect = is_redirect
+        self._location = location
+        self._url = url
 
     def __enter__(self):
         def raise_for_status():
@@ -104,7 +114,13 @@ class _FakeStreamCtx:
                     "error", request=None, response=SimpleNamespace(status_code=self._status_code)
                 )
 
-        return SimpleNamespace(raise_for_status=raise_for_status, iter_bytes=lambda: iter(self._chunks))
+        return SimpleNamespace(
+            raise_for_status=raise_for_status,
+            iter_bytes=lambda: iter(self._chunks),
+            is_redirect=self._is_redirect,
+            headers={"location": self._location} if self._location else {},
+            url=external_retrieval.httpx.URL(self._url),
+        )
 
     def __exit__(self, *exc_info):
         return False
@@ -189,6 +205,53 @@ def test_download_new_papers_rejects_non_public_pdf_url(monkeypatch, tmp_path):
         downloaded = external_retrieval.download_new_papers([_paper(pdf_url=evil_url)])
         assert downloaded == [], f"should have rejected {evil_url}"
     assert called == []
+
+
+def test_download_new_papers_rejects_redirect_to_internal_address(monkeypatch, tmp_path):
+    """SSRF-via-redirect (2026-08-15 full-system adversarial review): the
+    initial pdf_url is validated against _is_fetchable_url, but the old code
+    passed follow_redirects=True straight to httpx, which transparently
+    follows any redirect chain with zero re-validation of the destination —
+    a URL that itself resolves to a public IP (passing the initial check)
+    could 302 to http://169.254.169.254/... or any internal/loopback
+    address and httpx would fetch it anyway. Each hop must be re-checked."""
+    monkeypatch.setattr(external_retrieval, "CORPUS_DIR", tmp_path)
+
+    calls = []
+
+    def _stream(method, url, **kwargs):
+        calls.append(url)
+        if url == "https://example.org/x.pdf":
+            return _FakeStreamCtx([], status_code=302, is_redirect=True, location="http://169.254.169.254/secret")
+        raise AssertionError(f"must not have followed the redirect to {url}")
+
+    monkeypatch.setattr(external_retrieval.httpx, "stream", _stream)
+    downloaded = external_retrieval.download_new_papers([_paper()])
+    assert downloaded == []
+    assert not external_retrieval.paper_pdf_path("10.1/x").exists()
+    assert calls == ["https://example.org/x.pdf"]  # never actually requested the redirect target
+
+
+def test_download_new_papers_follows_redirect_to_public_address(monkeypatch, tmp_path):
+    """The other half of the same fix: a redirect to a genuinely public
+    address (the normal case — e.g. a DOI resolver bouncing to the
+    publisher's real PDF host) must still work, not be broken by closing
+    the SSRF hole."""
+    monkeypatch.setattr(external_retrieval, "CORPUS_DIR", tmp_path)
+
+    calls = []
+
+    def _stream(method, url, **kwargs):
+        calls.append(url)
+        if url == "https://example.org/x.pdf":
+            return _FakeStreamCtx([], status_code=302, is_redirect=True, location="https://example.com/real.pdf")
+        return _FakeStreamCtx([b"%PDF-real content"], status_code=200)
+
+    monkeypatch.setattr(external_retrieval.httpx, "stream", _stream)
+    downloaded = external_retrieval.download_new_papers([_paper()])
+    assert len(downloaded) == 1
+    assert calls == ["https://example.org/x.pdf", "https://example.com/real.pdf"]
+    assert external_retrieval.paper_pdf_path("10.1/x").read_bytes() == b"%PDF-real content"
 
 
 def test_download_new_papers_rejects_non_pdf_content(monkeypatch, tmp_path):

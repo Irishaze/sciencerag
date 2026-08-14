@@ -117,24 +117,52 @@ def _is_fetchable_url(url: str) -> bool:
     return True
 
 
+MAX_REDIRECTS = 5
+
+
 def _download_bytes(url: str) -> bytes | None:
     """Streams the response with a hard size cap rather than buffering an
     unbounded body (`httpx.get(...).content` would read the whole response
     into memory regardless of size — a misbehaving or malicious server
-    could otherwise force an arbitrarily large allocation)."""
+    could otherwise force an arbitrarily large allocation).
+
+    Manually follows redirects (rather than httpx's own follow_redirects=True)
+    so `_is_fetchable_url` is re-checked at every hop, not just the original
+    URL. Confirmed via adversarial review (2026-08-15) that this was a real
+    SSRF bypass: the caller already validates `paper.pdf_url` against
+    _is_fetchable_url before reaching here, precisely because it's an
+    attacker-influenceable value from a public API response — but with
+    follow_redirects=True, a URL that itself resolves to a public IP and
+    passes that check could 302 to http://169.254.169.254/... or any
+    internal address, and httpx would transparently follow it with zero
+    re-validation, fetching internal/cloud-metadata content into what the
+    pipeline then treats as trusted paper evidence."""
     total = 0
     chunks: list[bytes] = []
-    with httpx.stream(
-        "GET", url, timeout=PDF_DOWNLOAD_TIMEOUT_SECONDS, follow_redirects=True
-    ) as response:
-        response.raise_for_status()
-        for chunk in response.iter_bytes():
-            total += len(chunk)
-            if total > MAX_PDF_BYTES:
-                logger.warning("Download from %s exceeded %d byte cap, aborting", url, MAX_PDF_BYTES)
-                return None
-            chunks.append(chunk)
-    return b"".join(chunks)
+    for _ in range(MAX_REDIRECTS + 1):
+        if not _is_fetchable_url(url):
+            logger.warning("Refusing to fetch/follow-redirect to unsafe/non-public URL: %s", url)
+            return None
+        with httpx.stream(
+            "GET", url, timeout=PDF_DOWNLOAD_TIMEOUT_SECONDS, follow_redirects=False
+        ) as response:
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    logger.warning("Redirect from %s had no Location header, aborting", url)
+                    return None
+                url = str(response.url.join(location))
+                continue
+            response.raise_for_status()
+            for chunk in response.iter_bytes():
+                total += len(chunk)
+                if total > MAX_PDF_BYTES:
+                    logger.warning("Download from %s exceeded %d byte cap, aborting", url, MAX_PDF_BYTES)
+                    return None
+                chunks.append(chunk)
+            return b"".join(chunks)
+    logger.warning("Too many redirects (>%d) fetching %s, aborting", MAX_REDIRECTS, url)
+    return None
 
 
 def download_new_papers(papers: list[ExternalPaper]) -> list[ExternalPaper]:

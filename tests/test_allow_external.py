@@ -87,7 +87,7 @@ def test_allow_external_false_is_a_no_op(monkeypatch):
     called = []
     monkeypatch.setattr(retrieval, "search_semantic_scholar", lambda query: called.append(query) or [])
     monkeypatch.setattr(retrieval, "search_arxiv", lambda query: [])
-    response = retrieval._augment_with_external(_response(gaps=["some gap"]), "query", allow_external=False)
+    response = retrieval._augment_with_external(_response(gaps=["some gap"]), "query", "query", allow_external=False)
     assert response.coverage.gaps == ["some gap"]
     assert response.coverage.external_hits == 0
     assert called == []
@@ -97,7 +97,7 @@ def test_allow_external_true_but_no_gaps_is_a_no_op(monkeypatch):
     called = []
     monkeypatch.setattr(retrieval, "search_semantic_scholar", lambda query: called.append(query) or [])
     monkeypatch.setattr(retrieval, "search_arxiv", lambda query: [])
-    response = retrieval._augment_with_external(_response(gaps=[]), "query", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=[]), "query", "query", allow_external=True)
     assert response.coverage.external_hits == 0
     assert called == []
 
@@ -105,7 +105,7 @@ def test_allow_external_true_but_no_gaps_is_a_no_op(monkeypatch):
 def test_no_search_results_appends_gap_not_priors(monkeypatch):
     monkeypatch.setattr(retrieval, "search_semantic_scholar", lambda query: [])
     monkeypatch.setattr(retrieval, "search_arxiv", lambda query: [])
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", "query", allow_external=True)
     assert response.priors == []
     assert response.coverage.external_hits == 0
     assert any("Semantic Scholar and arXiv" in gap for gap in response.coverage.gaps)
@@ -134,7 +134,7 @@ def test_full_text_hit_is_downloaded_requeried_and_tagged_internal(monkeypatch):
         lambda query, evidence_table, trace=None: ([_fake_prior(arxiv_paper.doi)], 0, []),
     )
 
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "leg length COP", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "leg length COP", "leg length COP", allow_external=True)
 
     assert response.coverage.external_hits == 1
     assert len(response.priors) == 1
@@ -158,7 +158,7 @@ def test_paywalled_hit_falls_back_to_abstract_and_stays_external_unverified(monk
         lambda query, evidence_table, trace=None: ([_fake_prior(no_pdf_paper.doi, 0.8)], 0, []),
     )
 
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "leg length COP", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "leg length COP", "leg length COP", allow_external=True)
 
     assert response.coverage.external_hits == 1
     assert len(response.priors) == 1
@@ -192,7 +192,7 @@ def test_mixed_full_text_and_abstract_only_both_contribute(monkeypatch):
 
     monkeypatch.setattr(retrieval, "extract_priors", _fake_extract)
 
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", "query", allow_external=True)
 
     assert response.coverage.external_hits == 2
     assert len(response.priors) == 2
@@ -210,7 +210,7 @@ def test_extraction_failure_on_abstract_path_appends_gap(monkeypatch):
     monkeypatch.setattr(retrieval, "download_new_papers", lambda papers: [])
     monkeypatch.setattr(retrieval, "extract_priors", _raise)
 
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", "query", allow_external=True)
 
     assert response.priors == []
     assert response.coverage.external_hits == 2
@@ -247,7 +247,7 @@ def test_same_doi_from_both_sources_is_deduped_and_prefers_full_text(monkeypatch
     monkeypatch.setattr(retrieval, "download_new_papers", _fake_download)
     monkeypatch.setattr(retrieval, "run_query", lambda query: _FakeQueryResponse([]))
 
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", "query", allow_external=True)
 
     assert response.coverage.external_hits == 1
     assert len(captured["papers"]) == 1
@@ -274,7 +274,7 @@ def test_run_query_failure_during_requery_degrades_gracefully(monkeypatch):
 
     monkeypatch.setattr(retrieval, "run_query", _boom)
 
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", "query", allow_external=True)
 
     assert response.priors == []
     assert response.coverage.external_hits == 1
@@ -297,7 +297,7 @@ def test_already_downloaded_paper_does_not_requery(monkeypatch):
 
     monkeypatch.setattr(retrieval, "run_query", _fail_if_called)
 
-    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", allow_external=True)
+    response = retrieval._augment_with_external(_response(gaps=["thin coverage"]), "query", "query", allow_external=True)
 
     assert response.priors == []
     assert response.coverage.external_hits == 1

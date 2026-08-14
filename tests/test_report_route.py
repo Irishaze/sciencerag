@@ -59,6 +59,113 @@ def test_report_returns_valid_schema_and_citations():
     assert "10.1/x" in payload["markdown"]
 
 
+def test_deviations_render_as_a_markdown_list_not_one_paragraph():
+    """Regression test: "**Verdict:** ..." immediately followed by "- ..."
+    lines with no blank line between them was lazy-continuation in
+    Markdown — every deviation ran together into a single paragraph
+    instead of a bullet list. Confirmed by actually converting the
+    rendered Markdown to HTML (the same conversion render_pdf uses) and
+    checking for two separate <li> elements rather than asserting on the
+    Markdown text's raw formatting."""
+    import markdown as md_lib
+
+    payload = {
+        **_BASE_PAYLOAD,
+        "evaluation": {
+            "verdict": "consistent",
+            "deviations": [
+                {
+                    "field": "a",
+                    "source": "benchmark_comparison",
+                    "reference_id": "s1",
+                    "actual": 1.0,
+                    "reference_min": 0.9,
+                    "reference_max": 1.1,
+                    "verdict": "within_range",
+                },
+                {
+                    "field": "b",
+                    "source": "benchmark_comparison",
+                    "reference_id": "s1",
+                    "actual": 2.0,
+                    "reference_min": 1.9,
+                    "reference_max": 2.1,
+                    "verdict": "within_range",
+                },
+            ],
+            "sources": [],
+        },
+    }
+    response = client.post("/sciencerag/report", json=payload)
+    html = md_lib.markdown(response.json()["markdown"])
+    assert html.count("<li>") >= 2
+
+
+def test_anomaly_evidence_renders_as_readable_text_not_a_python_dict():
+    """Regression test: Anomaly.evidence used to be dumped as
+    f"`{evidence}`" — a literal Python dict repr (single-quoted keys,
+    braces) inside a Markdown code span. Confirmed live this showed up as
+    garbled text in the rendered PDF (xhtml2pdf doesn't decode the
+    resulting HTML entities the way a browser would)."""
+    payload = {
+        **_BASE_PAYLOAD,
+        "anomalies": [
+            {
+                "check": "ood",
+                "severity": "warning",
+                "evidence": {"mahalanobis_distance": 4.472135954999579, "training_sample_count": 31},
+            }
+        ],
+    }
+    response = client.post("/sciencerag/report", json=payload)
+    markdown = response.json()["markdown"]
+    assert "{'mahalanobis_distance'" not in markdown
+    assert "Mahalanobis distance: 4.472" in markdown
+
+
+def test_non_info_anomaly_renders_as_a_real_blockquote_in_pdf_html():
+    """Regression test: render_pdf originally escaped ">" (via
+    html.escape()), which meant Markdown never saw a literal ">" to
+    recognize as blockquote syntax — a warning/blocking anomaly's "> ..."
+    lines rendered as literal visible "&gt;" text instead of the intended
+    highlighted blockquote. Fixed by narrowing the escape to only "&"/"<"
+    (see render._escape_tag_open)."""
+    import markdown as md_lib
+
+    from sciencerag.report import render
+
+    payload = {
+        **_BASE_PAYLOAD,
+        "anomalies": [{"check": "ood", "severity": "warning", "evidence": {}}],
+    }
+    response = client.post("/sciencerag/report", json=payload)
+    markdown_text = response.json()["markdown"]
+    escaped = render._escape_tag_open(markdown_text)
+    html_out = md_lib.markdown(escaped)
+    assert "<blockquote>" in html_out
+    assert "&gt; **ood**" not in escaped
+
+
+def test_apostrophe_in_free_text_is_not_garbled_in_pdf():
+    """Regression test: html.escape()'s default quote=True also escaped
+    "'" and '"', which produced literal "&#x27;" text in the rendered PDF
+    for ordinary content like "the design's optimal length" — xhtml2pdf
+    doesn't decode that entity back to an apostrophe the way a browser
+    would. Fixed alongside the blockquote fix by narrowing the escape."""
+    payload = {
+        **_BASE_PAYLOAD,
+        "task_context": {"objective": "characterize the design's optimal leg length", "constraints": {}},
+    }
+    response = client.post("/sciencerag/report", json=payload)
+    stem = None
+    entries = store.list_reports()
+    assert entries
+    stem = entries[0]["stem"]
+    pdf_bytes = client.get(f"/sciencerag/reports/{stem}/pdf").content
+    assert b"&#x27;" not in pdf_bytes
+    assert b"&#39;" not in pdf_bytes
+
+
 def test_warning_anomaly_flags_key_results_as_check_flagged():
     payload = {**_BASE_PAYLOAD, "anomalies": [{"check": "ood", "severity": "warning", "evidence": {}}]}
     response = client.post("/sciencerag/report", json=payload)
@@ -125,6 +232,24 @@ def test_run_id_with_path_separator_is_rejected(bad_run_id: str, tmp_path):
     response = client.post("/sciencerag/report", json=payload)
     assert response.status_code == 422
     # And nothing should have been written anywhere, including outside tmp_path.
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_run_id_with_crlf_or_quote_is_rejected(tmp_path):
+    """Adversarial test (2026-08-15 full-system review), confirmed via a
+    real end-to-end repro: run_id='inject"x\\r\\nX-Injected-Header: pwned'
+    passed the old validator (only "/"/"\\"/"\\x00" were blocked), got
+    written into two real filenames on disk verbatim (control characters
+    and a literal quote, live in the filesystem), and fetching that
+    report's /pdf endpoint reached the Content-Disposition header with the
+    same raw stem — h11 (uvicorn's HTTP layer) refused to emit the
+    resulting malformed header, but did so by raising LocalProtocolError
+    deep in the ASGI send path, past this project's own try/except, so the
+    connection dropped with an ungraceful empty reply instead of the typed
+    4xx/5xx JSON error spec §8 requires."""
+    payload = {**_BASE_PAYLOAD, "run_id": 'inject"x\r\nX-Injected-Header: pwned'}
+    response = client.post("/sciencerag/report", json=payload)
+    assert response.status_code == 422
     assert list(tmp_path.iterdir()) == []
 
 

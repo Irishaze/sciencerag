@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-_UNSAFE_PATH_CHARS = ("/", "\\")
+_UNSAFE_PATH_CHARS = ("/", "\\", "\x00", '"', "\r", "\n")
 
 
 def reject_path_unsafe_id(value: str) -> str:
@@ -18,11 +18,39 @@ def reject_path_unsafe_id(value: str) -> str:
     docker-compose.yml, so this reaches real host paths, not just the
     container). Rejecting outright (422) rather than silently
     stripping/sanitizing, since a mangled run_id could still collide with
-    an unrelated real run's files."""
+    an unrelated real run's files.
+
+    "\\x00" is here for a different reason than "/"/"\\": it can't escape a
+    directory (it isn't a path separator), but confirmed via a real
+    adversarial test that sciencerag.kg_approval's `stem` path parameter
+    (validated with this same function, called directly rather than as a
+    Pydantic field_validator) reaches pathlib with a null byte still in it,
+    and pathlib raises ValueError("embedded null byte") from deep inside
+    load_pending — uncaught, so it surfaces as a raw 500 instead of the
+    router's typed 404/400. Reject early instead.
+
+    '"'/"\\r"/"\\n" added 2026-08-15 after a full adversarial-review pass:
+    a run_id of 'inject"x\\r\\nX-Injected-Header: pwned' passed the old
+    check (none of those three chars were blocked), got written into two
+    real filenames on disk verbatim (data/reports/*.json and *.md — control
+    characters and a literal quote, live in the filesystem), and later,
+    fetching that report's /pdf endpoint reached
+    report/router.py's `Content-Disposition: inline; filename="{stem}.pdf"`
+    with the same raw stem — h11 (uvicorn's HTTP layer) correctly refused
+    to emit the resulting malformed header (so real HTTP response-splitting
+    was never actually reachable), but it did so by raising
+    LocalProtocolError deep inside the ASGI send path, after this project's
+    own try/except in get_report_pdf had already run and returned
+    successfully — the connection then dropped with an ungraceful "empty
+    reply", not the typed 4xx/5xx JSON error response spec §8 requires
+    ("always return typed, schema-valid JSON"). Rejecting these three
+    characters at the same API boundary as the others closes both the
+    filename pollution and the ungraceful-crash paths at once, the same
+    "reject early, not deep in a library" principle as \\x00 above."""
     if not value:
         raise ValueError("run_id must not be empty")
     if any(c in value for c in _UNSAFE_PATH_CHARS):
-        raise ValueError(f"run_id must not contain {'/'.join(_UNSAFE_PATH_CHARS)!r}: {value!r}")
+        raise ValueError(f"run_id must not contain {_UNSAFE_PATH_CHARS!r}: {value!r}")
     return value
 
 
