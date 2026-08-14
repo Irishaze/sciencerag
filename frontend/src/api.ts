@@ -1,4 +1,13 @@
-import type { AskResponse, ErrorResponse, ReportDetail, ReportListEntry, Subgraph } from "./types";
+import type {
+  ApproveResponse,
+  AskResponse,
+  ErrorResponse,
+  PendingBatchDetail,
+  PendingBatchSummary,
+  ReportDetail,
+  ReportListEntry,
+  Subgraph,
+} from "./types";
 
 // Same-origin in production (this app is built and served by the FastAPI
 // app itself, see sciencerag/app.py); Vite's dev server proxies /sciencerag
@@ -51,4 +60,22 @@ export function getReport(stem: string): Promise<ReportDetail> {
 
 export function getFullGraph(): Promise<Subgraph> {
   return getJson<Subgraph>("/sciencerag/graph");
+}
+
+export function listPendingCandidates(): Promise<PendingBatchSummary[]> {
+  return getJson<PendingBatchSummary[]>("/sciencerag/kg_candidates/pending");
+}
+
+export function getPendingBatch(stem: string): Promise<PendingBatchDetail> {
+  return getJson<PendingBatchDetail>(`/sciencerag/kg_candidates/pending/${encodeURIComponent(stem)}`);
+}
+
+export function approvePending(
+  stem: string,
+  body: { approve_all?: boolean; indices?: number[]; operator?: string; reason?: string }
+): Promise<ApproveResponse> {
+  return postJson<ApproveResponse>(
+    `/sciencerag/kg_candidates/pending/${encodeURIComponent(stem)}/approve`,
+    body
+  );
 }

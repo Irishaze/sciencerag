@@ -197,10 +197,54 @@ button:disabled {
 }
 
 .graph-canvas {
+  position: relative;
   flex: 1;
-  background: var(--surface-2);
   border-radius: 10px;
   overflow: hidden;
+  border: 1px solid var(--line);
+  /* Graph paper, not a flat panel — this is a plotting surface, and the
+     faint grid gives the eye a scale reference for the force layout
+     (which has no axes of its own) without competing with the data. */
+  background-color: var(--surface-2);
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.graph-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(2px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.graph-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.graph-legend-line {
+  width: 12px;
+  height: 0;
+  border-top: 2px dashed var(--blocking);
+  flex-shrink: 0;
 }
 
 .graph-empty {
@@ -212,9 +256,17 @@ button:disabled {
 }
 
 .graph-inspector {
-  width: 220px;
+  width: 250px;
   flex-shrink: 0;
   font-size: 13px;
+}
+
+.graph-inspector-hint {
+  color: var(--text-dim);
+  padding: 14px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  line-height: 1.6;
 }
 
 .graph-inspector-title {
@@ -236,10 +288,6 @@ button:disabled {
 
 .graph-inspector dd {
   margin: 2px 0 0;
-}
-
-.graph-inspector-hint {
-  color: var(--text-dim);
 }
 
 .graph-inspector-plain {
@@ -269,23 +317,27 @@ button:disabled {
 
 .reports-layout {
   display: flex;
-  gap: 20px;
+  gap: 22px;
+  align-items: flex-start;
 }
 
 .report-list {
-  flex: 0 0 260px;
-  max-height: 520px;
+  flex: 0 0 264px;
+  max-height: 640px;
   overflow: auto;
   list-style: none;
   padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .report-list li {
   padding: 10px 12px;
   border-radius: 8px;
+  border-left: 2px solid transparent;
   cursor: pointer;
-  font-size: 13px;
 }
 
 .report-list li:hover {
@@ -294,8 +346,29 @@ button:disabled {
 
 .report-list li.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  border-left-color: var(--accent);
+}
+
+.report-list-run-id {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12.5px;
   font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.report-list li.active .report-list-run-id {
+  color: var(--accent);
+}
+
+.report-list-time {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  margin-top: 3px;
+  word-break: break-all;
 }
 
 .report-detail {
@@ -306,14 +379,14 @@ button:disabled {
 .report-meta-row {
   display: flex;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .report-anomalies {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .chip {
@@ -335,17 +408,78 @@ button:disabled {
   color: var(--blocking);
 }
 
+/* A report's whole reason to exist is "every number has a citation" (spec
+   "凡论断必有来源") — a serif face marks it as a formal, printed-feeling
+   record, distinct from the sans/mono the rest of the app uses for
+   controls. Georgia pairs with Songti SC the way the app's system sans
+   already pairs across Latin/CJK, just one register quieter. */
 .markdown-body {
-  background: var(--surface-2);
-  padding: 16px 20px;
-  border-radius: 8px;
-  font-size: 13.5px;
-  max-height: 480px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 30px 36px;
+  border-radius: 10px;
+  font-family: Georgia, "Songti SC", STSong, serif;
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--text);
+  max-height: 640px;
   overflow: auto;
 }
 
-.markdown-body :is(h1, h2, h3) {
-  font-size: 15px;
+.markdown-body h1 {
+  font-size: 23px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--accent);
+}
+
+.markdown-body h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 28px 0 10px;
+}
+
+.markdown-body h2:first-of-type {
+  margin-top: 20px;
+}
+
+.markdown-body p {
+  margin: 0 0 10px;
+}
+
+.markdown-body ul {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.markdown-body li {
+  margin-bottom: 7px;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 20px 0;
+}
+
+.markdown-body code {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Covers two different roles the source markdown uses "_..._" for
+   (citation brackets like [run:xxx], and free-text notes on an anomaly) —
+   no CSS-visible distinction between them, so both get the same quiet
+   "supplementary, not prose" treatment rather than default italic. */
+.markdown-body em {
+  font-style: normal;
+  color: var(--text-dim);
+  font-size: 0.92em;
 }
 
 .card-grid {
@@ -395,15 +529,21 @@ button:disabled {
 
 .stat {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  gap: 10px;
+}
+
+.stat-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 1px;
 }
 
 .stat strong {
+  display: block;
   font-size: 15px;
 }
 
-.stat span {
+.stat-body {
   font-size: 12.5px;
   color: var(--text-dim);
   line-height: 1.5;
@@ -486,7 +626,10 @@ button:disabled {
   color: var(--text-dim);
   line-height: 1.75;
   margin: 0;
-  max-width: 46ch;
+  /* No max-width cap — the sentence fits on one line at the hero-copy
+     column's actual width; a "ch"-based cap sized for Latin text comes out
+     far too narrow for CJK (each character is much wider than "0"), which
+     was forcing an unwanted second line. */
 }
 
 /* ---- homepage: question panel (right column of hero) ---- */
@@ -679,6 +822,11 @@ button:disabled {
   transform: translateY(-2px);
 }
 
+.feature-icon {
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+
 .feature-tag {
   align-self: flex-start;
   font-family: var(--mono);
@@ -755,4 +903,384 @@ button:disabled {
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ---- shared "intro row" — muted one-line description + primary action,
+   used at the top of every secondary page (graph/reports/approval) so
+   they read as siblings in one system, not each inventing their own
+   header treatment. ---- */
+
+.page-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.page-intro p {
+  margin: 0;
+  max-width: 62ch;
+}
+
+/* ---- knowledge candidate approval — a review queue, not a form: every
+   layout choice here is about letting a reviewer scan a claim, judge how
+   much to trust it, and see how it lands against what's already known,
+   before committing it permanently to the graph. ---- */
+
+.approval-cli-ref {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 1px 4px;
+  /* Not .mono's break-all — that's for opaque hash ids with no legible
+     structure; a file path should only ever wrap at its own "/", never
+     mid-word. */
+  word-break: keep-all;
+}
+
+.approval-layout {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+}
+
+.approval-queue {
+  flex: 0 0 268px;
+}
+
+.approval-queue-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
+
+.approval-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 600px;
+  overflow: auto;
+}
+
+.approval-queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+}
+
+.approval-queue-item:hover {
+  background: var(--surface-2);
+}
+
+.approval-queue-item.active {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+
+.approval-queue-stem {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.4;
+  word-break: break-all;
+  color: var(--text);
+}
+
+.approval-queue-item.active .approval-queue-stem {
+  color: var(--accent);
+}
+
+.approval-queue-count {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.approval-review {
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.approval-review-header h2 {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  word-break: break-all;
+}
+
+.approval-review-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.approval-candidate-list {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.approval-candidate {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.approval-candidate:hover {
+  border-color: var(--accent);
+}
+
+.approval-candidate.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.approval-candidate-checkbox {
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.approval-candidate-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.approval-candidate-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.approval-candidate-claim {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.approval-candidate-sentence {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 9px;
+  line-height: 1.55;
+}
+
+.approval-candidate-foot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* The signature element: a reviewer's real question for every row is "how
+   much should I trust this before I let it into the graph" — a bar reads
+   in one glance where a bare "0.70" needs a beat of arithmetic. */
+.approval-confidence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.approval-confidence-track {
+  width: 56px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.approval-confidence-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.approval-confidence-value {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.approval-run-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+
+.approval-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.approval-badge.new {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.approval-badge.duplicate_confirmed {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.approval-badge.conflict {
+  background: var(--blocking-soft);
+  color: var(--blocking);
+}
+
+.approval-actions {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.approval-actions-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.approval-actions-row input {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+
+.approval-actions-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.approval-actions-buttons .secondary {
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.approval-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 48px 20px;
+  text-align: center;
+  background: var(--surface-2);
+  border-radius: 10px;
+}
+
+.approval-results {
+  margin-bottom: 18px;
+}
+
+.approval-results h2 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.approval-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.approval-result-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.approval-result-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-dim);
+}
+
+.approval-result-dot.added,
+.approval-result-dot.merged {
+  background: var(--accent);
+}
+
+.approval-result-dot.conflict {
+  background: var(--warning);
+}
+
+.approval-result-dot.error {
+  background: var(--blocking);
+}
+
+@media (max-width: 760px) {
+  .approval-layout,
+  .reports-layout,
+  .graph-wrap {
+    flex-direction: column;
+  }
+  .approval-queue,
+  .report-list,
+  .graph-inspector {
+    flex: none;
+    width: 100%;
+  }
+  .approval-queue-list,
+  .report-list {
+    max-height: 240px;
+  }
 }

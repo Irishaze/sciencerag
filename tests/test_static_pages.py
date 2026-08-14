@@ -19,6 +19,18 @@ def test_demo_page_still_serves():
     assert response.status_code == 200
 
 
+def test_demo_and_workbench_pages_are_not_browser_cached():
+    # Regression for a real incident (2026-08-13): these two pages get
+    # redeployed across active iteration (unlike most static assets), and
+    # FileResponse sends no Cache-Control by default — a plain browser
+    # reload served a stale copy of demo.html straight from disk cache
+    # after a real redeploy, silently undoing the fix being tested. The
+    # user saw the OLD renderPriors() output (literal "null" field names,
+    # "(no DOI)" for KG sources) against the NEW API response shape.
+    assert client.get("/demo").headers["cache-control"] == "no-cache"
+    assert client.get("/workbench").headers["cache-control"] == "no-cache"
+
+
 # The real spec §7 Vite/React frontend (frontend/) is a separate build step
 # (`npm run build`) — these are skipped, not failed, when frontend/dist
 # hasn't been built yet (e.g. a fresh checkout before running that step),

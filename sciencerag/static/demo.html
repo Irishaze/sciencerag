@@ -120,6 +120,16 @@
     color: var(--accent);
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
+  .origin-badge {
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    padding: 3px 9px;
+    border-radius: 100px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .origin-kg { background: #e4ecd9; color: #4a6b1f; }
+  .origin-lit { background: var(--surface-2); color: var(--text-dim); }
+  .prior-notes { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
   .field-name {
     font-size: 13px;
     color: var(--text-dim);
@@ -248,7 +258,7 @@
 <body>
 <div class="page">
   <h1>ScienceRAG · Priors 检索演示</h1>
-  <p class="sub">问一个热电制冷器(TEC)相关的问题,系统会从内部论文库里检索证据,返回带引用的结构化先验知识。语料库已扩到 135 篇论文,单次查询(检索+LLM 结构化抽取)通常需要 1–2 分钟,请耐心等待。</p>
+  <p class="sub">问一个热电制冷器(TEC)相关的问题,系统会先查知识图谱(历史仿真结果 + 已入库的文献结论),再从内部论文库(170+ 篇论文)检索证据、用 LLM 结构化抽取,两边结果合并返回。单次查询(检索+LLM 结构化抽取)一般需要 3–6 分钟,期间不用刷新或重新提交——查询正在真实进行中,不是卡住了。</p>
 
   <div class="query-box">
     <textarea id="query" placeholder="例如:What design parameters affect the coefficient of performance (COP) of a thermoelectric cooler?"></textarea>
@@ -271,7 +281,12 @@
 
   <div class="pipeline" id="pipeline">
     <div class="pipeline-step">
+      <h3>0 · 知识图谱查询(无 LLM,确定性关键词打分,中文经 jieba 分词)</h3>
+      <div id="pipelineKg"></div>
+    </div>
+    <div class="pipeline-step">
       <h3>1 · 证据片段(PaperQA2 从语料库检索到的原始证据)</h3>
+      <div id="pipelineLiteratureQuery"></div>
       <div id="pipelineEvidence"></div>
     </div>
     <div class="pipeline-step">
@@ -286,15 +301,16 @@
       </details>
     </div>
     <div class="pipeline-step">
-      <h3>3-4 · LLM 输出 JSON + 校验/重试</h3>
+      <h3>3-4 · LLM 输出 JSON + 校验/重试(数值溯源 + 语义忠实度判官)</h3>
       <div id="pipelineAttempts"></div>
+      <div id="pipelineSemantic"></div>
     </div>
     <div class="pipeline-step">
       <h3>5 · 来源映射(证据编号 → 真实 DOI/页码,由代码完成,LLM 不接触真实 DOI)</h3>
       <p style="font-size:13px;color:var(--text-dim);margin:0">见下方每条 prior 的来源字段——LLM 只输出证据编号(如 E1),真实 DOI/页码由代码从证据表里查出来填入,LLM 全程不会自己编 DOI。</p>
     </div>
     <div class="pipeline-step">
-      <h3>6 · 置信度计算(公式:(0.5 + 0.1×min(证据数,3)) × 平均相关性)</h3>
+      <h3>6 · 置信度计算(公式:min(1, (0.5 + 0.1×min(论文数,3) + 0.02×min(额外片段数,3)) × 平均相关性))</h3>
       <div id="pipelineConfidence"></div>
     </div>
   </div>
@@ -309,6 +325,16 @@
 <script>
 const $ = (id) => document.getElementById(id);
 
+// Evidence text comes from paper content and raw_output comes straight
+// from the LLM — neither is trusted input, and both used to go into
+// innerHTML unescaped. A paper snippet (or a prompt-injected LLM output)
+// containing "<img src=x onerror=...>" would execute in the browser.
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 function kindLabel(kind) {
   return {
     parameter_range: "参数范围",
@@ -319,6 +345,55 @@ function kindLabel(kind) {
   }[kind] || kind;
 }
 
+const DIRECTION_LABEL = {
+  positive: "正相关", negative: "负相关", convex: "凸性",
+  concave: "凹性", non_monotonic: "非单调", unknown: "未知",
+};
+
+// Each of the 5 prior kinds has a genuinely different `value` shape (see
+// sciencerag/priors/models.py) — there is no generic `value.summary`
+// field. Rendering used to reach for one anyway and silently show a blank
+// line for every single prior card regardless of kind.
+function valueSummary(p) {
+  const v = p.value || {};
+  switch (p.kind) {
+    case "parameter_range": {
+      const parts = [];
+      if (v.typical != null) parts.push(`典型值 ${v.typical}${v.unit || ""}`);
+      if (v.min != null || v.max != null) parts.push(`范围 ${v.min ?? "?"}–${v.max ?? "?"}${v.unit || ""}`);
+      return esc(parts.join(" · ") || "(无数值)");
+    }
+    case "material_property": {
+      const mag = v.magnitude != null ? ` = ${v.magnitude}${v.unit || ""}` : "";
+      return esc(`${v.material}${v.form ? " (" + v.form + ")" : ""} · ${v.property_name}${mag} [${v.method}]`);
+    }
+    case "scaling_relationship": {
+      const dir = DIRECTION_LABEL[v.direction] || v.direction;
+      return esc(`${v.x} → ${v.y}：${dir}${v.functional_form ? "（" + v.functional_form + "）" : ""}`);
+    }
+    case "candidate_config": {
+      const params = Object.entries(v.parameters || {}).map(([k, val]) => `${k}=${val}`).join(", ");
+      const perf = Object.entries(v.reported_performance || {}).map(([k, val]) => `${k}=${val}`).join(", ");
+      return esc(`参数: ${params}` + (perf ? ` → 性能: ${perf}` : ""));
+    }
+    case "caution":
+      return esc(v.statement + (v.applicability_scope ? `（适用范围: ${v.applicability_scope}）` : ""));
+    default:
+      return esc(JSON.stringify(v));
+  }
+}
+
+function sourcesLine(p) {
+  return p.sources.map((s) => {
+    if (s.type === "kg_triple") return `知识图谱三元组 <code>${esc(s.triple_id)}</code>`;
+    if (s.doi) {
+      const link = `<a href="https://doi.org/${esc(s.doi)}" target="_blank" rel="noopener">${esc(s.doi)}</a>`;
+      return s.span ? `${link} · ${esc(s.span)}` : link;
+    }
+    return "(no DOI)";
+  }).join("；") || "(无来源)";
+}
+
 function renderPriors(priors) {
   const el = $("priors");
   if (priors.length === 0) {
@@ -326,19 +401,22 @@ function renderPriors(priors) {
     return;
   }
   el.innerHTML = priors.map((p) => {
-    const src = p.sources[0] || {};
-    const doiLink = src.doi
-      ? `<a href="https://doi.org/${src.doi}" target="_blank" rel="noopener">${src.doi}</a>`
-      : "(no DOI)";
+    const fromKg = (p.prior_id || "").startsWith("pr_kg_");
+    const originBadge = fromKg
+      ? '<span class="origin-badge origin-kg">知识图谱</span>'
+      : '<span class="origin-badge origin-lit">文献</span>';
+    const fieldName = p.field || (p.related_fields || []).join(", ");
     return `
       <div class="prior-card">
         <div class="prior-head">
-          <span class="kind-badge">${kindLabel(p.kind)}</span>
-          <span class="field-name">${p.field}</span>
+          <span class="kind-badge">${esc(kindLabel(p.kind))}</span>
+          ${originBadge}
+          <span class="field-name">${esc(fieldName)}</span>
           <span class="confidence">confidence ${p.confidence.toFixed(2)}</span>
         </div>
-        <div class="prior-summary">${(p.value && p.value.summary) || ""}</div>
-        <div class="prior-source">${p.notes || ""} — ${doiLink} · ${src.span || ""}</div>
+        <div class="prior-summary">${valueSummary(p)}</div>
+        ${p.notes ? `<div class="prior-notes">${esc(p.notes)}</div>` : ""}
+        <div class="prior-source">${sourcesLine(p)}</div>
       </div>
     `;
   }).join("");
@@ -351,19 +429,57 @@ function renderGaps(gaps) {
     return;
   }
   el.style.display = "block";
-  el.innerHTML = `<h3>覆盖不足提示</h3><ul>${gaps.map((g) => `<li>${g}</li>`).join("")}</ul>`;
+  el.innerHTML = `<h3>覆盖不足提示</h3><ul>${gaps.map((g) => `<li>${esc(g)}</li>`).join("")}</ul>`;
+}
+
+function renderKgLookup(trace) {
+  const el = $("pipelineKg");
+  if (!trace.kg_priors || trace.kg_priors.length === 0) {
+    el.innerHTML = `<p style="font-size:13px;color:var(--text-dim);margin:0">图谱里没有匹配这个问题的实体(匹配实体数: ${trace.kg_total_matching_entities || 0})。</p>`;
+    return;
+  }
+  const coverage = trace.kg_entities_returned >= trace.kg_total_matching_entities
+    ? `匹配到 ${trace.kg_total_matching_entities} 个实体,全部展示`
+    : `匹配到 ${trace.kg_total_matching_entities} 个实体,仅展示相关性最高的 ${trace.kg_entities_returned} 个`;
+  const rows = trace.kg_priors.map((p) => {
+    const fieldName = p.field || (p.related_fields || []).join(", ");
+    return `<div class="evidence-item"><span class="evidence-label">${esc(p.prior_id)}</span>[${esc(kindLabel(p.kind))}] ${esc(fieldName)} — confidence ${p.confidence.toFixed(2)}</div>`;
+  }).join("");
+  el.innerHTML = `<p style="font-size:13px;color:var(--text-dim);margin:0 0 8px">${coverage} → 产出 ${trace.kg_priors.length} 条 Prior(与下方文献 Prior 合并进最终结果):</p>${rows}`;
+}
+
+function renderSemantic(trace) {
+  const el = $("pipelineSemantic");
+  const drops = trace.semantic_check_failures || [];
+  const reviews = trace.semantic_reviews || [];
+  if (drops.length === 0 && reviews.length === 0) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--text-dim);margin:8px 0 0">语义忠实度判官(独立模型,非生产模型自评)未拒绝任何草稿。</p>';
+    return;
+  }
+  const dropItems = drops.map((d) => `<li><strong>DROP</strong>(触发整轮重试)— ${esc(d)}</li>`).join("");
+  const reviewItems = reviews.map((r) => `<li><strong>REVIEW</strong>(排除出最终结果,计入 gaps)— ${esc(r)}</li>`).join("");
+  el.innerHTML = `<div class="evidence-meta" style="margin-top:8px">语义忠实度判官(gpt-5.6-luna,独立于生产模型)的裁决:</div><ul style="font-size:13px;margin:6px 0 0;padding-left:18px">${dropItems}${reviewItems}</ul>`;
 }
 
 function renderPipeline(trace) {
+  renderKgLookup(trace);
+
+  const lq = $("pipelineLiteratureQuery");
+  if (trace.literature_query && trace.literature_query !== trace.query) {
+    lq.innerHTML = `<p style="font-size:13px;color:var(--text-dim);margin:0 0 10px">检索语料库全是英文论文,中文问题先自动翻译成英文再检索(避免PaperQA2自己反复改写查询、多耗几分钟):<br><strong>${esc(trace.literature_query)}</strong></p>`;
+  } else {
+    lq.innerHTML = "";
+  }
+
   $("pipelineEvidence").innerHTML = trace.evidence_labels.map((label, i) => {
     const item = trace.evidence[i];
     const doi = item.doi
-      ? `<a href="https://doi.org/${item.doi}" target="_blank" rel="noopener">${item.doi}</a>`
+      ? `<a href="https://doi.org/${esc(item.doi)}" target="_blank" rel="noopener">${esc(item.doi)}</a>`
       : "(no DOI)";
     return `
       <div class="evidence-item">
-        <span class="evidence-label">[${label}]</span>${item.text}
-        <div class="evidence-meta">${item.notes || ""} — ${doi} · ${item.span} · relevance ${item.relevance.toFixed(2)}</div>
+        <span class="evidence-label">[${esc(label)}]</span>${esc(item.text)}
+        <div class="evidence-meta">${esc(item.notes || "")} — ${doi} · ${esc(item.span)} · relevance ${item.relevance.toFixed(2)}</div>
       </div>
     `;
   }).join("");
@@ -375,22 +491,27 @@ function renderPipeline(trace) {
     const tag = a.error
       ? `<span class="attempt-tag fail">第 ${a.attempt} 次尝试 · 校验失败</span>`
       : `<span class="attempt-tag ok">第 ${a.attempt} 次尝试 · 校验通过</span>`;
-    const errLine = a.error ? `<div class="evidence-meta">错误: ${a.error}</div>` : "";
-    return `<div class="evidence-item">${tag}${errLine}<pre>${a.raw_output}</pre></div>`;
+    const errLine = a.error ? `<div class="evidence-meta">错误: ${esc(a.error)}</div>` : "";
+    return `<div class="evidence-item">${tag}${errLine}<pre>${esc(a.raw_output)}</pre></div>`;
   }).join("");
+  renderSemantic(trace);
 
-  const rows = trace.confidence_breakdown.map((c) => `
+  const rows = trace.confidence_breakdown.map((c) => {
+    const extra = c.n_snippets - c.n_papers;
+    return `
     <tr>
-      <td><code>${c.prior_field}</code></td>
-      <td><code>${c.evidence_labels.join(", ")}</code></td>
+      <td><code>${esc(c.prior_field || "(unnamed)")}</code></td>
+      <td><code>${esc(c.evidence_labels.join(", "))}</code></td>
+      <td>${c.n_papers} / ${c.n_snippets} (+${extra})</td>
       <td>${c.base.toFixed(2)}</td>
       <td>${c.avg_relevance.toFixed(2)}</td>
       <td><strong>${c.confidence.toFixed(2)}</strong></td>
     </tr>
-  `).join("");
+  `;
+  }).join("");
   $("pipelineConfidence").innerHTML = `
     <table class="confidence-table">
-      <thead><tr><th>field</th><th>证据编号</th><th>base</th><th>avg_relevance</th><th>confidence</th></tr></thead>
+      <thead><tr><th>field</th><th>证据编号</th><th>论文/片段(额外)</th><th>base</th><th>avg_relevance</th><th>confidence</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
   `;

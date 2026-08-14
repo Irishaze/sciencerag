@@ -173,3 +173,69 @@ def test_kg_prior_closes_the_geometry_gap_for_its_parameters(monkeypatch):
         assert not any(field in gap for gap in response.coverage.gaps), (
             f"{field} should be covered by the KG prior, found in gaps: {response.coverage.gaps}"
         )
+
+
+def test_ranking_signal_reorders_and_annotates_kg_priors():
+    # Regression for the 2026-08-14 finding: a superlative word ("最优")
+    # used to be treated as a plain keyword here — every matching design
+    # scored similar relevance and came back in an arbitrary order with no
+    # indication of which one was actually "the" answer. Real repro:
+    # "Bi2Te3单级热电制冷器的最优电流是多少" against 5 designs returned 5
+    # different optimal_current_A values with nothing distinguishing them.
+    _seed_design(
+        conditions={"leg_length": 0.5, "pitch": 0.2}, achieves={"optimal_current_A": 8.91}, run_id="r1"
+    )
+    _seed_design(
+        conditions={"leg_length": 0.65, "pitch": 0.2}, achieves={"optimal_current_A": 4.51}, run_id="r2"
+    )
+    _seed_design(
+        conditions={"leg_length": 0.8, "pitch": 0.2}, achieves={"optimal_current_A": 6.48}, run_id="r3"
+    )
+
+    priors = retrieval._kg_priors_for_query("Bi2Te3单级热电制冷器的最优电流是多少")
+
+    assert len(priors) == 3
+    values = [p.value.reported_performance["optimal_current_A"] for p in priors]
+    assert values == [8.91, 6.48, 4.51]  # highest first, "最优/最高" -> max direction
+    assert "第1名，共3个候选" in priors[0].notes
+    assert "第2名，共3个候选" in priors[1].notes
+    assert "第3名，共3个候选" in priors[2].notes
+
+
+def test_no_ranking_signal_leaves_kg_priors_unannotated():
+    _seed_design(
+        conditions={"leg_length": 0.5, "pitch": 0.2}, achieves={"optimal_current_A": 8.91}, run_id="r1"
+    )
+    priors = retrieval._kg_priors_for_query("Bi2Te3 optimal_current_A")
+    assert priors[0].notes is None
+
+
+def test_trace_captures_kg_lookup(monkeypatch):
+    # Regression for the 2026-08-13 finding: the KG step runs entirely
+    # before extract_priors() does, so PipelineTrace (which powers the
+    # /_debug demo view) never surfaced it at all — a KG hit was invisible
+    # in the pipeline walkthrough even though it ends up in the final
+    # response's `priors`. build_priors_response_with_trace's trace must
+    # now carry the same KG match info the response itself is built from.
+    _seed_design(
+        conditions={"leg_length": 0.8, "pitch": 0.29, "length": 4.9},
+        achieves={"delta_T_max_K": 71.7},
+    )
+
+    class _FakeSession:
+        contexts = []
+
+    class _FakeResponse:
+        session = _FakeSession()
+
+    monkeypatch.setattr(retrieval, "run_query", lambda query: _FakeResponse())
+    monkeypatch.setattr(retrieval, "search_semantic_scholar", lambda query: [])
+    monkeypatch.setattr(retrieval, "search_arxiv", lambda query: [])
+
+    response, trace = retrieval.build_priors_response_with_trace("leg_length delta_T_max_K")
+
+    assert trace.kg_total_matching_entities == 1
+    assert trace.kg_entities_returned == 1
+    assert len(trace.kg_priors) == 1
+    assert trace.kg_priors[0].kind == "candidate_config"
+    assert trace.kg_priors == response.priors

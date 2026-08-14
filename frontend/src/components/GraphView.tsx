@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import type { Subgraph, SubgraphEdge } from "../types";
 
@@ -17,7 +17,7 @@ const DEFAULT_LINK_COLOR = "#999999";
 // color per name for. Hash the name into a small fixed palette instead so
 // the same type always gets the same color across renders/sessions
 // without needing to know the type names in advance.
-const ENTITY_TYPE_PALETTE = ["#1f6f78", "#3d5a80", "#5f7a3d", "#7a4f8f", "#2e7d6b", "#8f5f2e"];
+const ENTITY_TYPE_PALETTE = ["#1f6f78", "#3d5a80", "#5f7a3d", "#7a4f8f", "#9c4f6b", "#8f5f2e"];
 
 function colorForEntityType(entityType: string | null): string {
   if (!entityType) return VALUE_COLOR;
@@ -39,6 +39,13 @@ function phraseFor(edge: SubgraphEdge): string {
 export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<SubgraphEdge | null>(null);
+  // The force layout starts every node at (0,0) and settles outward from
+  // there — left uncentered, the canvas's default viewport (also anchored
+  // near its own origin) only ever shows whichever corner of the spread-out
+  // result happens to land near (0,0), so most of the graph sits off-screen
+  // until the user manually pans/zooms. zoomToFit on every engine-settle
+  // (initial load and any subsequent "refresh") re-frames the whole result.
+  const fgRef = useRef<any>(null);
 
   // Edges only carry node ids (source/target) — this is the id -> display
   // label lookup used everywhere a raw id would otherwise show up in the
@@ -85,6 +92,19 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
     [subgraph, selectedNodeId]
   );
 
+  // entity_type is open-ended (see colorForEntityType above) — so unlike a
+  // fixed-category legend, this one is built from whatever types actually
+  // appear in the current subgraph, not a hardcoded list that would drift
+  // out of sync with the ontology.
+  const entityTypeLegend = useMemo(() => {
+    const types = new Set<string>();
+    for (const n of subgraph.nodes) {
+      if (n.kind === "entity" && n.entity_type) types.add(n.entity_type);
+    }
+    return Array.from(types).sort();
+  }, [subgraph]);
+  const hasValueNodes = useMemo(() => subgraph.nodes.some((n) => n.kind === "value"), [subgraph]);
+
   if (subgraph.nodes.length === 0) {
     return <div className="graph-empty">{emptyMessage ?? "图谱目前是空的。"}</div>;
   }
@@ -93,8 +113,15 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
     <div className="graph-wrap">
       <div className="graph-canvas">
         <ForceGraph2D
+          ref={fgRef}
           graphData={graphData}
           height={height}
+          // Default cooldownTime is 15s — onEngineStop (and so zoomToFit,
+          // above) wouldn't fire until then, leaving the graph looking
+          // unfit/off-center for most of that wait. This graph is small
+          // enough (tens of nodes) to settle well within 2s.
+          cooldownTime={2000}
+          onEngineStop={() => fgRef.current?.zoomToFit(400, 40)}
           nodeLabel={(node: any) => node.label}
           nodeColor={(node: any) =>
             node.id === selectedNodeId ? SELECTED_COLOR : colorForEntityType(node.kind === "entity" ? node.entity_type : null)
@@ -126,6 +153,26 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
             setSelectedEdge(null);
           }}
         />
+        <div className="graph-legend">
+          {entityTypeLegend.map((type) => (
+            <div key={type} className="graph-legend-item">
+              <span className="graph-legend-dot" style={{ background: colorForEntityType(type) }} />
+              {type}
+            </div>
+          ))}
+          {hasValueNodes && (
+            <div className="graph-legend-item">
+              <span className="graph-legend-dot" style={{ background: VALUE_COLOR }} />
+              数值
+            </div>
+          )}
+          {conflictPartner.size > 0 && (
+            <div className="graph-legend-item">
+              <span className="graph-legend-line" />
+              有冲突
+            </div>
+          )}
+        </div>
       </div>
       <div className="graph-inspector">
         {selectedEdge && (

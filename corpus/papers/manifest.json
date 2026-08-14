@@ -1942,5 +1942,76 @@
     "year": 2022,
     "venue": "International Journal of Heat and Technology (IIETA)",
     "path": "99_Performance_Thermoelectric_Personal_Cooler_Ambient_Temperatures.pdf"
+  },
+  {
+    "doi": "10.1155/2019/3725364",
+    "title": "Experimental Investigation on a Thermoelectric Cooler for Thermal Management of a Lithium-Ion Battery Module",
+    "authors": [
+      "Xinxi Li",
+      "Zhaoda Zhong",
+      "Jinghai Luo",
+      "Ziyuan Wang",
+      "Weizhong Yuan",
+      "Guoqing Zhang",
+      "Chengzhao Yang",
+      "Chuxiong Yang"
+    ],
+    "year": 2019,
+    "venue": "International Journal of Photoenergy",
+    "path": "100_Li2019_TEC_LiIon_Battery_Module.pdf"
+  },
+  {
+    "doi": "10.1002/ente.202301205",
+    "title": "Modeling and Model Predictive Control of a Battery Thermal Management System Based on Thermoelectric Cooling for Electric Vehicles",
+    "authors": [
+      "Ruochen Wang",
+      "Hui Zhang",
+      "Jie Chen",
+      "Renkai Ding",
+      "Ding Luo"
+    ],
+    "year": 2024,
+    "venue": "Energy Technology",
+    "path": "101_Wang2024_TEC_MPC_Battery_EV.pdf"
+  },
+  {
+    "doi": "10.1063/1.5119022",
+    "title": "Multi-objective optimization of thermoelectric cooler using genetic algorithms",
+    "authors": [
+      "Tianbo Lu",
+      "Xiang Zhang",
+      "Jianxin Zhang",
+      "Pingfan Ning",
+      "Yuqiang Li",
+      "Pingjuan Niu"
+    ],
+    "year": 2019,
+    "venue": "AIP Advances",
+    "path": "102_Lu2019_Multiobjective_TEC_GA_COP_Geometry.pdf"
+  },
+  {
+    "doi": "10.1002/er.1124",
+    "title": "Design and characterization of a cylindrical, water-cooled heat sink for thermoelectric air-conditioners",
+    "authors": [
+      "S. B. Riffat",
+      "G. Q. Qiu"
+    ],
+    "year": 2006,
+    "venue": "International Journal of Energy Research",
+    "path": "103_Riffat_Qiu2006_Heat_Sink_TEC_AC.pdf"
+  },
+  {
+    "doi": "10.1002/ese3.1591",
+    "title": "Design and performance analysis of hot side heat sink of thermoelectric cooler device based on simulation and experiment",
+    "authors": [
+      "Zhinan Xu",
+      "Cheng Li",
+      "Huadong Zhao",
+      "Yanping Zheng",
+      "Jingshuang Zhang"
+    ],
+    "year": 2023,
+    "venue": "Energy Science & Engineering",
+    "path": "104_Xu2023_Hot_Side_Heat_Sink_TEC.pdf"
   }
 ]

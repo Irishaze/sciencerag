@@ -15,7 +15,14 @@ VALID_RESPONSE = {
     "status": "ok",
     "answer": "delta_T_max_K is 71.7K.",
     "subgraph": {
-        "nodes": [{"id": "Bi2Te3 single-stage TEC", "kind": "entity"}],
+        "nodes": [
+            {
+                "id": "tec_abc123",
+                "kind": "entity",
+                "label": "Bi2Te3 single-stage TEC",
+                "entity_type": "TECDesign",
+            }
+        ],
         "edges": [],
     },
     "sources": [{"type": "kg_triple", "triple_id": "kg_1"}],

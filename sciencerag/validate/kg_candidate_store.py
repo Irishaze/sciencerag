@@ -74,8 +74,24 @@ def archive_pending(stem: str) -> None:
     """Moves a processed pending file out of the pending queue so
     --list-pending doesn't keep offering it back up after it's been acted
     on. Candidates the operator chose to skip aren't lost — they're just no
-    longer in the default queue; the archived file still has them."""
+    longer in the default queue; the archived file still has them.
+
+    Idempotent by design, not just by intent: sciencerag.kg_approval's web
+    panel calls this at the end of every approve request regardless of
+    which indices were approved, so two concurrent approvals against the
+    same stem (two operators, or a double-click) both reach this. The
+    `src.exists()` check followed by `src.rename()` is not atomic — a real
+    concurrency test (2 threads x 2000 trials) confirmed the second caller's
+    rename() raising an uncaught FileNotFoundError 99%+ of the time once the
+    first caller's rename had already completed. That crash reached the
+    caller as a raw 500 even though their own candidate approvals had
+    already succeeded (add_triple already committed before archive_pending
+    runs) — so the response looked like a failure for a request that had
+    actually already done its real work. Treat "already archived by someone
+    else" as success, not an error."""
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     src = PENDING_DIR / f"{stem}.json"
-    if src.exists():
+    try:
         src.rename(ARCHIVE_DIR / f"{stem}.json")
+    except FileNotFoundError:
+        pass

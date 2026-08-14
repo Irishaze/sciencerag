@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException
 from starlette.types import Scope
 
 from sciencerag.ask.router import router as ask_router
+from sciencerag.kg_approval.router import router as kg_approval_router
 from sciencerag.priors.router import router as priors_router
 from sciencerag.report.router import router as report_router
 from sciencerag.validate.router import router as validate_router
@@ -25,6 +26,7 @@ app.include_router(priors_router)
 app.include_router(validate_router)
 app.include_router(report_router)
 app.include_router(ask_router)
+app.include_router(kg_approval_router)
 
 
 def _sanitize_non_finite(value: Any) -> Any:
@@ -59,8 +61,17 @@ def demo_page() -> FileResponse:
     """Ad-hoc demo UI for /sciencerag/priors — not part of the official
     roadmap (the real Web frontend is spec §7 / milestone M5, and is built
     around sciencerag.ask, not priors). Just a same-origin static page so
-    it can call the API with no CORS setup."""
-    return FileResponse(STATIC_DIR / "demo.html")
+    it can call the API with no CORS setup.
+
+    no-cache (not no-store): FileResponse already sends an ETag, so a
+    revalidation round-trip is cheap (304 when unchanged) — this just
+    stops the browser from skipping that round-trip entirely and serving
+    a stale copy straight from disk cache on a plain reload, which is
+    exactly what happened after a real redeploy (2026-08-13): the page
+    kept rendering the pre-fix JS against the new API responses until a
+    hard refresh. This page changes across active iteration, unlike most
+    static assets — a stale cache here silently undoes every fix."""
+    return FileResponse(STATIC_DIR / "demo.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/workbench")
@@ -69,10 +80,15 @@ def workbench_page() -> FileResponse:
     around after /app (the real spec §7 Vite/React frontend, see below)
     shipped — useful when frontend/dist hasn't been built (e.g. local dev
     without running `npm run build` first) and as a lighter-weight
-    reference implementation. The 文献/知识候选审批 panel is deliberately not
-    here in either frontend: spec §7 explicitly allows a v1 CLI substitute
-    (scripts/approve_kg_candidates.py), which is what M5/M6 actually ship."""
-    return FileResponse(STATIC_DIR / "workbench.html")
+    reference implementation. Unlike /app, this one still doesn't have the
+    知识候选审批 panel (sciencerag/kg_approval/) — that's only in the real
+    frontend; scripts/approve_kg_candidates.py (CLI) still works everywhere
+    regardless, sharing the same approval logic (sciencerag/validate/
+    kg_approval.py) either way.
+
+    no-cache: same reasoning as /demo's — this page changes across active
+    iteration and a stale browser cache would silently undo a redeploy."""
+    return FileResponse(STATIC_DIR / "workbench.html", headers={"Cache-Control": "no-cache"})
 
 
 class SPAStaticFiles(StaticFiles):

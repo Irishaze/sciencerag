@@ -20,10 +20,55 @@ from io import BytesIO
 import markdown as md_lib
 from xhtml2pdf import pisa
 
+from sciencerag.priors.contract import GEOMETRY_FREE_PARAMS
 from sciencerag.validate import tec_bridge
 from sciencerag.report.models import KeyResult, ReportRequest, ReportResponse
 
 _SEVERITY_RANK = {"info": 0, "warning": 1, "blocking": 2}
+
+# A report reader isn't necessarily the one who submitted the run (spec §5:
+# reports trace a run's full lineage for whoever's reviewing it later) — raw
+# contract field names like `d_ceramics` or `delta_T_max_K` read as opaque
+# code to anyone who hasn't memorized sim_params.json. Reused from the
+# contract's own `desc` (sim_params.json, same Chinese already shown in
+# priors output) rather than inventing separate wording here.
+_DESIGN_PARAM_LABELS = {p["name"]: p["desc"] for p in GEOMETRY_FREE_PARAMS}
+_DESIGN_PARAM_LABELS["n_pairs"] = "PN结对数"
+
+# Same reasoning, for scalar_results — reused from the exact wording
+# ontology_generator.describe_relation() already generates for these fields'
+# "achieves_X" KG relations (relation_description_cache.json), so a field
+# doesn't end up labelled two different ways depending which part of the
+# app a reader is looking at.
+_SCALAR_FIELD_LABELS = {
+    "delta_T_max_K": "最大温差",
+    "optimal_current_A": "最优电流",
+    "optimal_voltage_V": "最优电压",
+    "total_resistance_ohm": "总电阻",
+    "max_heat_dissipation_W": "最大散热功率",
+    "figure_of_merit_1_per_K": "优值系数",
+}
+
+# Same enum-to-Chinese-label pattern as the two dicts above, applied to the
+# comparison verdicts — kept in sync with frontend/src/pages/ReportsPage.tsx's
+# VERDICT_LABEL (that one labels the badge outside the markdown; this one
+# labels the same word appearing a second time inside the markdown body
+# itself, which the frontend just renders verbatim).
+_LITERATURE_VERDICT_LABELS = {
+    "consistent": "与基准一致",
+    "deviation_found": "发现偏差",
+    "insufficient_benchmark": "基准数据不足",
+}
+_DEVIATION_VERDICT_LABELS = {"within_range": "在范围内", "deviation": "偏离"}
+_DEVIATION_SOURCE_LABELS = {
+    "prior_comparison": "文献先验对比",
+    "benchmark_comparison": "基准案例对比",
+}
+
+
+def _field_label(field: str) -> str:
+    label = _DESIGN_PARAM_LABELS.get(field) or _SCALAR_FIELD_LABELS.get(field)
+    return f"{label}（`{field}`）" if label else f"`{field}`"
 
 
 def _confidence_label(anomalies: list) -> str:
@@ -151,7 +196,7 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
 
     lines += ["## Experiment Spec Summary", ""]
     for field, value in sorted(response.spec_summary.items()):
-        lines.append(f"- `{field}` = {value}")
+        lines.append(f"- {_field_label(field)} = {value}")
     lines.append("")
 
     lines += ["## Key Results", ""]
@@ -160,23 +205,26 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
     for result in response.key_results:
         unit = f" {result.unit}" if result.unit else ""
         lines.append(
-            f"- **{result.field}** = {result.value}{unit} "
+            f"- {_field_label(result.field)} = {result.value}{unit} "
             f"(confidence: {result.confidence_label})"
         )
     lines.append("")
 
     lines += ["## Comparison with Literature Priors", ""]
-    lines.append(f"**Verdict:** {response.literature_comparison.verdict}")
+    verdict = response.literature_comparison.verdict
+    lines.append(f"**Verdict:** {_LITERATURE_VERDICT_LABELS.get(verdict, verdict)}（`{verdict}`）")
     # Markdown (this renderer, python-markdown) treats a "- " line as lazy
     # continuation of the preceding paragraph rather than a new list unless
     # a blank line separates them — without this, every deviation below
     # rendered as one run-on paragraph instead of a bullet list.
     lines.append("")
     for deviation in response.literature_comparison.deviations:
+        verdict_label = _DEVIATION_VERDICT_LABELS.get(deviation.verdict, deviation.verdict)
+        source_label = _DEVIATION_SOURCE_LABELS.get(deviation.source, deviation.source)
         lines.append(
-            f"- `{deviation.field}` actual={deviation.actual} "
+            f"- {_field_label(deviation.field)} actual={deviation.actual} "
             f"reference=[{deviation.reference_min}, {deviation.reference_max}] "
-            f"→ **{deviation.verdict}** _[{deviation.source}:{deviation.reference_id}]_"
+            f"→ **{verdict_label}** _[{source_label}:{deviation.reference_id}]_"
         )
     lines.append("")
 

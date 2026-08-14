@@ -266,6 +266,23 @@ class PipelineTrace(BaseModel):
     # out verbatim) — these priors are excluded from the final response but
     # aren't "wrong" the way a DROP is, so tracked separately for visibility.
     semantic_reviews: list[str] = Field(default_factory=list)
+    # Knowledge-graph lookup (spec §3.2: KG first, always additive to
+    # literature, never a substitute) — added 2026-08-13 because this step
+    # runs entirely before extract_priors() and so was previously invisible
+    # in every trace-based demo/debug view, even though its output ends up
+    # merged into the final response's `priors` (retrieval.py's
+    # _build_priors_response). No LLM involved: deterministic keyword
+    # overlap over the graph (jieba-segmented for CJK query text).
+    kg_total_matching_entities: int = 0
+    kg_entities_returned: int = 0
+    kg_priors: list[Prior] = Field(default_factory=list)
+    # The English query actually sent to PaperQA2/Semantic Scholar/arXiv
+    # when `query` contains CJK text (see retrieval.py's
+    # _translate_for_literature_search) — equal to `query` itself
+    # otherwise. Surfaced so a demo/debug view can show *why* a Chinese
+    # question got noticeably faster/better evidence after 2026-08-13,
+    # instead of the translation happening invisibly.
+    literature_query: str = ""
 
 
 def _build_evidence_block(evidence_table: dict[str, EvidenceItem]) -> str:

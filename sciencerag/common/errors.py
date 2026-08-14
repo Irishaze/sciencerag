@@ -9,6 +9,8 @@ ErrorCategory = Literal[
     "schema_validation_failed",
     "insufficient_coverage",
     "benchmark_unavailable",
+    "not_found",
+    "invalid_request",
 ]
 
 

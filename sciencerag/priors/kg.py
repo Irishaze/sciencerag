@@ -28,7 +28,7 @@ import re
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import Any, Iterator, Literal
 import uuid
 
 import jieba
@@ -105,6 +105,15 @@ class KGTriple(BaseModel):
     # "computed one layer up" split as entity_type), and older triples
     # written before this field existed simply don't have one.
     relation_description: str | None = None
+    # The concrete numbers behind `confidence` for achieves_* triples whose
+    # confidence came from sciencerag.validate.kg_candidates._deviation_detail
+    # ("方案B", 2026-08-14/15): {"verdict", "relative_deviation",
+    # "benchmark_case_id"} — e.g. confidence=0.7 could mean a near-exact
+    # 0.8%-off match against a real benchmark case, or (before this existed)
+    # nothing at all. None for triples with no such backing (literature-
+    # seeded, structural link triples, or written before this field existed)
+    # — always optional, never required, so it degrades gracefully.
+    evidence_detail: dict[str, Any] | None = None
     conditions: dict[str, float] = Field(default_factory=dict)
     confidence: float
     run_ids: list[str] = Field(default_factory=list)
@@ -237,6 +246,7 @@ def add_triple(
     object_entity_type: str | None = None,
     entity_type: str = DEFAULT_ENTITY_TYPE,
     relation_description: str | None = None,
+    evidence_detail: dict[str, Any] | None = None,
 ) -> tuple[KGTriple, Literal["added", "merged", "conflict"]]:
     """The only write path into the graph (spec §6.3). Callers are expected
     to have already run this through human approval.
@@ -272,7 +282,15 @@ def add_triple(
             if _values_agree(existing, object_value, object_entity_id):
                 if run_id not in existing.run_ids:
                     existing.run_ids.append(run_id)
-                existing.sources.extend(sources)
+                # Regression for a real bug found via adversarial review
+                # (2026-08-14/15), confirmed already present in production
+                # data/kg/graph.json: run_ids dedupes on merge (the check
+                # above), but sources.extend() never did, so re-approving
+                # the same run/candidate (a retried request, a demo script
+                # run twice) silently accumulated exact-duplicate KGSource
+                # entries forever — one real triple had 3 unique run_ids
+                # but 5 source entries, 2 of them dead-weight duplicates.
+                existing.sources.extend(s for s in sources if s not in existing.sources)
                 _save_triples(triples)
                 return existing, "merged"
 
@@ -288,6 +306,7 @@ def add_triple(
                 object_entity_label=object_entity_label,
                 object_entity_type=object_entity_type,
                 relation_description=relation_description,
+                evidence_detail=evidence_detail,
                 conditions=conditions,
                 confidence=confidence,
                 run_ids=[run_id],
@@ -311,6 +330,7 @@ def add_triple(
             object_entity_label=object_entity_label,
             object_entity_type=object_entity_type,
             relation_description=relation_description,
+            evidence_detail=evidence_detail,
             conditions=conditions,
             confidence=confidence,
             run_ids=[run_id],
@@ -356,6 +376,7 @@ _CJK_STOPWORDS = {
     "使", "让", "能", "可以", "要", "会", "有", "对", "把", "被",
     "吗", "呢", "啊", "吧", "地", "得", "着", "过", "也", "都", "就",
     "上", "下", "中", "个", "些", "才", "还", "又", "并", "而",
+    "谁", "哪个", "哪一个", "哪种", "哪些", "哪",
 }
 
 
@@ -476,6 +497,99 @@ def query_kg_entities(query: str, max_entities: int = 10) -> KGEntityQueryResult
         groups=groups,
         total_matching_entities=len(ranked_entity_ids),
         entities_returned=len(selected),
+    )
+
+
+# A superlative word in a query ("最优电流" / "最高温差") answers "which
+# FIELD to show", not "which RECORD wins" — query_kg_entities' keyword
+# overlap already handles field selection correctly (see its docstring).
+# What it never did is comparison: asking "哪个设计温差最高" used to just
+# return every matching design at similar text-relevance, with the LLM
+# left to guess which one's "best" from an unordered dump — no ranking
+# ever actually ran. These two word sets are the trigger for the separate
+# aggregation path (rank_kg_entities) that actually sorts by value instead
+# of by keyword overlap. Deliberately excluded from _CJK_STOPWORDS: they
+# ARE real content when they show up inside a relation_description like
+# "最优电流" (must still contribute to field-matching overlap there).
+_SUPERLATIVE_MAX_WORDS = {"最优", "最好", "最高", "最大", "最强", "最佳"}
+_SUPERLATIVE_MIN_WORDS = {"最低", "最小", "最少", "最弱"}
+
+
+def detect_ranking_direction(query: str) -> Literal["max", "min"] | None:
+    """None means the query has no superlative signal — caller should fall
+    back to plain (non-ranked) lookup. A query containing both max- and
+    min-signal words (rare, e.g. comparing two different fields) resolves
+    to "max" — same ambiguity a human reader would have to guess at, not
+    something this function can resolve without real NL understanding."""
+    terms = _tokenize(query)
+    if terms & _SUPERLATIVE_MIN_WORDS:
+        return "min"
+    if terms & _SUPERLATIVE_MAX_WORDS:
+        return "max"
+    return None
+
+
+class KGRankedEntity(BaseModel):
+    entity_id: str
+    value: float
+    unit: str | None
+    triple: KGTriple
+
+
+class KGRankingResult(BaseModel):
+    relation: str
+    relation_description: str | None
+    direction: Literal["max", "min"]
+    ranked: list[KGRankedEntity]
+    # How many entities had ANY value for `relation` at all — lets the
+    # caller say "ranked #1 of N candidates" rather than implying ranked
+    # covers everything that exists.
+    total_candidates: int
+
+
+def rank_kg_entities(query: str, top_k: int = 3) -> KGRankingResult | None:
+    """Real aggregation, not keyword matching: when the query contains a
+    superlative word, figure out which numeric field is being asked about
+    (via the same _score_triples overlap query_kg_entities already trusts
+    for field selection) and actually sort every entity's value for that
+    field, rather than returning an unordered pile of "matching" triples
+    and letting the LLM guess which one's best. Returns None when there's
+    no ranking signal (detect_ranking_direction), no graph data, or no
+    triple with a value for whatever field the query seems to be about —
+    callers fall back to the plain query_kg_entities path in all of those
+    cases, unchanged from before this existed."""
+    direction = detect_ranking_direction(query)
+    if direction is None:
+        return None
+    triples = _load_triples()
+    if not triples:
+        return None
+    scored = _score_triples(query, triples)
+    numeric_scored = [(t, s) for t, s in scored if t.object_value is not None]
+    if not numeric_scored:
+        return None
+
+    # The single best-scoring numeric triple names the field being asked
+    # about (e.g. query "哪个设计温差最高" best-overlaps an
+    # achieves_delta_T_max_K triple via the shared token "温差") — then we
+    # gather EVERY triple in the graph for that exact relation, not just
+    # the ones _score_triples happened to score, so ranking is over the
+    # true full candidate set rather than an incidental keyword-matched
+    # subset.
+    best_triple, _ = max(numeric_scored, key=lambda pair: pair[1])
+    relation = best_triple.relation
+    candidates = [t for t in triples if t.relation == relation and t.object_value is not None]
+    candidates.sort(key=lambda t: t.object_value, reverse=(direction == "max"))
+
+    return KGRankingResult(
+        relation=relation,
+        relation_description=best_triple.relation_description,
+        direction=direction,
+        ranked=[
+            KGRankedEntity(entity_id=t.entity_id, value=t.object_value, unit=t.object_unit, triple=t)
+            for t in candidates[:top_k]
+        ],
+        total_candidates=len(candidates),
     )
 
 

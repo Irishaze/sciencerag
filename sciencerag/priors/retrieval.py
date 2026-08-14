@@ -9,6 +9,7 @@ project's index doesn't mix with unrelated projects.
 
 import json
 import logging
+import re
 from pathlib import Path
 
 import litellm
@@ -21,6 +22,7 @@ from sciencerag.common.config import get_embedding_model, get_llm_model
 from sciencerag.common.trace import new_trace_id
 from sciencerag.priors.contract import GEOMETRY_FREE_NAMES, GEOMETRY_FREE_PARAMS
 from sciencerag.priors.extract import (
+    REQUEST_TIMEOUT_SECONDS,
     EvidenceItem,
     ExtractionError,
     PipelineTrace,
@@ -34,7 +36,7 @@ from sciencerag.priors.external_retrieval import (
     download_new_papers,
     search_semantic_scholar,
 )
-from sciencerag.priors.kg import KGEntityGroup, query_kg_entities
+from sciencerag.priors.kg import KGEntityGroup, query_kg_entities, rank_kg_entities
 from sciencerag.priors.models import (
     CandidateConfigValue,
     Coverage,
@@ -331,6 +333,14 @@ def _kg_priors_from_group(group: KGEntityGroup) -> list[Prior]:
     return priors
 
 
+
+# Comfortably above any realistic number of designs sharing one relation —
+# rank_kg_entities' top_k caps how many ranked entries come back, and we
+# want the FULL ranking here (to annotate every matching prior with its
+# real rank), not just the usual top-3 default used elsewhere.
+_RANK_ALL_TOP_K = 1000
+
+
 def _kg_priors_for_query(query: str) -> list[Prior]:
     """Step 1 of spec §3.2's query order: the knowledge graph, before
     literature. Always additive, never a substitute for the literature
@@ -345,11 +355,54 @@ def _kg_priors_for_query(query: str) -> list[Prior]:
     row-capped results can slice a matched design's data mid-entity (see
     its own docstring for the real bug that caused: an LLM concluding "no
     other data exists" from a partial slice). query_kg_entities returns
-    every triple of a matched entity together."""
+    every triple of a matched entity together.
+
+    When the query carries an explicit superlative signal ("最优"/"最高"/
+    "最低"...), the returned candidate_config priors are additionally
+    reordered (best match first) and annotated in `notes` with their real
+    rank — confirmed via a real repro (2026-08-14): asking "Bi2Te3单级热电
+    制冷器的最优电流是多少" against a graph with 6 different TEC designs
+    returned 5 different optimal_current_A values with no indication of
+    which one was actually "the" answer, because this step never ran any
+    real comparison — it's the same problem rank_kg_entities was built to
+    fix for sciencerag.ask a day earlier, just never wired in here too.
+
+    The reordering is local to this function's own return value only:
+    _build_priors_response's later _cap_priors() re-sorts everything by
+    confidence when merging with literature priors (spec principle:
+    confidence, not value ranking, decides what survives max_priors) —
+    the `notes` annotation is what actually survives that step, not list
+    position, so it's the part a caller (Hermes, or a human reading the
+    response) can actually rely on."""
     result = query_kg_entities(query)
     priors: list[Prior] = []
     for group in result.groups:
         priors.extend(_kg_priors_from_group(group))
+
+    ranking = rank_kg_entities(query, top_k=_RANK_ALL_TOP_K)
+    if ranking is None or not priors:
+        return priors
+
+    rank_by_entity_id = {entity.entity_id: i + 1 for i, entity in enumerate(ranking.ranked)}
+
+    def _entity_id_of(prior: Prior) -> str:
+        # Only candidate_config priors' prior_id embeds a bare entity_id
+        # (f"pr_kg_{entity_id}", see _kg_priors_from_group) — parameter_range
+        # priors embed a triple_id instead, which simply won't match any
+        # key in rank_by_entity_id below, so they're left unranked/unmoved
+        # rather than mismatched against the wrong thing.
+        return prior.prior_id.removeprefix("pr_kg_")
+
+    priors.sort(key=lambda p: rank_by_entity_id.get(_entity_id_of(p), len(rank_by_entity_id) + 1))
+
+    label = ranking.relation_description or ranking.relation
+    direction_word = "从高到低" if ranking.direction == "max" else "从低到高"
+    for prior in priors:
+        rank = rank_by_entity_id.get(_entity_id_of(prior))
+        if rank is None:
+            continue
+        note = f"按{label}排序（{direction_word}）：第{rank}名，共{ranking.total_candidates}个候选"
+        prior.notes = f"{prior.notes} · {note}" if prior.notes else note
     return priors
 
 
@@ -555,7 +608,7 @@ def _build_max_priors_gap(truncated_priors: list[Prior], max_priors: int) -> lis
 # Scholar + arXiv. `allow_external` only changes behavior when internal
 # coverage is thin (see the `coverage.gaps` check below).
 def _augment_with_external(
-    response: PriorsResponse, query: str, allow_external: bool
+    response: PriorsResponse, query: str, literature_query: str, allow_external: bool
 ) -> PriorsResponse:
     """M6 (spec §3.2/§3.5): supplement with Semantic Scholar + arXiv when
     internal coverage is insufficient (any `coverage.gaps`) and the caller
@@ -569,12 +622,18 @@ def _augment_with_external(
     hits with no open-access PDF fall back to abstract-only evidence,
     tagged `provenance="external_unverified"` — that tag reflects "this is
     a thin abstract snippet", not a trust judgment, since there's no way
-    to obtain full text for a paywalled paper."""
+    to obtain full text for a paywalled paper.
+
+    `literature_query` (see _translate_for_literature_search) is used for
+    every search call here — Semantic Scholar/arXiv are just as English-
+    only as the internal corpus — while `query` (the original) is kept for
+    extract_priors below, so drafted priors stay faithful to what was
+    actually asked rather than a machine-translated paraphrase of it."""
     if not allow_external or not response.coverage.gaps:
         return response
 
-    semantic_scholar_papers = search_semantic_scholar(query)
-    arxiv_papers = search_arxiv(query)
+    semantic_scholar_papers = search_semantic_scholar(literature_query)
+    arxiv_papers = search_arxiv(literature_query)
 
     # The same paper can legitimately turn up in both searches (e.g. an
     # arXiv preprint that Semantic Scholar also indexes under the same
@@ -619,7 +678,7 @@ def _augment_with_external(
             # discarding those results. Broad except is deliberate: this
             # boundary needs to swallow whatever a third-party retrieval
             # pipeline can throw, not just the extraction-specific error.
-            full_text_contexts = run_query(query).session.contexts
+            full_text_contexts = run_query(literature_query).session.contexts
             full_text_evidence, _below_threshold = _build_evidence_table(full_text_contexts)
             full_text_evidence = {
                 label: item
@@ -666,6 +725,62 @@ def _augment_with_external(
     return response
 
 
+_CJK_RE = re.compile(r"[一-鿿]")
+
+_TRANSLATE_SYSTEM_PROMPT = (
+    "Translate the user's question into concise, natural English for a "
+    "scientific literature search query. Output ONLY the translation — no "
+    "quotes, no explanation, no preamble."
+)
+
+
+def _translate_for_literature_search(query: str) -> str:
+    """The internal corpus (corpus/papers/) is entirely English papers, and
+    PaperQA2's own agent does its own query reformulation loop whenever a
+    paper_search round finds few relevant papers — confirmed via a real
+    repro (2026-08-13): a Chinese query triggered 3 separate paper_search
+    rounds (1 Chinese + 2 English reformulations the agent came up with
+    itself) before finding evidence, versus 1 round for an equivalent
+    English query — several extra minutes, and it still ended in a
+    lower-confidence 'unsure' verdict instead of 'certain'. Translating up
+    front lets the FIRST round already succeed instead of relying on the
+    agent to rediscover "this corpus is English" on its own every time.
+
+    Deliberately narrow: only used for the literature search call
+    (run_query) and the external Semantic Scholar/arXiv search terms in
+    _augment_with_external, which have the same English-corpus mismatch.
+    NOT used for the KG lookup (query_kg_entities already handles Chinese
+    natively via jieba — see kg.py) or the extract_priors prompt (the
+    drafted priors should stay faithful to the question as actually
+    asked, not a machine-translated paraphrase of it).
+
+    Best-effort: a translation failure or timeout falls back to the
+    original query rather than blocking the whole request — same
+    "explanatory/supporting call, never a hard gate" pattern as
+    _match_params_to_evidence.
+    """
+    if not _CJK_RE.search(query):
+        return query
+    messages = [
+        {"role": "system", "content": _TRANSLATE_SYSTEM_PROMPT},
+        {"role": "user", "content": query},
+    ]
+    try:
+        model = get_llm_model()
+        try:
+            response = litellm.completion(
+                model=model, messages=messages, temperature=0, timeout=REQUEST_TIMEOUT_SECONDS
+            )
+        except litellm.BadRequestError as e:
+            if "temperature" not in str(e):
+                raise
+            response = litellm.completion(model=model, messages=messages, timeout=REQUEST_TIMEOUT_SECONDS)
+        translated = (response.choices[0].message.content or "").strip()
+        return translated or query
+    except Exception:  # noqa: BLE001 - best-effort, see docstring
+        return query
+
+
 def _build_priors_response(
     query: str,
     trace: PipelineTrace | None = None,
@@ -688,9 +803,28 @@ def _build_priors_response(
     # additive to whatever literature retrieval below finds, never a
     # short-circuit — see _kg_priors_for_query's docstring for why a KG
     # hit can't safely skip the literature check that follows it.
-    kg_priors = _kg_priors_for_query(query)
+    #
+    # Inlined rather than calling _kg_priors_for_query (which does the same
+    # two lines internally) so the KGEntityQueryResult itself — not just
+    # the Priors derived from it — is available to capture on `trace`; this
+    # step runs before extract_priors ever does, so without this it was
+    # invisible in every trace-based demo/debug view (added 2026-08-13).
+    kg_result = query_kg_entities(query)
+    kg_priors = [p for group in kg_result.groups for p in _kg_priors_from_group(group)]
+    if trace is not None:
+        trace.kg_total_matching_entities = kg_result.total_matching_entities
+        trace.kg_entities_returned = kg_result.entities_returned
+        trace.kg_priors = kg_priors
 
-    response = run_query(query)
+    # The corpus is all-English papers; PaperQA2's own agent will
+    # rediscover that and reformulate a Chinese query into English itself
+    # if we don't — but only after burning a full paper_search+
+    # gather_evidence round finding little, adding several minutes (see
+    # _translate_for_literature_search's docstring for the real repro).
+    literature_query = _translate_for_literature_search(query)
+    if trace is not None:
+        trace.literature_query = literature_query
+    response = run_query(literature_query)
     contexts = response.session.contexts
 
     if not contexts:
@@ -709,6 +843,7 @@ def _build_priors_response(
                     trace_id=new_trace_id(),
                 ),
                 query,
+                literature_query,
                 allow_external,
             ),
             0,
@@ -738,6 +873,7 @@ def _build_priors_response(
                     trace_id=new_trace_id(),
                 ),
                 query,
+                literature_query,
                 allow_external,
             ),
             0,
@@ -768,6 +904,7 @@ def _build_priors_response(
                     trace_id=new_trace_id(),
                 ),
                 query,
+                literature_query,
                 allow_external,
             ),
             0,
@@ -793,6 +930,7 @@ def _build_priors_response(
                 trace_id=new_trace_id(),
             ),
             query,
+            literature_query,
             allow_external,
         ),
         filtered_material_count,

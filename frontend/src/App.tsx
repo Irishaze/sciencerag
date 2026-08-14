@@ -1,18 +1,25 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 import "./App.css";
-import { AskPage } from "./pages/AskPage";
+import { ApprovalPage } from "./pages/ApprovalPage";
 import { GraphPage } from "./pages/GraphPage";
 import { HomePage } from "./pages/HomePage";
 import { ReportsPage } from "./pages/ReportsPage";
+import { useAsk } from "./hooks/useAsk";
 
 const NAV_ITEMS = [
   { to: "/", label: "主页", end: true },
-  { to: "/ask", label: "问答" },
   { to: "/graph", label: "知识图谱" },
   { to: "/reports", label: "报告" },
+  { to: "/approval", label: "知识候选审批" },
 ];
 
 export default function App() {
+  // Lifted here (not inside HomePage) so the last question/answer survives
+  // navigating away and back — HomePage unmounts on route change like any
+  // other route, which would otherwise reset useAsk's local state on every
+  // return trip to "/".
+  const ask = useAsk();
+
   return (
     <div className="app-shell">
       <nav className="site-nav">
@@ -37,15 +44,7 @@ export default function App() {
       </nav>
 
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route
-          path="/ask"
-          element={
-            <div className="page">
-              <AskPage />
-            </div>
-          }
-        />
+        <Route path="/" element={<HomePage ask={ask} />} />
         <Route
           path="/graph"
           element={
@@ -59,6 +58,14 @@ export default function App() {
           element={
             <div className="page">
               <ReportsPage />
+            </div>
+          }
+        />
+        <Route
+          path="/approval"
+          element={
+            <div className="page">
+              <ApprovalPage />
             </div>
           }
         />

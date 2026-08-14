@@ -1,0 +1,333 @@
+{
+  "PendingBatchSummary": {
+    "properties": {
+      "stem": {
+        "title": "Stem",
+        "type": "string"
+      },
+      "count": {
+        "title": "Count",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "stem",
+      "count"
+    ],
+    "title": "PendingBatchSummary",
+    "type": "object"
+  },
+  "PendingBatchDetail": {
+    "$defs": {
+      "KGCandidate": {
+        "description": "spec §4.4: one 材料-结构-工况-性能 candidate triple, with full\nprovenance (运行 ID、置信度、支撑数据切片) attached per spec.",
+        "properties": {
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "relation": {
+            "title": "Relation",
+            "type": "string"
+          },
+          "object_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Value"
+          },
+          "object_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Unit"
+          },
+          "object_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Id"
+          },
+          "object_entity_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Label"
+          },
+          "object_entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Object Entity Type"
+          },
+          "relation_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Relation Description"
+          },
+          "conditions": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Conditions",
+            "type": "object"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "dedup_status": {
+            "enum": [
+              "new",
+              "duplicate_confirmed",
+              "conflict"
+            ],
+            "title": "Dedup Status",
+            "type": "string"
+          },
+          "supporting_evidence": {
+            "additionalProperties": true,
+            "title": "Supporting Evidence",
+            "type": "object"
+          }
+        },
+        "required": [
+          "subject",
+          "relation",
+          "confidence",
+          "run_id",
+          "entity_type",
+          "dedup_status"
+        ],
+        "title": "KGCandidate",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "stem": {
+        "title": "Stem",
+        "type": "string"
+      },
+      "candidates": {
+        "items": {
+          "$ref": "#/$defs/KGCandidate"
+        },
+        "title": "Candidates",
+        "type": "array"
+      }
+    },
+    "required": [
+      "stem",
+      "candidates"
+    ],
+    "title": "PendingBatchDetail",
+    "type": "object"
+  },
+  "ApproveRequest": {
+    "properties": {
+      "approve_all": {
+        "default": false,
+        "title": "Approve All",
+        "type": "boolean"
+      },
+      "indices": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Indices",
+        "type": "array"
+      },
+      "operator": {
+        "default": "web",
+        "title": "Operator",
+        "type": "string"
+      },
+      "reason": {
+        "default": "",
+        "title": "Reason",
+        "type": "string"
+      }
+    },
+    "title": "ApproveRequest",
+    "type": "object"
+  },
+  "ApproveResponse": {
+    "$defs": {
+      "ApprovalResult": {
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "added",
+              "merged",
+              "conflict",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "triple_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Triple Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          }
+        },
+        "required": [
+          "index",
+          "status"
+        ],
+        "title": "ApprovalResult",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "stem": {
+        "title": "Stem",
+        "type": "string"
+      },
+      "results": {
+        "items": {
+          "$ref": "#/$defs/ApprovalResult"
+        },
+        "title": "Results",
+        "type": "array"
+      },
+      "archived": {
+        "title": "Archived",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "stem",
+      "results",
+      "archived"
+    ],
+    "title": "ApproveResponse",
+    "type": "object"
+  },
+  "ErrorResponse": {
+    "$defs": {
+      "ErrorDetail": {
+        "properties": {
+          "category": {
+            "enum": [
+              "retrieval_timeout",
+              "schema_validation_failed",
+              "insufficient_coverage",
+              "benchmark_unavailable",
+              "not_found",
+              "invalid_request"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          }
+        },
+        "required": [
+          "category",
+          "message"
+        ],
+        "title": "ErrorDetail",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "status": {
+        "const": "error",
+        "default": "error",
+        "title": "Status",
+        "type": "string"
+      },
+      "error": {
+        "$ref": "#/$defs/ErrorDetail"
+      },
+      "trace_id": {
+        "title": "Trace Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "error",
+      "trace_id"
+    ],
+    "title": "ErrorResponse",
+    "type": "object"
+  }
+}

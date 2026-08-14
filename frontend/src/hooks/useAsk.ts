@@ -2,9 +2,8 @@ import { useState } from "react";
 import { ApiError, ask } from "../api";
 import type { AskResponse } from "../types";
 
-/** Shared question/answer state — used by both the homepage's inline Q&A
- * and the dedicated /ask page, so the two don't drift into two slightly
- * different implementations of the same request. */
+/** Question/answer state for the homepage's inline Q&A panel. Owned by App
+ * (not HomePage) so it survives navigating away and back — see App.tsx. */
 export function useAsk(initialQuestion = "") {
   const [question, setQuestion] = useState(initialQuestion);
   const [maxHits, setMaxHits] = useState(10);

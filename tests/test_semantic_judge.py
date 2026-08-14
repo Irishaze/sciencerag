@@ -198,6 +198,93 @@ def test_extract_priors_retries_on_semantic_drop_then_succeeds(monkeypatch):
     assert review_priors == []
 
 
+def test_extract_priors_discards_whole_batch_when_only_one_prior_is_dropped(monkeypatch):
+    """The exact scenario a real batch raises: 3 drafts in one attempt, 2 of
+    them individually judged KEEP and 1 judged DROP. Even the 2 good ones
+    must be thrown away and re-drafted from scratch on retry — this is NOT
+    a per-prior fix-up, it's a whole-attempt do-over. Proven by: attempt 2's
+    (smaller, 2-prior) draft is what survives, not attempt 1's KEEP'd pair
+    merged with a corrected third."""
+    extraction_calls = {"n": 0}
+
+    def attempt_1_draft():
+        return json.dumps(
+            {
+                "priors": [
+                    {
+                        "kind": "caution",
+                        "field": "leg_length",
+                        "value": {"statement": "ok"},
+                        "evidence": ["E1"],
+                    },
+                    {
+                        "kind": "caution",
+                        "field": "pitch",
+                        "value": {"statement": "ok"},
+                        "evidence": ["E1"],
+                    },
+                    {
+                        "kind": "caution",
+                        "field": "leg_width",
+                        "value": {"statement": "ok"},
+                        "evidence": ["E1"],
+                    },
+                ]
+            }
+        )
+
+    def attempt_2_draft():
+        # The LLM's redraft, after being told leg_width's claim was
+        # unsupported — it drops leg_width entirely rather than trying to
+        # patch it (a real model might instead re-justify it; either way
+        # this attempt's output, whatever it is, is what must survive).
+        return json.dumps(
+            {
+                "priors": [
+                    {
+                        "kind": "caution",
+                        "field": "leg_length",
+                        "value": {"statement": "ok"},
+                        "evidence": ["E1"],
+                    },
+                    {
+                        "kind": "caution",
+                        "field": "pitch",
+                        "value": {"statement": "ok"},
+                        "evidence": ["E1"],
+                    },
+                ]
+            }
+        )
+
+    def fake_completion(**kwargs):
+        if kwargs["messages"][0]["content"] == extract_mod.SEMANTIC_SUPPORT_RUBRIC:
+            user_prompt = kwargs["messages"][1]["content"]
+            import re
+
+            ids = re.findall(r"id: (\S+)", user_prompt)
+            verdicts = []
+            for i in ids:
+                # First-attempt's leg_width draft is the one judged DROP;
+                # everything else (both attempts' leg_length/pitch) is KEEP.
+                verdict = "DROP" if "leg_width" in i else "KEEP"
+                verdicts.append({"prior_id": i, "verdict": verdict, "reason": "reason"})
+            return _fake_llm_response(json.dumps({"verdicts": verdicts}))
+
+        extraction_calls["n"] += 1
+        content = attempt_1_draft() if extraction_calls["n"] == 1 else attempt_2_draft()
+        return _fake_llm_response(content)
+
+    monkeypatch.setattr(extract_mod.litellm, "completion", fake_completion)
+    priors, _filtered, review_priors = extract_priors("test query", _evidence_table())
+
+    assert extraction_calls["n"] == 2  # a real second draft call happened
+    assert review_priors == []
+    assert len(priors) == 2  # NOT 3 — leg_length+pitch weren't selectively
+    # kept from attempt 1's KEEP verdicts; they're attempt 2's fresh output
+    assert {p.field for p in priors} == {"leg_length", "pitch"}
+
+
 def test_extract_priors_excludes_review_verdict_without_retrying(monkeypatch):
     """A REVIEW verdict must NOT trigger a retry (the evidence won't get
     more literal on another attempt) — the prior is excluded from `priors`

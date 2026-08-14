@@ -28,10 +28,8 @@ import json
 import sys
 from pathlib import Path
 
-from sciencerag.common.audit import log_audit_entry
-from sciencerag.common.trace import new_trace_id
-from sciencerag.priors.kg import KGSource, add_triple
 from sciencerag.validate import kg_candidate_store
+from sciencerag.validate.kg_approval import approve_candidate
 from sciencerag.validate.models import KGCandidate
 
 
@@ -41,32 +39,20 @@ def load_candidates(path: Path) -> list[KGCandidate]:
 
 
 def _print_candidate(index: int, candidate: KGCandidate) -> None:
+    obj = (
+        f"{candidate.object_value}{candidate.object_unit or ''}"
+        if candidate.object_value is not None
+        else (candidate.object_entity_label or candidate.object_entity_id)
+    )
     print(
-        f"[{index}] {candidate.subject} {candidate.relation} = "
-        f"{candidate.object_value}{candidate.object_unit or ''} "
+        f"[{index}] {candidate.subject} {candidate.relation} = {obj} "
         f"(confidence={candidate.confidence}, run_id={candidate.run_id}, "
         f"dedup_status={candidate.dedup_status})"
     )
 
 
 def approve(candidate: KGCandidate, operator: str, reason: str) -> None:
-    triple, status = add_triple(
-        subject=candidate.subject,
-        relation=candidate.relation,
-        object_value=candidate.object_value,
-        object_unit=candidate.object_unit,
-        conditions=candidate.conditions,
-        confidence=candidate.confidence,
-        run_id=candidate.run_id,
-        sources=[KGSource(type="run", run_id=candidate.run_id)],
-    )
-    log_audit_entry(
-        trace_id=new_trace_id("kgappr"),
-        endpoint="sciencerag.kg_approval",
-        request={"candidate": candidate.model_dump(), "operator": operator, "reason": reason},
-        evidence=[],
-        output={"triple": triple.model_dump(), "status": status},
-    )
+    triple, status = approve_candidate(candidate, operator, reason)
     print(f"  -> {status}: triple_id={triple.triple_id}")
 
 

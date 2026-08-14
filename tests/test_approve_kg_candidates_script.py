@@ -37,6 +37,7 @@ def _queue_one_candidate(run_id="run_test", relation="achieves_delta_T_max_K"):
             "confidence": 0.7,
             "run_id": run_id,
             "dedup_status": "new",
+            "entity_type": "TECDesign",
         }
     )
     kg_candidate_store.store_pending_candidates(run_id, [candidate])

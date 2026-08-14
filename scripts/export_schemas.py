@@ -10,6 +10,7 @@ from pathlib import Path
 
 from sciencerag.ask.models import AskRequest, AskResponse
 from sciencerag.common.errors import ErrorResponse
+from sciencerag.kg_approval.models import ApproveRequest, ApproveResponse, PendingBatchDetail, PendingBatchSummary
 from sciencerag.priors.batch_evidence import BatchEvidenceRequest, BatchEvidenceResponse
 from sciencerag.priors.models import PriorsRequest, PriorsResponse
 from sciencerag.report.models import ReportRequest, ReportResponse
@@ -32,6 +33,12 @@ _ENDPOINTS: dict[str, dict[str, type]] = {
     "validate": {"ValidateRequest": ValidateRequest, "ValidateResponse": ValidateResponse},
     "report": {"ReportRequest": ReportRequest, "ReportResponse": ReportResponse},
     "ask": {"AskRequest": AskRequest, "AskResponse": AskResponse},
+    "kg_approval": {
+        "PendingBatchSummary": PendingBatchSummary,
+        "PendingBatchDetail": PendingBatchDetail,
+        "ApproveRequest": ApproveRequest,
+        "ApproveResponse": ApproveResponse,
+    },
 }
 
 
