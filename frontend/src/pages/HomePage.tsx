@@ -1,38 +1,8 @@
 import { AnswerCard } from "../components/AnswerCard";
 import { TecDiagram } from "../components/TecDiagram";
+import { DocumentIcon, GraphIcon, ShieldCheckIcon, TraceIcon } from "../components/icons";
 import type { useAsk } from "../hooks/useAsk";
 import { Link } from "react-router-dom";
-
-const ICON_PROPS = {
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.6,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-// Two points joined by the same dashed stroke the graph page already uses
-// for "this links back to something else" (see GraphView's conflict
-// edges) — a claim and the source it traces to, not a generic bullet icon.
-function TraceIcon() {
-  return (
-    <svg {...ICON_PROPS} width="22" height="22">
-      <circle cx="6" cy="18" r="2.3" />
-      <circle cx="18" cy="6" r="2.3" />
-      <path d="M8.2 15.8 L15.8 8.2" strokeDasharray="2.4 2.4" />
-    </svg>
-  );
-}
-
-function ShieldCheckIcon() {
-  return (
-    <svg {...ICON_PROPS} width="22" height="22">
-      <path d="M12 3 L19 6 V11 C19 16 16 19.5 12 21 C8 19.5 5 16 5 11 V6 Z" />
-      <path d="M8.5 12 L10.8 14.5 L15.5 9.5" />
-    </svg>
-  );
-}
 
 const STATS = [
   {
@@ -53,29 +23,6 @@ const WORKFLOW = [
   { n: "03", title: "知识积累", body: "只有通过检查的结果才会成为候选知识，经人工审批后写入图谱" },
   { n: "04", title: "问答与报告", body: "回答有理有据，报告可追溯完整的运行血缘" },
 ];
-
-// Echoes the actual force-graph nodes/edges on /graph — not a generic
-// "network" glyph, the same three-dot shape a real subgraph collapses to.
-function GraphIcon() {
-  return (
-    <svg {...ICON_PROPS} width="26" height="26">
-      <circle cx="6" cy="7" r="2.1" />
-      <circle cx="18" cy="7" r="2.1" />
-      <circle cx="12" cy="18" r="2.1" />
-      <path d="M8 8.1 L10.3 16.1 M16 8.1 L13.7 16.1 M8.1 7 H15.9" />
-    </svg>
-  );
-}
-
-function DocumentIcon() {
-  return (
-    <svg {...ICON_PROPS} width="26" height="26">
-      <path d="M6 3 H14 L18 7 V21 H6 Z" />
-      <path d="M14 3 V7 H18" />
-      <path d="M9 12 H15 M9 15 H15 M9 18 H12.5" />
-    </svg>
-  );
-}
 
 const FEATURES = [
   {
