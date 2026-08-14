@@ -94,3 +94,26 @@ def test_batch_evidence_route(monkeypatch):
 def test_batch_evidence_requires_at_least_one_candidate():
     response = client.post("/sciencerag/priors/batch_evidence", json={"candidates": []})
     assert response.status_code == 422
+
+
+def test_batch_evidence_rejects_more_than_the_cap(monkeypatch):
+    # Regression for a real finding (2026-08-15 adversarial review):
+    # get_batch_evidence runs one real PaperQA2 query per candidate,
+    # sequentially, with no concurrency cap — an unbounded candidates list
+    # let a single request fan out into an unbounded number of billed API
+    # calls and tie up the request indefinitely. run_query is monkeypatched
+    # to fail loudly if it's ever reached — this must be rejected by
+    # request validation before any real work starts.
+    from sciencerag.priors import batch_evidence as batch_evidence_module
+
+    def _fail_if_called(*args, **kwargs):
+        raise AssertionError("run_query must not be reached once the candidate cap is exceeded")
+
+    monkeypatch.setattr(batch_evidence_module, "run_query", _fail_if_called)
+
+    too_many = [
+        {"candidate_id": f"c{i}", "description": "x"}
+        for i in range(batch_evidence_module.MAX_BATCH_EVIDENCE_CANDIDATES + 1)
+    ]
+    response = client.post("/sciencerag/priors/batch_evidence", json={"candidates": too_many})
+    assert response.status_code == 422

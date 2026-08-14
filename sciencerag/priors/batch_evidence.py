@@ -144,8 +144,20 @@ def get_batch_evidence(candidates: list[CandidateSpec]) -> list[CandidateEvidenc
     return [get_candidate_evidence(candidate) for candidate in candidates]
 
 
+# get_batch_evidence runs one real PaperQA2 query (retrieval + an LLM
+# stance-classification call) per candidate, sequentially, with no
+# concurrency cap — found via adversarial review (2026-08-15) that
+# candidates had no upper bound at all, so a single request could fan out
+# into an arbitrarily large number of real, billed API calls and tie up
+# the request for an unbounded amount of wall-clock time (a cost/DoS
+# vector, not just a slow response). Spec §3.4 describes this as
+# supporting a "generate-debate-rank" competition over a candidate pool —
+# scaled for a few dozen candidates, not an unbounded batch.
+MAX_BATCH_EVIDENCE_CANDIDATES = 20
+
+
 class BatchEvidenceRequest(BaseModel):
-    candidates: list[CandidateSpec] = Field(min_length=1)
+    candidates: list[CandidateSpec] = Field(min_length=1, max_length=MAX_BATCH_EVIDENCE_CANDIDATES)
 
 
 class BatchEvidenceResponse(BaseModel):
