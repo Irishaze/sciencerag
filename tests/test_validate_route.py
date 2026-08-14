@@ -252,6 +252,48 @@ def test_prior_out_of_range_is_deviation() -> None:
     assert deviation["verdict"] == "deviation"
 
 
+def test_prior_only_consistent_match_keeps_flat_confidence_by_design() -> None:
+    """Documents a real constraint, not a bug: a "consistent" verdict
+    reached purely via a parameter_range prior match (no matching benchmark
+    case at all) still gets the flat 0.7 confidence / no deviation_detail
+    for its achieves_* candidates. This looks at first glance like the same
+    "two very different matches treated identically" gap the 2026-08-14/15
+    graduated-confidence fix solved for the benchmark path — it isn't:
+    checked live whether widening kg_candidates.py's matching to include
+    prior_comparison deviations would help, and it structurally can't.
+    evaluation.py's prior comparison only ever grades a request.
+    design_parameters field (e.g. "leg_length"); the achieves_* candidate
+    being scored here is a request.scalar_results field (e.g.
+    "delta_T_max_K") — GEOMETRY_FREE_NAMES and tec_bridge.SCALAR_UNITS'
+    keys are disjoint by construction, so there is no per-field comparison
+    data connecting a geometry-parameter prior to a performance-result
+    candidate. The flat fallback here is the honest answer, not a gap."""
+    response = client.post(
+        "/sciencerag/validate",
+        json={
+            "run_id": "run_prior_only_consistent",
+            "design_parameters": {"leg_length": 1.5},
+            "n_pairs": 1,
+            "scalar_results": {"delta_T_max_K": 60.0},
+            "priors": [
+                {
+                    "prior_id": "pr_prior_only",
+                    "kind": "parameter_range",
+                    "field": "leg_length",
+                    "value": {"field_name": "leg_length", "min": 1.0, "max": 2.0, "unit": "mm"},
+                    "confidence": 0.6,
+                    "sources": [{"type": "paper", "doi": "10.1/x"}],
+                }
+            ],
+        },
+    )
+    payload = response.json()
+    assert payload["evaluation"]["verdict"] == "consistent"
+    numeric = next(c for c in payload["update_package"]["kg_candidates"] if c["object_value"] is not None)
+    assert numeric["confidence"] == 0.7
+    assert "deviation_detail" not in numeric["supporting_evidence"]
+
+
 def test_extreme_latent_state_blocks_update_package() -> None:
     response = client.post(
         "/sciencerag/validate",

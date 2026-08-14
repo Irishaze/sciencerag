@@ -54,9 +54,9 @@ SYSTEM_PROMPT = (
     "Some triples carry an 'evidence_detail' note — e.g. a triple validated "
     "against a real benchmark case at 0.8% deviation vs one at 4.9% "
     "deviation can carry the same confidence number despite very different "
-    "real support; when evidence_detail is present, reference it (how "
-    "close the match actually was, which benchmark case) rather than just "
-    "quoting the bare confidence number."
+    "real support; when evidence_detail is present on a triple you cite, "
+    "reference it (how close the match actually was, which benchmark "
+    "case) rather than just quoting the bare confidence number."
 )
 
 

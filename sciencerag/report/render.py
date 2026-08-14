@@ -149,7 +149,11 @@ def _format_evidence(evidence: dict) -> list[str]:
 
     lines = []
     if stats:
-        lines.append(" · ".join(stats))
+        # " | ", not the visually quieter " · ": confirmed live that the
+        # middle dot (U+00B7) hits the same STSong-Light glyph-mapping bug
+        # as the list bullet (see _PDF_STYLE's ul comment) — renders as an
+        # unrelated wrong character in the PDF, not just in a bare "<li>".
+        lines.append(" | ".join(stats))
     for note in notes:
         lines.append(f"_{note}_")
     return lines
@@ -323,7 +327,17 @@ _PDF_STYLE = f"""
         border-bottom: 1px solid {_HAIRLINE}; padding-bottom: 4px; }}
   hr {{ border: none; border-top: 1px solid {_HAIRLINE}; margin: 8px 0 14px 0; }}
   p {{ margin: 3px 0 10px 0; }}
-  ul {{ margin: 2px 0 10px 0; padding-left: 16px; }}
+  /* decimal, not the default disc: xhtml2pdf always draws the bullet
+     glyph in the *current* font (xhtml2pdf/tags.py's pisaTagLI.start —
+     "this should be the recent font, but it throws errors in
+     Reportlab!"), and confirmed live that STSong-Light's disc bullet
+     (U+2022) renders as a wrong, unrelated CJK character instead of a
+     dot — not a missing-glyph box, an actively wrong one, in both a
+     bare "<li>" and a plain paragraph containing "•" as body text, so
+     this isn't fixable by scoping the character to a different tag.
+     decimal's "1." markers are plain ASCII digits, confirmed safe under
+     the same font. */
+  ul {{ margin: 2px 0 10px 0; padding-left: 16px; list-style-type: decimal; }}
   li {{ margin-bottom: 4px; }}
   code {{ font-family: Courier, monospace; background-color: {_CODE_BG}; font-size: 9pt;
           padding: 0 3px; color: {_INK}; }}

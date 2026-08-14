@@ -38,6 +38,20 @@ _CONSISTENT_CONFIDENCE_MAX = 0.9
 
 
 def _matching_benchmark_deviation(evaluation: Evaluation, field: str):
+    """Deliberately benchmark_comparison-only, not prior_comparison too:
+    checked live whether broadening this to also match prior_comparison
+    deviations would grade more "consistent" candidates, and confirmed it
+    can never fire — evaluation.py's _prior_deviations only ever produces a
+    Deviation for a field in request.design_parameters (contract geometry
+    names like "leg_length"), while this function is only ever called with
+    a request.scalar_results field (like "delta_T_max_K", a performance
+    output) — GEOMETRY_FREE_NAMES and tec_bridge.SCALAR_UNITS' keys have
+    zero overlap by construction, so a prior_comparison deviation's field
+    can never equal an achieves_* candidate's field. When a "consistent"
+    verdict is reached purely via a prior match on an unrelated design
+    parameter, there genuinely is no per-field comparison data for the
+    scalar being graded here — the flat fallback below is the honest
+    answer, not a gap to fix."""
     for deviation in evaluation.deviations:
         if deviation.source == "benchmark_comparison" and deviation.field == field:
             return deviation
@@ -79,11 +93,12 @@ def _consistent_confidence(evaluation: Evaluation, field: str) -> float:
     was actually used, so this doesn't need to duplicate that table.
 
     Falls back to the old flat constant if this field has no matching
-    benchmark_comparison Deviation — shouldn't normally happen when the
-    overall verdict is "consistent" (every scalar_results field failing to
-    find one would itself have prevented that verdict), but a defensive
-    fallback costs nothing and avoids a KeyError-shaped surprise if the
-    verdict/deviations ever disagree."""
+    benchmark_comparison Deviation — normal (not just defensive) whenever
+    "consistent" was reached via a prior match on a design parameter
+    instead (see _matching_benchmark_deviation's docstring: those live in
+    disjoint field domains and can never supply this function's per-field
+    tolerance data), and also covers the genuinely-defensive case of
+    verdict/deviations disagreeing."""
     deviation = _matching_benchmark_deviation(evaluation, field)
     if deviation is not None and deviation.reference_min is not None and deviation.reference_max is not None:
         reference = (deviation.reference_min + deviation.reference_max) / 2
