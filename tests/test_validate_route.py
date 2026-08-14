@@ -110,7 +110,11 @@ def test_matching_benchmark_case_is_consistent() -> None:
     assert {c["relation"] for c in numeric_candidates} == {f"achieves_{name}" for name in scalar_results}
     assert {c["relation"] for c in link_candidates} == {"SIMULATION_USES_DESIGN", "SIMULATION_USES_MATERIAL"}
     assert all(c["dedup_status"] == "new" for c in candidates)
-    assert all(c["confidence"] == pytest.approx(0.7) for c in numeric_candidates)
+    # _report_row echoes a benchmark case's scalar_results back exactly, so
+    # relative_deviation=0 for every field — the top of the per-field
+    # confidence range (2026-08-14/15: _consistent_confidence, no longer a
+    # flat 0.7 regardless of how close the match actually was).
+    assert all(c["confidence"] == pytest.approx(0.9) for c in numeric_candidates)
     assert all(c["confidence"] == pytest.approx(1.0) for c in link_candidates)
     # Non-empty kg_candidates should be queued for approve_kg_candidates.py
     # --list-pending, not just returned in the response body.
@@ -149,6 +153,61 @@ def test_benchmark_deviation_is_flagged() -> None:
         for sample in surrogate_update["recommended_training_samples"]
     )
     assert payload["update_package"]["kg_candidates"] == []
+
+
+def test_wide_tolerance_field_within_it_is_consistent_not_flagged() -> None:
+    # Regression for the 2026-08-14/15 finding (scripts/loo_scalar_error_sweep.py):
+    # total_resistance_ohm has real leave-one-out relative error up to ~90th
+    # percentile 219% against the deployed surrogate — the old flat 5%
+    # BENCHMARK_SCALAR_RELATIVE_TOLERANCE made "consistent" essentially
+    # unreachable for this field from a genuine prediction (confirmed
+    # separately: every historical "consistent" verdict in logs/audit.jsonl
+    # had exactly 0 deviation, i.e. an echoed exact value, not a real
+    # prediction). A 30% deviation on total_resistance_ohm — which the old
+    # flat 5% band would have flagged as deviation_found — must now land
+    # within its widened per-field tolerance (0.5) instead.
+    design_parameters, scalar_results = _report_row(0)
+    scalar_results = dict(scalar_results)
+    scalar_results["total_resistance_ohm"] *= 1.30
+    response = client.post(
+        "/sciencerag/validate",
+        json={
+            "run_id": "run_wide_tolerance",
+            "design_parameters": design_parameters,
+            "n_pairs": 1,
+            "scalar_results": scalar_results,
+            "priors": [],
+        },
+    )
+    payload = response.json()
+    assert payload["evaluation"]["verdict"] == "consistent"
+    flagged = [d for d in payload["evaluation"]["deviations"] if d["field"] == "total_resistance_ohm"]
+    assert flagged[0]["verdict"] == "within_range"
+
+
+def test_tight_tolerance_field_still_flags_small_deviation() -> None:
+    # The other half of the same finding: delta_T_max_K/figure_of_merit_1_per_K
+    # generalize tightly (real leave-one-out p90 <1.5%) and correctly kept
+    # their existing 5% tolerance, unchanged and unwidened — a 10% deviation
+    # there must still flag as a real deviation, not get waved through by
+    # whatever widening applies to the unreliable fields.
+    design_parameters, scalar_results = _report_row(0)
+    scalar_results = dict(scalar_results)
+    scalar_results["delta_T_max_K"] *= 1.10
+    response = client.post(
+        "/sciencerag/validate",
+        json={
+            "run_id": "run_tight_tolerance",
+            "design_parameters": design_parameters,
+            "n_pairs": 1,
+            "scalar_results": scalar_results,
+            "priors": [],
+        },
+    )
+    payload = response.json()
+    assert payload["evaluation"]["verdict"] == "deviation_found"
+    flagged = [d for d in payload["evaluation"]["deviations"] if d["field"] == "delta_T_max_K"]
+    assert flagged[0]["verdict"] == "deviation"
 
 
 def test_non_matching_design_is_insufficient_benchmark() -> None:

@@ -27,11 +27,43 @@ _CONTRACT_UNIT_BY_NAME = {param["name"]: param["unit"] for param in GEOMETRY_FRE
 # expected to perform differently, so only a near-exact geometry match makes
 # a scalar comparison meaningful (see module docstring).
 GEOMETRY_MATCH_RELATIVE_TOLERANCE = 0.01
-# Reasonableness band for scalar outputs once the benchmark case's geometry
-# is confirmed to match: repeated solves of the same geometry/BCs should
-# reproduce closely, so this is deliberately tight, not a physical-model
-# tolerance.
+# Fallback for any scalar field not in BENCHMARK_SCALAR_RELATIVE_TOLERANCE_BY_FIELD
+# below (e.g. a new field added to the contract before the sweep is re-run).
 BENCHMARK_SCALAR_RELATIVE_TOLERANCE = 0.05
+
+# A single flat 5% band applied to every scalar field was checked against
+# real data (2026-08-14/15, scripts/loo_scalar_error_sweep.py — real
+# leave-one-out cross-validation of the deployed latent surrogate over its
+# own 31-sample training set, not synthetic/assumed error) and found badly
+# mismatched: delta_T_max_K/figure_of_merit_1_per_K generalize tightly
+# (<1.5% p90 relative error — 5% was already generous for these), while
+# total_resistance_ohm/optimal_current_A/max_heat_dissipation_W have 90th-
+# percentile leave-one-out error of 89-219% — meaning a flat 5% band is
+# essentially unreachable for those fields from a genuine new prediction
+# (confirmed separately: every historical "consistent" verdict in
+# logs/audit.jsonl for benchmark_comparison had exactly 0.0000 deviation,
+# i.e. the request had echoed a benchmark value back verbatim rather than
+# supplying a real surrogate prediction — a flat 5% tolerance was silently
+# never being cleared by real predictions on the wide-error fields, so
+# "consistent" could only ever fire on exact echoes).
+#
+# Per-field values here are min(p90 leave-one-out relative error, 0.05),
+# capped at 0.5 (50%) rather than used raw — the sweep's own p90 for
+# total_resistance_ohm is 219%, and widening tolerance that far would make
+# the check accept almost anything, defeating its purpose. Capping at 0.5
+# keeps the check meaningful while still reflecting that this field's real
+# reliability is much worse than delta_T_max_K's — deviation_found will
+# likely still fire often for total_resistance_ohm/optimal_current_A even
+# with the widened band, which is an honest signal about surrogate quality
+# for those two fields specifically, not a bug in this tolerance table.
+BENCHMARK_SCALAR_RELATIVE_TOLERANCE_BY_FIELD = {
+    "delta_T_max_K": 0.05,
+    "figure_of_merit_1_per_K": 0.05,
+    "optimal_voltage_V": 0.30,
+    "max_heat_dissipation_W": 0.5,
+    "optimal_current_A": 0.5,
+    "total_resistance_ohm": 0.5,
+}
 
 
 def _find_matching_benchmark_case(design_parameters: dict[str, float]) -> int | None:
@@ -74,7 +106,10 @@ def _benchmark_deviations(request: ValidateRequest) -> tuple[list[Deviation], bo
         if field not in scalar_names:
             continue
         reference = float(dataset["scalar_outputs"][case_index, scalar_names.index(field)])
-        band = BENCHMARK_SCALAR_RELATIVE_TOLERANCE * max(abs(reference), 1e-9)
+        tolerance = BENCHMARK_SCALAR_RELATIVE_TOLERANCE_BY_FIELD.get(
+            field, BENCHMARK_SCALAR_RELATIVE_TOLERANCE
+        )
+        band = tolerance * max(abs(reference), 1e-9)
         verdict = "within_range" if abs(actual - reference) <= band else "deviation"
         deviations.append(
             Deviation(

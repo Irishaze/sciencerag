@@ -16,8 +16,8 @@ from sciencerag.priors import kg
 from sciencerag.priors.kg import KGHit
 from sciencerag.validate import kg_candidates as kg_candidates_module
 from sciencerag.validate.finetune import suggest_surrogate_update
-from sciencerag.validate.kg_candidates import extract_kg_candidates
-from sciencerag.validate.models import Anomaly, Evaluation, ValidateRequest
+from sciencerag.validate.kg_candidates import _consistent_confidence, extract_kg_candidates
+from sciencerag.validate.models import Anomaly, Deviation, Evaluation, ValidateRequest
 
 
 @pytest.fixture(autouse=True)
@@ -121,6 +121,73 @@ def test_insufficient_benchmark_still_extracts_at_lower_confidence():
     links = [c for c in candidates if c.object_entity_id is not None]
     assert len(links) == 2
     assert {c.relation for c in links} == {"SIMULATION_USES_DESIGN", "SIMULATION_USES_MATERIAL"}
+
+
+def _deviation(field, actual, reference, tolerance):
+    band = tolerance * abs(reference)
+    return Deviation(
+        field=field,
+        source="benchmark_comparison",
+        reference_id="sample_test.docx",
+        actual=actual,
+        reference_min=reference - band,
+        reference_max=reference + band,
+        verdict="within_range" if abs(actual - reference) <= band else "deviation",
+    )
+
+
+def test_consistent_confidence_exact_match_gets_ceiling():
+    evaluation = Evaluation(
+        verdict="consistent",
+        deviations=[_deviation("delta_T_max_K", actual=71.7, reference=71.7, tolerance=0.05)],
+        sources=[],
+    )
+    assert _consistent_confidence(evaluation, "delta_T_max_K") == 0.9
+
+
+def test_consistent_confidence_at_tolerance_edge_gets_floor():
+    evaluation = Evaluation(
+        verdict="consistent",
+        # actual sits exactly at the tolerance boundary (5% off reference)
+        deviations=[_deviation("delta_T_max_K", actual=71.7 * 1.05, reference=71.7, tolerance=0.05)],
+        sources=[],
+    )
+    assert _consistent_confidence(evaluation, "delta_T_max_K") == 0.5
+
+
+def test_consistent_confidence_halfway_is_between_floor_and_ceiling():
+    evaluation = Evaluation(
+        verdict="consistent",
+        deviations=[_deviation("delta_T_max_K", actual=71.7 * 1.025, reference=71.7, tolerance=0.05)],
+        sources=[],
+    )
+    assert _consistent_confidence(evaluation, "delta_T_max_K") == pytest.approx(0.7, abs=0.01)
+
+
+def test_consistent_confidence_no_matching_deviation_falls_back_to_flat_value():
+    # Defensive path: verdict says "consistent" but this specific field has
+    # no benchmark_comparison Deviation on record — shouldn't normally
+    # happen, but must degrade gracefully rather than KeyError.
+    evaluation = Evaluation(verdict="consistent", deviations=[], sources=[])
+    assert _consistent_confidence(evaluation, "delta_T_max_K") == 0.7
+
+
+def test_extract_kg_candidates_uses_per_field_consistent_confidence():
+    request = _request(scalar_results={"delta_T_max_K": 71.7, "optimal_current_A": 6.4831})
+    evaluation = Evaluation(
+        verdict="consistent",
+        deviations=[
+            _deviation("delta_T_max_K", actual=71.7, reference=71.7, tolerance=0.05),
+            _deviation("optimal_current_A", actual=6.4831 * 1.05, reference=6.4831, tolerance=0.05),
+        ],
+        sources=[],
+    )
+    candidates = extract_kg_candidates(request, evaluation)
+    by_relation = {c.relation: c for c in candidates}
+    assert by_relation["achieves_delta_T_max_K"].confidence == 0.9
+    assert by_relation["achieves_optimal_current_A"].confidence == 0.5
+    # link candidates are unaffected — always structural certainty
+    assert by_relation["SIMULATION_USES_DESIGN"].confidence == 1.0
 
 
 def test_high_relevance_kg_hit_marks_duplicate(monkeypatch):
