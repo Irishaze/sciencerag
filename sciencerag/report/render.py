@@ -292,10 +292,21 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
 # ink for body text, a muted steel-blue for structure (headings/rules),
 # gray for asides, amber only for the one signature device (elevated
 # anomaly severity, via blockquote — see _render_markdown). Two type
-# roles: Helvetica for prose/headings, Courier for identifiers and data
-# (run_id, field names, numeric evidence) — reportlab's built-in PDF base
-# fonts are the only ones available without bundling font files, so this
-# pairing (not a third display face) is the deliberate ceiling here.
+# roles: a CJK-capable serif for prose/headings, Courier for identifiers
+# and data (run_id, field names, numeric evidence).
+#
+# body leads with STSong-Light, not Helvetica: this renderer's own labels
+# (_DESIGN_PARAM_LABELS, _LITERATURE_VERDICT_LABELS, etc.) are Chinese, and
+# Helvetica/Courier are reportlab's Latin-only base-14 fonts — confirmed
+# live that every Chinese label in the PDF output rendered as a blank
+# tofu box under the old Helvetica-first font stack, silently dropping
+# every label this renderer exists to attach. STSong-Light is reportlab's
+# built-in Simplified Chinese CID font (registered on demand by
+# xhtml2pdf's getFontName -> set_asian_fonts when the CSS font-family
+# resolves to a name in reportlab's cidfontdata), so this needs no bundled
+# font file either — same "no font files to ship" constraint the old
+# comment described, just with a font stack that actually covers the
+# script this report renders.
 _INK = "#1a1a2e"
 _ACCENT = "#2a5a7c"
 _MUTED = "#6b7280"
@@ -306,7 +317,7 @@ _FLAG_BG = "#fdf6ec"
 
 _PDF_STYLE = f"""
 <style>
-  body {{ font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: {_INK}; line-height: 1.55; }}
+  body {{ font-family: "STSong-Light", Helvetica, Arial, sans-serif; font-size: 10pt; color: {_INK}; line-height: 1.55; }}
   h1 {{ font-size: 22pt; color: {_INK}; margin-bottom: 2px; }}
   h2 {{ font-size: 12pt; color: {_ACCENT}; margin-top: 18pt; margin-bottom: 8px;
         border-bottom: 1px solid {_HAIRLINE}; padding-bottom: 4px; }}
