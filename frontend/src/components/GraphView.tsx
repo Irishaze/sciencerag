@@ -253,6 +253,17 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
                   {phraseFor(e)}
                   {"："}
                   {labelFor(e.target === selectedNodeId ? e.source : e.target)}
+                  {Object.keys(e.conditions).length > 0 && (
+                    <span className="node-edge-detail">
+                      条件：
+                      {Object.entries(e.conditions)
+                        .map(([key, value]) => `${key}=${value}`)
+                        .join("，")}
+                    </span>
+                  )}
+                  {typeof e.evidence_detail?.notes === "string" && (
+                    <span className="node-edge-detail">{e.evidence_detail.notes}</span>
+                  )}
                 </li>
               ))}
             </ul>
