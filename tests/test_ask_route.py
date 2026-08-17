@@ -33,6 +33,37 @@ def _fake_llm_response(text: str):
     return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text))])
 
 
+def _mock_llm(
+    monkeypatch,
+    answer,
+    captured_prompts=None,
+    is_ranking=False,
+    ranking_relation=None,
+    ranking_direction=None,
+):
+    """kg.litellm and ask_pipeline.litellm are the same module object (a
+    single `import litellm` singleton), so one litellm.completion
+    monkeypatch intercepts BOTH rank_kg_entities' ranking-classification
+    call and the final answer-generation call below it. Dispatch on the
+    system prompt so each gets the right canned response, and only the
+    real answer call is recorded into captured_prompts — otherwise a test
+    asserting on captured_prompts[0] would silently get the ranking
+    classifier's prompt instead whenever the KG has any numeric triples."""
+    ranking_payload = json.dumps(
+        {"is_ranking": is_ranking, "direction": ranking_direction, "relation": ranking_relation}
+    )
+
+    def _fake_completion(**kwargs):
+        messages = kwargs["messages"]
+        if messages[0]["content"] == kg._RANKING_SYSTEM_PROMPT:
+            return _fake_llm_response(ranking_payload)
+        if captured_prompts is not None:
+            captured_prompts.append(messages[1]["content"])
+        return _fake_llm_response(answer)
+
+    monkeypatch.setattr(ask_pipeline.litellm, "completion", _fake_completion)
+
+
 def test_graph_hit_answers_without_fallback(monkeypatch):
     kg.add_triple(
         subject="Bi2Te3 single-stage TEC",
@@ -44,9 +75,7 @@ def test_graph_hit_answers_without_fallback(monkeypatch):
         run_id="run_1",
         sources=[],
     )
-    monkeypatch.setattr(
-        ask_pipeline.litellm, "completion", lambda **kwargs: _fake_llm_response("delta_T_max_K is 71.7K.")
-    )
+    _mock_llm(monkeypatch, "delta_T_max_K is 71.7K.")
 
     response = client.post(
         "/sciencerag/ask", json={"question": "Bi2Te3 achieves_delta_T_max_K", "max_hits": 5}
@@ -88,12 +117,7 @@ def test_evidence_detail_is_included_in_the_prompt(monkeypatch):
         evidence_detail={"verdict": "consistent", "relative_deviation": 0.008, "benchmark_case_id": "sample_02.docx"},
     )
     captured_prompts = []
-
-    def _fake_completion(**kwargs):
-        captured_prompts.append(kwargs["messages"][1]["content"])
-        return _fake_llm_response("delta_T_max_K is 71.7K.")
-
-    monkeypatch.setattr(ask_pipeline.litellm, "completion", _fake_completion)
+    _mock_llm(monkeypatch, "delta_T_max_K is 71.7K.", captured_prompts=captured_prompts)
 
     response = client.post("/sciencerag/ask", json={"question": "Bi2Te3 achieves_delta_T_max_K"})
     assert response.status_code == 200
@@ -133,12 +157,7 @@ def test_multi_design_graph_answer_reports_truncation_honestly(monkeypatch):
         )
 
     captured_prompts = []
-
-    def _fake_completion(**kwargs):
-        captured_prompts.append(kwargs["messages"][1]["content"])
-        return _fake_llm_response("some answer")
-
-    monkeypatch.setattr(ask_pipeline.litellm, "completion", _fake_completion)
+    _mock_llm(monkeypatch, "some answer", captured_prompts=captured_prompts)
 
     response = client.post(
         "/sciencerag/ask",
@@ -191,12 +210,14 @@ def test_ranking_question_answers_from_graph_with_ranking_block(monkeypatch):
     )
 
     captured_prompts = []
-
-    def _fake_completion(**kwargs):
-        captured_prompts.append(kwargs["messages"][1]["content"])
-        return _fake_llm_response("81.5K")
-
-    monkeypatch.setattr(ask_pipeline.litellm, "completion", _fake_completion)
+    _mock_llm(
+        monkeypatch,
+        "81.5K",
+        captured_prompts=captured_prompts,
+        is_ranking=True,
+        ranking_relation="achieves_delta_T_max_K",
+        ranking_direction="max",
+    )
 
     response = client.post("/sciencerag/ask", json={"question": "哪个设计的最大温差最高"})
     assert response.status_code == 200
@@ -365,6 +386,11 @@ def test_weak_keyword_overlap_falls_back_instead_of_answering_from_graph(monkeyp
         session=SimpleNamespace(answer="From the literature: I_opt = alpha*Tc/R", contexts=[fake_context])
     )
     monkeypatch.setattr(ask_pipeline, "run_query", lambda query: fake_response)
+    # Six numeric triples now on the graph means rank_kg_entities' LLM
+    # classification call would otherwise fire for real (no mock existed
+    # here before this path called any LLM) — the question has no ranking
+    # intent, so "not ranking" is the honest response anyway.
+    _mock_llm(monkeypatch, "unused")
 
     response = client.post(
         "/sciencerag/ask",

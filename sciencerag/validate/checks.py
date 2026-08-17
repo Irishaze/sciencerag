@@ -32,13 +32,30 @@ from sciencerag.validate.models import Anomaly, ValidateRequest
 #     latent distribution has a fatter tail than a Gaussian model predicts,
 #     so borrowing the textbook chi-square cutoff isn't safe either.
 # What n=31 *can* support: knowing the single most extreme point we've ever
-# actually validated (13.32, itself ~3x the next-most-extreme point at
-# 4.49). BLOCKING_MARGIN scales that as an honest "worse than anything we've
-# confirmed the surrogate can meaningfully represent" rule, with headroom so
-# one historical outlier point doesn't singlehandedly define the boundary.
-# Provisional: switch back to a real empirical percentile once training data
-# grows past ~100-150 samples.
-BLOCKING_MARGIN = 1.5
+# actually validated. BLOCKING_MARGIN scales that as a "worse than anything
+# we've confirmed the surrogate can meaningfully represent" rule.
+#
+# 2026-08-17 first-principles re-derivation, margin dropped 1.5 -> 1.0:
+# the original "with headroom so one historical outlier point doesn't
+# singlehandedly define the boundary" justification didn't actually hold up
+# under scrutiny — blocking_threshold = training_max * BLOCKING_MARGIN is a
+# straight linear function of that single point (training_max) no matter
+# what the multiplier is; a >1.0 margin never protected against the
+# boundary being anchored to one n=1 observation, it only ever buffered
+# "requests almost exactly as extreme as the worst confirmed case" from
+# tripping the boundary on noise. Worse, extending trust 50% past the most
+# extreme point we've ever actually validated is in real tension with what
+# an OOD gate is *for* — the whole point is to not extrapolate past
+# validated territory, and a >1.0 margin was doing exactly that. 1.0 means
+# blocking now fires only on distances more extreme than anything we've
+# confirmed the surrogate can represent, full stop — the most honest
+# reading of "out of distribution" available at this sample size. Kept as a
+# named constant (not inlined as training_max directly) so a future margin,
+# if real evidence ever justifies one, stays a one-line change.
+#
+# Provisional either way: switch to a real empirical percentile once
+# training data grows past ~100-150 samples.
+BLOCKING_MARGIN = 1.0
 
 
 def check_ood(request: ValidateRequest) -> Anomaly:
@@ -90,12 +107,46 @@ def check_ood(request: ValidateRequest) -> Anomaly:
         score = np.sqrt(np.sum(((training_z[index] - rest_mean) / rest_std) ** 2))
         training_scores.append(float(score))
     training_scores.sort()
+    # training_distance_percentile is still computed and reported below
+    # (useful audit context — "where does this land among 31 known-normal
+    # designs") but is no longer what decides severity; see warning_threshold
+    # below for why.
     percentile = float(np.searchsorted(training_scores, mahalanobis) / n * 100)
     training_max = training_scores[-1]
+    # 2026-08-17: warning changed from percentile>=90-by-rank to the
+    # midpoint of the data's own largest gap (excluding the top point,
+    # which blocking already owns) after looking at the actual spacing
+    # between the 31 sorted leave-one-out scores, not just their rank. The
+    # real distribution isn't a smooth tail: most of the 31 scores climb in
+    # tiny ~0.05-0.4 steps with no real structure, then there's a real
+    # ~0.68 jump up to the 2nd-highest score, then a dominant ~8.8 jump up
+    # to the max.
+    #
+    # An earlier version of this anchored warning directly to the
+    # 2nd-highest score's own *value* (training_scores[-2]) rather than to
+    # the gap itself — a smaller mistake of the same shape as the one
+    # BLOCKING_MARGIN's docstring above describes: it put the boundary
+    # exactly on top of a single real historical point again, so a new
+    # request landing almost exactly on that point (a near-duplicate of
+    # that one training design) sits right at the edge instead of clearly
+    # on one side of it. Sitting anywhere *inside* the actual gap avoids
+    # that — the training data classifies identically no matter where in
+    # the gap the line falls, so the midpoint is the natural, symmetric
+    # choice, not an arbitrary one.
+    #
+    # Computed generally (largest gap among all-but-the-top score, not a
+    # position hardcoded to "index -2") so this keeps finding wherever the
+    # real structural break actually is as training data grows, rather than
+    # assuming there will always be exactly two standout points the way
+    # today's 31 samples happen to show.
+    sub_scores = training_scores[:-1]
+    gaps = [sub_scores[i + 1] - sub_scores[i] for i in range(len(sub_scores) - 1)]
+    gap_index = int(np.argmax(gaps))
+    warning_threshold = (sub_scores[gap_index] + sub_scores[gap_index + 1]) / 2
     blocking_threshold = training_max * BLOCKING_MARGIN
     if mahalanobis > blocking_threshold:
         severity = "blocking"
-    elif percentile >= 90:
+    elif mahalanobis > warning_threshold:
         severity = "warning"
     else:
         severity = "info"
@@ -108,6 +159,7 @@ def check_ood(request: ValidateRequest) -> Anomaly:
             "training_distance_percentile": percentile,
             "training_distance_range": [training_scores[0], training_scores[-1]],
             "blocking_threshold": blocking_threshold,
+            "warning_threshold": warning_threshold,
         },
     )
 

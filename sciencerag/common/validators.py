@@ -70,6 +70,29 @@ def reject_non_finite_values(values: dict[str, float]) -> dict[str, float]:
     return values
 
 
+def reject_non_finite_optional(value: float | None) -> float | None:
+    """Scalar counterpart to reject_non_finite_values, for individual
+    `float | None` fields like ParameterRangeValue.min/max/typical that
+    aren't dict- or list-shaped. Confirmed via a real adversarial test:
+    ValidateRequest.priors is passed in-band by the caller (no priors store
+    to resolve against — see ValidateRequest's docstring), so a client can
+    hand /sciencerag/validate a parameter_range prior with
+    min=-Infinity/max=Infinity. evaluation.py's `_prior_deviations` then
+    computes `actual < min` / `actual > max` — and any finite `actual` is
+    trivially not less than -inf and not greater than +inf, so the deviation
+    always comes back "within_range" regardless of how far outside any real
+    range `actual` is. Live repro: design_parameters={"leg_length": 99999.0}
+    (real leg lengths are ~0.02-0.2mm) plus an Infinity-bounded prior on
+    "leg_length" returned evaluation.verdict="consistent", HTTP 200 — the
+    exact same "forge a free pass with a value comparisons can't touch"
+    shape as the NaN-in-latent_state bug above, just reached through a
+    different field that had been missed. Reject at the API boundary
+    instead of letting an unreachable bound manufacture a false verdict."""
+    if value is not None and not math.isfinite(value):
+        raise ValueError(f"non-finite value is not allowed: {value!r}")
+    return value
+
+
 def reject_non_finite_list(values: list[float] | None) -> list[float] | None:
     """List-shaped counterpart to reject_non_finite_values, for fields like
     ValidateRequest.latent_state that aren't a dict. Confirmed via a real

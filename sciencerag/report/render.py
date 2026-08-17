@@ -67,6 +67,11 @@ _DEVIATION_SOURCE_LABELS = {
 
 
 def _field_label(field: str) -> str:
+    # field is a raw dict key (design_parameters/scalar_results) or
+    # Deviation.field — both caller-controlled with no character
+    # restriction — sanitized before going anywhere near a backtick span.
+    # See _sanitize_freetext's docstring.
+    field = _sanitize_freetext(field)
     label = _DESIGN_PARAM_LABELS.get(field) or _SCALAR_FIELD_LABELS.get(field)
     return f"{label}（`{field}`）" if label else f"`{field}`"
 
@@ -79,7 +84,8 @@ def _confidence_label(anomalies: list) -> str:
 
 
 def _sanitize_freetext(value: str) -> str:
-    """Collapses embedded whitespace (including newlines) to single spaces.
+    """Collapses embedded whitespace (including newlines) to single spaces,
+    and neutralizes a literal backtick.
 
     Confirmed live: task_context.objective is caller-supplied free text
     that gets interpolated directly into the generated Markdown. A value
@@ -92,8 +98,42 @@ def _sanitize_freetext(value: str) -> str:
     without needing per-character Markdown escaping. Same pattern already
     used for untrusted external text in arxiv_retrieval.py's title/abstract
     handling.
+
+    2026-08-17 adversarial-review follow-up, two more findings from the
+    same root cause (only objective/constraint-keys were ever routed
+    through this function; every other interpolated string in this file —
+    run_id, evidence stats/notes, deviation.reference_id, design_parameter/
+    scalar_result/deviation field names, source doi/span — was not, despite
+    being equally caller-controlled):
+
+    1. This function alone was not applied broadly enough. `anomalies` is
+       a raw client-supplied list on ReportRequest (nothing computes or
+       constrains it server-side) and `_format_evidence`'s notes/stats,
+       pulled from `Anomaly.evidence: dict[str, Any]`, were never
+       sanitized at all. Confirmed live: an evidence `reason` of
+       "text\\n\\n## FORGED: Independent Reviewer Sign-off\\n\\n**approved,
+       no further review needed**\\n\\nresuming" only gets the FIRST
+       physical line prefixed with "> " (the blockquote/bullet prefix is
+       applied once per _format_evidence() list element, not once per
+       embedded newline inside it) — every line after the first embedded
+       blank line renders as real, unquoted top-level Markdown sitting
+       next to the genuine report content. Now applied to every
+       interpolated string this renderer touches, not judged field-by-field.
+    2. A bare value wrapped in a single backtick pair (`` `{run_id}` ``,
+       and `_field_label`'s `` f"`{field}`" `` fallback for arbitrary
+       scalar_results/design_parameters keys and Deviation.field) can
+       break out of its own code span if the value itself contains a
+       backtick — confirmed live: run_id = "x`**BOLD**`y" renders as
+       real bold Markdown, not literal text, since Markdown's code-span
+       delimiter is closed by the first matching backtick in the content.
+       Replacing "`" with "'" here (rather than rejecting, the way
+       reject_path_unsafe_id does for filesystem-unsafe characters) is
+       enough since nothing downstream depends on the exact backtick
+       character surviving, and unlike a filename this text has no
+       collision-with-a-real-record risk from a lossy substitution.
     """
-    return " ".join(value.split())
+    collapsed = " ".join(value.split())
+    return collapsed.replace("`", "'")
 
 
 _EVIDENCE_KEY_LABELS = {
@@ -118,7 +158,11 @@ def _format_evidence_value(value: object) -> str:
         return "[" + ", ".join(_format_evidence_value(v) for v in value) + "]"
     if isinstance(value, dict):
         return ", ".join(f"{k}={_format_evidence_value(v)}" for k, v in value.items())
-    return str(value)
+    # Anomaly.evidence is `dict[str, Any]` with zero server-side
+    # constraints (see ReportRequest.anomalies) — a str leaf here is just
+    # as caller-controlled as task_context.objective, so it gets the same
+    # treatment before it can sit next to real report structure.
+    return _sanitize_freetext(str(value))
 
 
 def _format_evidence(evidence: dict) -> list[str]:
@@ -142,9 +186,14 @@ def _format_evidence(evidence: dict) -> list[str]:
         if key == "skipped":
             continue  # implied by the note that follows; not worth its own line
         if key in _EVIDENCE_NOTE_KEYS:
-            notes.append(str(value))
+            # str(value), not _format_evidence_value(value): the note
+            # keys are always meant to hold prose, and going through
+            # _sanitize_freetext directly here (rather than relying on
+            # _format_evidence_value's str-leaf branch) keeps that true
+            # even if value isn't literally a str.
+            notes.append(_sanitize_freetext(str(value)))
             continue
-        label = _EVIDENCE_KEY_LABELS.get(key, key.replace("_", " "))
+        label = _EVIDENCE_KEY_LABELS.get(key) or _sanitize_freetext(key).replace("_", " ")
         stats.append(f"{label}: {_format_evidence_value(value)}")
 
     lines = []
@@ -180,7 +229,7 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
     lines = [
         "# Run Report",
         "",
-        f"`{response.run_id}`",
+        f"`{_sanitize_freetext(response.run_id)}`",
         "",
         f"_generated {response.generated_at}_",
         "",
@@ -228,7 +277,7 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
         lines.append(
             f"- {_field_label(deviation.field)} actual={deviation.actual} "
             f"reference=[{deviation.reference_min}, {deviation.reference_max}] "
-            f"→ **{verdict_label}** _[{source_label}:{deviation.reference_id}]_"
+            f"→ **{verdict_label}** _[{source_label}:{_sanitize_freetext(deviation.reference_id)}]_"
         )
     lines.append("")
 
@@ -270,7 +319,7 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
             lines.append(
                 f"- Surrogate fine-tune suggestion: {len(package.surrogate_update.recommended_training_samples)} "
                 f"recommended sample(s), hyperparameter direction: "
-                f"{package.surrogate_update.hyperparameter_direction}"
+                f"{_sanitize_freetext(package.surrogate_update.hyperparameter_direction)}"
             )
         lines.append(f"- KG candidates proposed: {len(package.kg_candidates)}")
     lines.append("")
@@ -280,9 +329,11 @@ def _render_markdown(response: ReportResponse, request: ReportRequest) -> str:
         lines.append("(no literature sources cited — this run used no priors)")
     for source in response.citations:
         if source.type == "paper":
-            lines.append(f"- {source.doi}" + (f" ({source.span})" if source.span else ""))
+            doi = _sanitize_freetext(source.doi)
+            span = f" ({_sanitize_freetext(source.span)})" if source.span else ""
+            lines.append(f"- {doi}" + span)
         else:
-            lines.append(f"- KG triple `{source.triple_id}`")
+            lines.append(f"- KG triple `{_sanitize_freetext(source.triple_id)}`")
     lines.append("")
 
     return "\n".join(lines)
@@ -350,12 +401,34 @@ _PDF_STYLE = f"""
 
 
 def _escape_tag_open(markdown_text: str) -> str:
-    """Neutralizes only "&" and "<" — the two characters a parser actually
-    needs to recognize a live HTML tag (an opening "<") or to be tricked
-    by a double-decode ("&amp;lt;..."). This is the real fix for the SSRF
-    described in render_pdf's docstring: "<" -> "&lt;" means
-    '<img src="...">' can never form a real tag, regardless of what
-    follows.
+    """Neutralizes "&", "<", and Markdown's own image syntax ("![") — the
+    ways a live, resource-fetching tag can reach the HTML this renderer
+    hands to xhtml2pdf.
+
+    "&"/"<" close the raw-HTML route: a parser needs a literal "<" to
+    recognize an opening tag (or a double-decode via "&amp;lt;..."), so
+    "<" -> "&lt;" means '<img src="...">' typed directly into a free-text
+    field can never form a real tag, regardless of what follows.
+
+    2026-08-17 adversarial-review follow-up: that alone was not the whole
+    fix. This function only ever ran on the Markdown *source* before
+    handing it to `markdown.markdown()` — but Markdown's own image syntax,
+    `![alt](url)`, needs no raw "<" anywhere in the source at all, and
+    `markdown.markdown()` happily expands it into a real, live
+    `<img src="url">` *after* this escaping already ran. Confirmed live
+    against a local HTTP listener: an anomaly evidence `reason` of
+    "![x](http://<attacker-host>/probe)" (no literal "<" or "&" involved)
+    produced a genuine outbound GET during `render_pdf()` — the exact SSRF
+    this function exists to close, just reached through the syntax layer
+    instead of the character layer. "![" -> "!\\[" (a backslash-escaped
+    "[", standard CommonMark syntax for a literal "[") stops
+    `markdown.markdown()` from ever recognizing an image start, in both
+    inline `![alt](url)` and reference-style `![alt][ref]` forms (both
+    require "![" specifically) — the visible text still contains a literal
+    "![...]" rather than vanishing or being misread as something else.
+    Plain links, `[text](url)`, are left alone: unlike an image, a PDF
+    renderer never fetches a link's target server-side, only an image's,
+    so there's no equivalent SSRF via "[" alone.
 
     Deliberately narrower than `html.escape()`, which also escapes ">",
     '"', and "'" — confirmed live that escaping ">" breaks Markdown's own
@@ -368,7 +441,11 @@ def _escape_tag_open(markdown_text: str) -> str:
     leaving them unescaped doesn't reopen the SSRF — confirmed live
     against the original payload with this narrower escape.
     """
-    return markdown_text.replace("&", "&amp;").replace("<", "&lt;")
+    return (
+        markdown_text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace("![", "!\\[")
+    )
 
 
 def render_pdf(markdown_text: str) -> bytes:

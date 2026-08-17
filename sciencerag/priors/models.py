@@ -2,7 +2,9 @@
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from sciencerag.common.validators import reject_non_finite_optional
 
 
 class TaskContext(BaseModel):
@@ -13,7 +15,16 @@ class TaskContext(BaseModel):
 class PriorsRequest(BaseModel):
     query: str
     task_context: TaskContext = Field(default_factory=TaskContext)
-    max_priors: int = Field(default=5, ge=1)
+    # Raised from 5 (2026-08-17): real audit-log data (975 real requests)
+    # showed 99.7% of callers never override the default, so the default is
+    # the only lever that actually changes behavior — and 12 matches the
+    # true ceiling (contract.GEOMETRY_FREE_NAMES has 12 fields; recurring
+    # real broad queries topped out at 7-8 before being truncated). Costs
+    # nothing for the ~96% of narrow (0-1 field) queries that never
+    # approach the cap either way — max_priors only trims the already-
+    # extracted result, it never changes what extract_priors drafts or how
+    # many LLM calls that costs (see retrieval.py's _cap_priors).
+    max_priors: int = Field(default=12, ge=1)
     allow_external: bool = False
 
 
@@ -38,6 +49,10 @@ class ParameterRangeValue(BaseModel):
     typical: float | None = None
     unit: str
     conditions: dict[str, str | float] = Field(default_factory=dict)
+
+    _validate_min = field_validator("min")(reject_non_finite_optional)
+    _validate_max = field_validator("max")(reject_non_finite_optional)
+    _validate_typical = field_validator("typical")(reject_non_finite_optional)
 
     @model_validator(mode="after")
     def _at_least_one_number(self) -> "ParameterRangeValue":
@@ -89,12 +104,51 @@ class CautionValue(BaseModel):
     applicability_scope: str | None = None
 
 
+class RankedCandidateEntry(BaseModel):
+    # Absolute rank within the full KG population (kg.KGRankingResult.
+    # ranked), not within this list — can have gaps when some ranked
+    # entities were filtered out of `candidates` (e.g. fewer than 2 real
+    # contract parameters, see _kg_priors_from_group), which is meant to be
+    # visible rather than silently renumbered away.
+    rank: int = Field(ge=1)
+    parameters: dict[str, str | float]
+    reported_performance: dict[str, str | float] = Field(default_factory=dict)
+    triple_ids: list[str] = Field(min_length=1)
+
+
+class RankedCandidateSetValue(BaseModel):
+    """One superlative-ranked KG query's full result, e.g. "哪个设计最优电流最大"
+    against 5 simulated designs — kept as ONE prior instead of 5 separate
+    candidate_config priors that would otherwise all compete individually
+    for the same max_priors budget, even though they answer a single
+    question (spec discussion 2026-08-17: 5 candidates answering the same
+    question are one finding, not five)."""
+
+    relation: str
+    relation_description: str | None = None
+    direction: Literal["max", "min"]
+    # The true population size from kg.KGRankingResult.total_candidates —
+    # can exceed len(candidates) when some ranked entities didn't produce a
+    # usable Prior (see RankedCandidateEntry.rank's docstring); reported
+    # as-is rather than silently narrowed to match, so a reader can tell
+    # candidates were dropped.
+    total_candidates: int = Field(ge=1)
+    candidates: list[RankedCandidateEntry]
+
+    @model_validator(mode="after")
+    def _min_two_candidates(self) -> "RankedCandidateSetValue":
+        if len(self.candidates) < 2:
+            raise ValueError("ranked_candidate_set needs >= 2 candidates (else it's just a candidate_config)")
+        return self
+
+
 _VALUE_MODEL_BY_KIND: dict[str, type[BaseModel]] = {
     "parameter_range": ParameterRangeValue,
     "material_property": MaterialPropertyValue,
     "scaling_relationship": ScalingRelationshipValue,
     "candidate_config": CandidateConfigValue,
     "caution": CautionValue,
+    "ranked_candidate_set": RankedCandidateSetValue,
 }
 
 
@@ -106,6 +160,7 @@ class Prior(BaseModel):
         "scaling_relationship",
         "candidate_config",
         "caution",
+        "ranked_candidate_set",
     ]
     # Single-parameter priors (parameter_range/caution) use `field`;
     # relationships spanning multiple contract parameters
@@ -122,6 +177,7 @@ class Prior(BaseModel):
         | ScalingRelationshipValue
         | CandidateConfigValue
         | CautionValue
+        | RankedCandidateSetValue
     )
     confidence: float = Field(ge=0, le=1)
     sources: list[Source] = Field(min_length=1)
@@ -176,6 +232,13 @@ class Prior(BaseModel):
             if value_fields != set(self.related_fields):
                 raise ValueError(
                     f"candidate_config value.parameters keys={sorted(value_fields)} must "
+                    f"match prior.related_fields={sorted(self.related_fields)}"
+                )
+        elif isinstance(self.value, RankedCandidateSetValue):
+            value_fields = {name for entry in self.value.candidates for name in entry.parameters}
+            if value_fields != set(self.related_fields):
+                raise ValueError(
+                    f"ranked_candidate_set candidates' parameters keys={sorted(value_fields)} must "
                     f"match prior.related_fields={sorted(self.related_fields)}"
                 )
         return self

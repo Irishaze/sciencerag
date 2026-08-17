@@ -8,7 +8,7 @@ does — same source attribution, same audit logging, same add_triple() call.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from sciencerag.common.audit import log_audit_entry
 from sciencerag.common.trace import new_trace_id
@@ -28,6 +28,40 @@ def source_for(candidate: KGCandidate) -> KGSource:
     return KGSource(type="run", run_id=candidate.run_id)
 
 
+def _evidence_detail_for(candidate: KGCandidate) -> dict[str, Any] | None:
+    """Simulation-derived candidates (kg_candidates.py) carry their
+    confidence backing under supporting_evidence["deviation_detail"] — pass
+    that straight through, unchanged from before.
+
+    Literature-derived candidates with a real DOI (source_for() above
+    attributes them to KGSource(type="paper", doi=...)) already have real
+    traceability — nothing extra needed here.
+
+    But when a literature-derived candidate has NO usable DOI (the
+    underlying corpus evidence's own metadata lacks one — a real, observed
+    corpus data-quality gap, not something this function can fix), source_for()
+    degrades to KGSource(type="run", run_id=...), an opaque internal id that
+    means nothing to anyone without archaeology through old audit logs.
+    Confirmed live 2026-08-17: a literature_range_leg_length triple ended up
+    with evidence_detail=None AND a doi-less run-only source — completely
+    unrecoverable provenance, even though the original Prior's `notes` (the
+    paper title, per extract.py's fallback — see its _to_prior docstring)
+    was sitting right there in supporting_evidence and got silently
+    discarded. Carrying that forward doesn't fix the missing-DOI corpus gap,
+    but stops throwing away the one piece of provenance still available."""
+    deviation_detail = candidate.supporting_evidence.get("deviation_detail")
+    if deviation_detail is not None:
+        return deviation_detail
+    if candidate.supporting_evidence.get("source_doi"):
+        return None
+    fallback = {
+        key: value
+        for key, value in candidate.supporting_evidence.items()
+        if key in ("notes", "prior_id", "prior_kind") and value
+    }
+    return fallback or None
+
+
 def approve_candidate(
     candidate: KGCandidate, operator: str, reason: str
 ) -> tuple[KGTriple, Literal["added", "merged", "conflict"]]:
@@ -44,7 +78,7 @@ def approve_candidate(
         object_entity_label=candidate.object_entity_label,
         object_entity_type=candidate.object_entity_type,
         relation_description=candidate.relation_description,
-        evidence_detail=candidate.supporting_evidence.get("deviation_detail"),
+        evidence_detail=_evidence_detail_for(candidate),
         conditions=candidate.conditions,
         confidence=candidate.confidence,
         run_id=candidate.run_id,

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import type { Subgraph, SubgraphEdge } from "../types";
 
@@ -215,6 +215,25 @@ export function GraphView({ subgraph, height = 340, emptyMessage }: Props) {
                 <dd>{selectedEdge.confidence.toFixed(2)}</dd>
                 <dt>triple_id</dt>
                 <dd className="mono">{selectedEdge.triple_id}</dd>
+                {Object.keys(selectedEdge.conditions).length > 0 && (
+                  <>
+                    <dt>测量条件</dt>
+                    <dd className="mono">
+                      {Object.entries(selectedEdge.conditions)
+                        .map(([key, value]) => `${key}=${value}`)
+                        .join("，")}
+                    </dd>
+                  </>
+                )}
+                {selectedEdge.evidence_detail &&
+                  Object.entries(selectedEdge.evidence_detail).map(([key, value]) =>
+                    value === null || value === undefined ? null : (
+                      <Fragment key={key}>
+                        <dt>{key}</dt>
+                        <dd>{String(value)}</dd>
+                      </Fragment>
+                    )
+                  )}
               </dl>
             </details>
           </>

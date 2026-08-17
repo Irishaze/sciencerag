@@ -30,6 +30,14 @@ export type SubgraphEdge = {
   // (see sciencerag/priors/kg.py:KGTriple.conflicts_with) — null when this
   // edge doesn't conflict with anything currently in the graph.
   conflicts_with: string | null;
+  // What this reading was measured/reported under (e.g. n_pairs for a
+  // literature-range claim, full geometry for a simulation-derived fact).
+  // {} for structural link edges (SIMULATION_USES_*).
+  conditions: Record<string, number>;
+  // Free-form backing detail: benchmark verdict/deviation for simulation-
+  // derived facts, or extraction method/notes for literature-derived ones.
+  // null when nothing was ever recorded.
+  evidence_detail: Record<string, unknown> | null;
 };
 export type Subgraph = { nodes: SubgraphNode[]; edges: SubgraphEdge[] };
 

@@ -1,10 +1,26 @@
 """Unit tests for sciencerag/validate/literature_seeding.py — converting
 literature Priors into knowledge-graph candidates (the spec's "cold-start
-seeding" mechanism). Pure conversion logic, no retrieval/LLM calls."""
+seeding" mechanism)."""
+
+import pytest
 
 from sciencerag.priors.kg import compute_entity_id
 from sciencerag.priors.models import Prior, SourcePaper
+from sciencerag.validate import literature_seeding as literature_seeding_module
 from sciencerag.validate.literature_seeding import prior_to_kg_candidates
+
+
+@pytest.fixture(autouse=True)
+def _no_ontology_by_default(monkeypatch):
+    # Same regression class as tests/test_validate_m3.py's fixture of the
+    # same name (2026-08-11 incident): once a real data/kg/ontology.json
+    # exists on disk, prior_to_kg_candidates() started making real
+    # describe_relation LLM calls on every test run (2026-08-17, when this
+    # module started calling it at all — see literature_seeding.py's module
+    # docstring). Default to the cold-start "no ontology yet" path so these
+    # stay free/fast; tests that want the ontology-present path override
+    # this with their own explicit (still-mocked) monkeypatch.
+    monkeypatch.setattr(literature_seeding_module, "load_ontology", lambda: None)
 
 
 def _prior(kind: str, value: dict, **overrides) -> Prior:
@@ -48,6 +64,49 @@ def test_parameter_range_becomes_numeric_candidate():
     assert c.object_entity_id is None
     assert c.entity_type == "TECDesign"
     assert c.supporting_evidence["source_doi"] == "10.1/fake"
+
+
+def test_parameter_range_preserves_numeric_conditions_filters_non_numeric():
+    # Regression for a real gap (2026-08-17): conditions used to be
+    # hardcoded to {} here, discarding whatever real context the LLM
+    # extracted (e.g. "at 0.7A applied current") — which collapsed every
+    # literature fact about a field onto the SAME entity_id regardless of
+    # what circumstance it was reported under (compute_entity_id hashes
+    # (subject, conditions)), so unrelated claims looked like they were
+    # agreeing/conflicting with each other.
+    prior = _prior(
+        "parameter_range",
+        {
+            "field_name": "leg_length",
+            "typical": 7.0,
+            "unit": "mm",
+            "conditions": {"applied_current_A": 0.7, "material_state": "annealed"},
+        },
+    )
+    candidates = prior_to_kg_candidates(prior)
+    # numeric kept, non-numeric (str) dropped — KGCandidate.conditions is
+    # dict[str, float] only.
+    assert candidates[0].conditions == {"applied_current_A": 0.7}
+
+
+def test_parameter_range_gets_relation_description_when_ontology_present(monkeypatch):
+    monkeypatch.setattr(literature_seeding_module, "load_ontology", lambda: object())
+    monkeypatch.setattr(literature_seeding_module, "describe_relation", lambda relation, ontology: "腿长文献范围")
+    prior = _prior("parameter_range", {"field_name": "leg_length", "typical": 0.8, "unit": "mm"})
+    candidates = prior_to_kg_candidates(prior)
+    assert candidates[0].relation_description == "腿长文献范围"
+
+
+def test_relation_description_failure_degrades_to_none_not_a_crash(monkeypatch):
+    monkeypatch.setattr(literature_seeding_module, "load_ontology", lambda: object())
+
+    def _boom(relation, ontology):
+        raise RuntimeError("network hiccup")
+
+    monkeypatch.setattr(literature_seeding_module, "describe_relation", _boom)
+    prior = _prior("parameter_range", {"field_name": "leg_length", "typical": 0.8, "unit": "mm"})
+    candidates = prior_to_kg_candidates(prior)
+    assert candidates[0].relation_description is None
 
 
 def test_parameter_range_falls_back_to_min_max_midpoint():

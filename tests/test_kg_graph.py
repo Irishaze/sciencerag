@@ -5,6 +5,7 @@ on the real data/kg/graph.json.
 
 import json
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,6 +16,24 @@ def _reset_graph_path(tmp_path, monkeypatch):
     path = tmp_path / "graph.json"
     monkeypatch.setattr(kg, "GRAPH_PATH", path)
     return path
+
+
+def _fake_llm_response(content: str):
+    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+
+
+def _stub_ranking_classification(monkeypatch, is_ranking, relation=None, direction=None):
+    """rank_kg_entities now decides ranking intent + field via one LLM call
+    (sciencerag.priors.kg._classify_ranking_query) instead of the old
+    keyword word-list — these tests stub that call so they stay fast/free
+    and exercise this module's own sort/grouping logic, not real model
+    behavior."""
+    payload = json.dumps({"is_ranking": is_ranking, "direction": direction, "relation": relation})
+
+    def fake_completion(*args, **kwargs):
+        return _fake_llm_response(payload)
+
+    monkeypatch.setattr(kg.litellm, "completion", fake_completion)
 
 
 def test_empty_graph_returns_no_hits(tmp_path, monkeypatch):
@@ -65,6 +84,68 @@ def test_matching_value_merges_and_appends_run_id(tmp_path, monkeypatch):
     assert second.triple_id == first.triple_id
     assert set(second.run_ids) == {"run_1", "run_2"}
     assert len(kg._load_triples()) == 1
+
+
+def test_merge_upgrades_confidence_when_new_evidence_is_stronger(tmp_path, monkeypatch):
+    # Regression for a real gap: the first run to write a triple can land
+    # via kg_candidates.py's flat fallback (no matching benchmark case that
+    # day), and every later run that re-confirms the same fact with a real
+    # per-field deviation behind it used to be silently discarded — the
+    # triple stayed frozen at its first, weaker confidence forever.
+    _reset_graph_path(tmp_path, monkeypatch)
+    first, _ = kg.add_triple(
+        subject="Bi2Te3 single-stage TEC",
+        relation="achieves_delta_T_max_K",
+        object_value=71.7,
+        object_unit="K",
+        conditions={"leg_length": 0.8},
+        confidence=0.7,  # flat-fallback value, no evidence_detail
+        run_id="run_1",
+        sources=[],
+    )
+    assert first.evidence_detail is None
+    second, status = kg.add_triple(
+        subject="Bi2Te3 single-stage TEC",
+        relation="achieves_delta_T_max_K",
+        object_value=71.8,  # within 2% tolerance of 71.7
+        object_unit="K",
+        conditions={"leg_length": 0.8},
+        confidence=0.85,  # stronger: real per-field deviation this time
+        run_id="run_2",
+        sources=[],
+        evidence_detail={"verdict": "consistent", "relative_deviation": 0.01, "benchmark_case_id": "bench_1"},
+    )
+    assert status == "merged"
+    assert second.confidence == 0.85
+    assert second.evidence_detail == {"verdict": "consistent", "relative_deviation": 0.01, "benchmark_case_id": "bench_1"}
+
+
+def test_merge_does_not_downgrade_confidence_when_new_evidence_is_weaker(tmp_path, monkeypatch):
+    _reset_graph_path(tmp_path, monkeypatch)
+    kg.add_triple(
+        subject="Bi2Te3 single-stage TEC",
+        relation="achieves_delta_T_max_K",
+        object_value=71.7,
+        object_unit="K",
+        conditions={"leg_length": 0.8},
+        confidence=0.85,
+        run_id="run_1",
+        sources=[],
+        evidence_detail={"verdict": "consistent", "relative_deviation": 0.01, "benchmark_case_id": "bench_1"},
+    )
+    second, status = kg.add_triple(
+        subject="Bi2Te3 single-stage TEC",
+        relation="achieves_delta_T_max_K",
+        object_value=71.8,
+        object_unit="K",
+        conditions={"leg_length": 0.8},
+        confidence=0.5,  # weaker — must not overwrite the stronger evidence already stored
+        run_id="run_2",
+        sources=[],
+    )
+    assert status == "merged"
+    assert second.confidence == 0.85
+    assert second.evidence_detail == {"verdict": "consistent", "relative_deviation": 0.01, "benchmark_case_id": "bench_1"}
 
 
 def test_conflicting_value_is_flagged_not_overwritten(tmp_path, monkeypatch):
@@ -433,9 +514,10 @@ def _add_design(subject_leg_length, delta_t, relation_description="最大温差"
     )
 
 
-def test_no_superlative_word_returns_no_ranking(tmp_path, monkeypatch):
+def test_no_ranking_signal_returns_no_ranking(tmp_path, monkeypatch):
     _reset_graph_path(tmp_path, monkeypatch)
     _add_design(0.8, 71.7)
+    _stub_ranking_classification(monkeypatch, is_ranking=False)
     assert kg.rank_kg_entities("温差是多少") is None
 
 
@@ -450,6 +532,9 @@ def test_rank_kg_entities_sorts_by_value_max(tmp_path, monkeypatch):
     low, _ = _add_design(0.5, 58.2)
     high, _ = _add_design(0.8, 81.5)
     mid, _ = _add_design(0.65, 65.4)
+    _stub_ranking_classification(
+        monkeypatch, is_ranking=True, relation="achieves_delta_T_max_K", direction="max"
+    )
     result = kg.rank_kg_entities("哪个设计的最大温差最高", top_k=2)
     assert result is not None
     assert result.relation == "achieves_delta_T_max_K"
@@ -463,6 +548,9 @@ def test_rank_kg_entities_sorts_by_value_min(tmp_path, monkeypatch):
     _reset_graph_path(tmp_path, monkeypatch)
     low, _ = _add_design(0.5, 58.2)
     high, _ = _add_design(0.8, 81.5)
+    _stub_ranking_classification(
+        monkeypatch, is_ranking=True, relation="achieves_delta_T_max_K", direction="min"
+    )
     result = kg.rank_kg_entities("最低温差是多少", top_k=1)
     assert result is not None
     assert result.direction == "min"
@@ -470,12 +558,11 @@ def test_rank_kg_entities_sorts_by_value_min(tmp_path, monkeypatch):
     assert result.ranked[0].value == 58.2
 
 
-def test_rank_kg_entities_field_selection_ignores_superlative_word_itself(tmp_path, monkeypatch):
-    # The field is chosen by non-superlative content-word overlap
-    # ("电流"), not by the superlative word matching relation_description
-    # literally — confirms detect_ranking_direction and field selection
-    # are decoupled, so "最高"/"最大"/"最优" are interchangeable triggers
-    # regardless of which one the stored relation_description happens to use.
+def test_rank_kg_entities_relation_from_classification(tmp_path, monkeypatch):
+    # The field comes straight from the classifier's `relation`, not from
+    # any text-overlap heuristic — confirms rank_kg_entities trusts the
+    # classification's field choice directly, regardless of what the
+    # stored relation_description happens to say.
     _reset_graph_path(tmp_path, monkeypatch)
     kg.add_triple(
         subject="Bi2Te3 single-stage TEC",
@@ -486,16 +573,42 @@ def test_rank_kg_entities_field_selection_ignores_superlative_word_itself(tmp_pa
         confidence=0.7,
         run_id="run_1",
         sources=[],
-        relation_description="最优电流",  # note: says "最优", not "最高"
+        relation_description="最优电流",
+    )
+    _stub_ranking_classification(
+        monkeypatch, is_ranking=True, relation="achieves_optimal_current_A", direction="max"
     )
     result = kg.rank_kg_entities("最高电流是多少")
     assert result is not None
     assert result.relation == "achieves_optimal_current_A"
 
 
+def test_rank_kg_entities_rejects_relation_outside_candidate_set(tmp_path, monkeypatch):
+    # A classification naming a relation that doesn't exist in the graph
+    # (hallucination, or a stale answer) must degrade to no-ranking, not
+    # raise or silently rank an empty/wrong set.
+    _reset_graph_path(tmp_path, monkeypatch)
+    _add_design(0.8, 71.7)
+    _stub_ranking_classification(
+        monkeypatch, is_ranking=True, relation="does_not_exist", direction="max"
+    )
+    assert kg.rank_kg_entities("最高温差是多少") is None
+
+
 def test_rank_kg_entities_empty_graph_returns_none(tmp_path, monkeypatch):
     _reset_graph_path(tmp_path, monkeypatch)
     assert kg.rank_kg_entities("最优电流是多少") is None
+
+
+def test_classify_ranking_query_best_effort_on_llm_failure(tmp_path, monkeypatch):
+    _reset_graph_path(tmp_path, monkeypatch)
+    _add_design(0.8, 71.7)
+
+    def fake_completion(*args, **kwargs):
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(kg.litellm, "completion", fake_completion)
+    assert kg.rank_kg_entities("最高温差是多少") is None
 
 
 def test_backfill_entity_fields_migrates_legacy_records(tmp_path, monkeypatch):

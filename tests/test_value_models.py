@@ -50,6 +50,24 @@ def test_parameter_range_value_requires_unit():
         ParameterRangeValue(field_name="leg_length", typical=0.06)
 
 
+@pytest.mark.parametrize("field", ["min", "max", "typical"])
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_parameter_range_value_rejects_non_finite_bounds(field: str, bad: float) -> None:
+    """Adversarial test: min/max/typical are plain `float | None`, so
+    Pydantic accepts NaN/Infinity by default — unlike ValidateRequest's
+    design_parameters/scalar_results/latent_state, which already reject
+    non-finite values via reject_non_finite_values/_list. Confirmed live
+    that this specific gap let a client-supplied parameter_range prior
+    (priors are passed in-band to /sciencerag/validate, not resolved from a
+    trusted store) with min=-inf/max=inf force evaluation.py's
+    `actual < min` / `actual > max` checks to always be False — any finite
+    `actual` is trivially not less than -inf or greater than +inf — turning
+    a wildly out-of-range design_parameters value into a forged
+    verdict="within_range"/"consistent" at HTTP 200."""
+    with pytest.raises(ValidationError, match="non-finite value is not allowed"):
+        ParameterRangeValue(field_name="leg_length", unit="mm", **{field: bad})
+
+
 # -- MaterialPropertyValue -------------------------------------------------
 
 

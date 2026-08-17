@@ -12,10 +12,14 @@ would make 4.4 almost always empty in practice.
 
 from __future__ import annotations
 
+import logging
+
 from sciencerag.priors.kg import DEFAULT_ENTITY_TYPE, compute_entity_id, query_kg
 from sciencerag.priors.ontology_generator import classify_relation, describe_relation, load_ontology
 from sciencerag.validate import tec_bridge
 from sciencerag.validate.models import Evaluation, KGCandidate, ValidateRequest
+
+logger = logging.getLogger(__name__)
 
 # insufficient_benchmark has no per-field deviation to grade against (no
 # matching benchmark case at all — see evaluation.py's _benchmark_deviations)
@@ -166,13 +170,50 @@ def extract_kg_candidates(
 
     candidates = []
     for field, value in request.scalar_results.items():
+        # scalar_results is caller-supplied with no fixed vocabulary at the
+        # schema level (unlike design_parameters, which _find_matching_
+        # benchmark_case/​_benchmark_deviations already silently skip
+        # unrecognized keys for) — confirmed live that an unrecognized field
+        # name here still turned into a real "achieves_<field>" KGCandidate,
+        # auto-classified by the ontology LLM and auto-queued to data/
+        # kg_candidates/pending/ for human approval, with nothing upstream
+        # ever checking it against a known scalar name. Match evaluation.py's
+        # existing precedent of quietly skipping fields outside the known
+        # contract instead of fabricating a candidate for them.
+        if field not in tec_bridge.SCALAR_NAMES:
+            continue
         relation = f"achieves_{field}"
         hits = query_kg(f"{SUBJECT} {relation}")
         dedup_status = "new"
         if any(hit.relevance >= _DUPLICATE_RELEVANCE_THRESHOLD for hit in hits):
             dedup_status = "duplicate_confirmed"
-        entity_type = classify_relation(relation, ontology) if ontology else DEFAULT_ENTITY_TYPE
-        relation_description = describe_relation(relation, ontology) if ontology else None
+        # classify_relation/describe_relation are real synchronous LLM calls
+        # (litellm.completion, timeout=90s — already longer alone than this
+        # endpoint's own 60s LATENCY_TARGET_SECONDS) whenever `relation`
+        # isn't already in their on-disk cache — reachable the moment
+        # data/kg/ontology.json exists (confirmed live: this test file's own
+        # fixture monkeypatches load_ontology to None specifically to avoid
+        # triggering them). Unlike the `ontology` is None branch just above
+        # (a deliberate, already-handled fallback), a network hiccup here
+        # was uncaught: it propagated out of extract_kg_candidates, through
+        # post_validate's blanket except, and turned an otherwise fully-
+        # computed, correct anomalies/evaluation result into a 502 — the
+        # exact "best-effort side-effect must not sink the main response"
+        # failure already fixed for store_report, priors' external
+        # augmentation, and store_pending_candidates a few lines below this
+        # function's own caller, just missed here.
+        entity_type, relation_description = DEFAULT_ENTITY_TYPE, None
+        if ontology:
+            try:
+                entity_type = classify_relation(relation, ontology)
+                relation_description = describe_relation(relation, ontology)
+            except Exception as e:  # noqa: BLE001 - see comment above
+                logger.warning(
+                    "KG relation classification/description failed for %r, "
+                    "falling back to defaults: %s",
+                    relation,
+                    e,
+                )
         confidence = (
             _consistent_confidence(evaluation, field)
             if evaluation.verdict == "consistent"

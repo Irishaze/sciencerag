@@ -48,10 +48,12 @@ ScienceRAG 是一组供 Hermes 调用的服务端点(endpoint,即服务对外暴
     "objective": "maximize_cop",
     "constraints": {"heat_load_w": 5, "ambient_k": 300}
   },
-  "max_priors": 5,
+  "max_priors": 12,
   "allow_external": true
 }
 ```
+
+`max_priors` 默认值为 12(2026-08-17 从 5 上调,对齐 contract 12 个 geometry_free 参数的真实上限——见 §3.7 的 `_cap_priors`）：真实 audit log 显示 99.7% 的调用从不显式传这个字段,因此默认值本身是唯一真正生效的调节杠杆；同时它只裁剪 extract_priors 已经算出的结果,不影响抽取阶段的 LLM 调用次数,对占比 96%+ 的窄查询(只涉及 0-1 个 field)没有任何额外开销。
 
 响应:
 

@@ -4,19 +4,33 @@ graph candidates, for the spec's documented "cold-start acceleration
 先跑一个一次性批处理任务,让 LLM 通读内部论文库,把文献中的关键结论逐条抽取成
 三元组...流程完全复用4.4已定义的候选→审批→入库路径,不引入新机制").
 
-This module is pure conversion logic — no retrieval, no LLM calls, no graph
-writes. scripts/seed_kg_from_corpus.py drives it (calling the same
-priors-retrieval pipeline /sciencerag/priors uses, then this), and
-scripts/approve_kg_candidates.py is still the only thing that ever calls
-kg.add_triple() — the human-approval gate is untouched by this feature,
-same as every other source of KGCandidate.
+No retrieval, no graph writes — scripts/seed_kg_from_corpus.py drives it
+(calling the same priors-retrieval pipeline /sciencerag/priors uses, then
+this), and scripts/approve_kg_candidates.py is still the only thing that
+ever calls kg.add_triple() — the human-approval gate is untouched by this
+feature, same as every other source of KGCandidate.
+
+Does make real (cached) LLM calls now (2026-08-17, describe_relation below)
+— this module used to be pure conversion logic, but that left every
+literature-seeded triple with no relation_description at all, which is the
+ONLY Chinese-language content a triple can carry (kg.py's _render_text
+docstring) — a real, reproduced bug: query_kg_entities("腿长") returned 0
+hits against a graph that genuinely had a leg_length literature value in
+it, while query_kg_entities("leg length") returned 6, purely because
+kg_candidates.py (the simulation-result write path) already called
+describe_relation() and this path never did.
 """
 
 from __future__ import annotations
 
+import logging
+
 from sciencerag.priors.kg import compute_entity_id
 from sciencerag.priors.models import Prior
+from sciencerag.priors.ontology_generator import describe_relation, load_ontology
 from sciencerag.validate.models import KGCandidate
+
+logger = logging.getLogger(__name__)
 
 # Same fixed subject sciencerag/validate/kg_candidates.py uses for
 # simulation-derived candidates — a literature-sourced parameter_range
@@ -58,6 +72,41 @@ def _first_doi(prior: Prior) -> str | None:
         if doi:
             return doi
     return None
+
+
+def _numeric_conditions(conditions: dict[str, str | float]) -> dict[str, float]:
+    """ParameterRangeValue/MaterialPropertyValue.conditions is dict[str, str
+    | float] (extract.py lets the LLM note qualitative context too, e.g.
+    material_state="annealed") but KGCandidate.conditions is dict[str,
+    float] only (it feeds compute_entity_id, which needs to hash cleanly).
+    Real gap this closes (2026-08-17): this used to be discarded entirely
+    (every literature_range_* candidate got conditions={}), which collapsed
+    every literature fact about the same field onto ONE entity_id
+    regardless of what circumstance it was reported under — e.g. "leg
+    length at 0.7A applied current" and "leg length, no stated condition"
+    ended up hashed as the same claim, so kg.py's add_triple flagged them
+    as agreeing/conflicting with each other when they were actually
+    talking about two different things that were never comparable to begin
+    with. Keeping the real numeric conditions gives them distinct entity_ids
+    instead."""
+    return {k: v for k, v in conditions.items() if isinstance(v, (int, float))}
+
+
+def _relation_description_for(relation: str) -> str | None:
+    """Best-effort, matching kg_candidates.py's own defensive pattern for
+    the exact same real LLM call: a network hiccup here must degrade to no
+    description, never crash the whole seeding batch — this only ever runs
+    from scripts/seed_kg_from_corpus.py, not a request-serving hot path,
+    but the failure mode (and the cache load_ontology()/describe_relation()
+    already do) is identical."""
+    ontology = load_ontology()
+    if not ontology:
+        return None
+    try:
+        return describe_relation(relation, ontology)
+    except Exception as e:  # noqa: BLE001 - see docstring
+        logger.warning("describe_relation failed for %r, leaving relation_description unset: %s", relation, e)
+        return None
 
 
 def _supporting_evidence(prior: Prior) -> dict:
@@ -102,17 +151,19 @@ def prior_to_kg_candidates(prior: Prior) -> list[KGCandidate]:
             value = v.min if v.min is not None else v.max
         if value is None:
             return []
+        relation = f"literature_range_{v.field_name}"
         return [
             KGCandidate(
                 subject=_SUBJECT,
-                relation=f"literature_range_{v.field_name}",
+                relation=relation,
                 object_value=value,
                 object_unit=v.unit,
-                conditions={},
+                conditions=_numeric_conditions(v.conditions),
                 confidence=prior.confidence,
                 run_id=run_id,
                 dedup_status="new",
                 supporting_evidence=evidence,
+                relation_description=_relation_description_for(relation),
                 entity_type="TECDesign",
             )
         ]
@@ -121,17 +172,19 @@ def prior_to_kg_candidates(prior: Prior) -> list[KGCandidate]:
         v = prior.value
         if v.magnitude is None:
             return []
+        relation = f"literature_{v.property_name}"
         return [
             KGCandidate(
                 subject=v.material,
-                relation=f"literature_{v.property_name}",
+                relation=relation,
                 object_value=v.magnitude,
                 object_unit=v.unit,
-                conditions={},
+                conditions=_numeric_conditions(v.conditions),
                 confidence=prior.confidence,
                 run_id=run_id,
                 dedup_status="new",
                 supporting_evidence=evidence,
+                relation_description=_relation_description_for(relation),
                 entity_type="Material",
             )
         ]

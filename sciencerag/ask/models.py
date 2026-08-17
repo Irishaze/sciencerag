@@ -34,6 +34,18 @@ class SubgraphEdge(BaseModel):
     # entity_id+relation (kg.py's KGTriple.conflicts_with) — null when this
     # triple doesn't conflict with anything currently in the graph.
     conflicts_with: str | None = None
+    # What this specific reading was measured/reported under (e.g.
+    # n_pairs for a literature-range claim, full geometry for a
+    # simulation-derived achieves_* fact) — see kg.py's KGTriple.conditions.
+    # Empty for structural link triples (SIMULATION_USES_*), which carry no
+    # conditions of their own.
+    conditions: dict[str, float] = Field(default_factory=dict)
+    # Free-form backing detail — for simulation-derived facts this is the
+    # benchmark-comparison verdict/deviation (kg.py:117-125); for
+    # literature-derived facts this is the extraction method/notes
+    # (sciencerag/validate/kg_approval.py's DOI-less fallback shape). None
+    # when no such detail was ever recorded.
+    evidence_detail: dict | None = None
 
 
 class Subgraph(BaseModel):

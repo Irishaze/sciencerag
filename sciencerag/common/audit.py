@@ -7,11 +7,27 @@ tmp file via monkeypatch.
 """
 
 import json
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 AUDIT_LOG_PATH = Path("logs/audit.jsonl")
+
+# Every sciencerag route function is a plain `def`, so FastAPI/Starlette runs
+# each request in a real worker thread (not cooperatively) — concurrent
+# requests across ANY endpoint call this at the same time. A single f.write()
+# of a large entry (this app embeds the full request+output dumps; nothing
+# caps ValidateRequest.priors/design_parameters/scalar_results sizes) is only
+# guaranteed atomic by the OS up to a platform-specific limit; past that, two
+# interleaved writes can splice two entries into one line that no longer
+# parses as JSON, corrupting logs/audit.jsonl for every downstream reader
+# (regression tooling, loo_scalar_error_sweep.py-style sweeps, a human
+# tailing it). This only serializes writers within one process — a
+# multi-worker deployment (uvicorn --workers > 1) would still need a real
+# file lock (fcntl/flock), not covered here since nothing in this repo's
+# deployment config runs more than one worker today.
+_LOG_LOCK = threading.Lock()
 
 
 def log_audit_entry(
@@ -44,5 +60,6 @@ def log_audit_entry(
         # not a coverage shortfall) but logged here so it stays auditable.
         "filtered_material_count": filtered_material_count,
     }
-    with AUDIT_LOG_PATH.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    line = json.dumps(entry, ensure_ascii=False) + "\n"
+    with _LOG_LOCK, AUDIT_LOG_PATH.open("a", encoding="utf-8") as f:
+        f.write(line)

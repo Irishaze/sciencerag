@@ -26,8 +26,24 @@ class ReportRequest(BaseModel):
     # — see that field's docstring for why 500, not 20.
     n_pairs: int = Field(default=1, ge=1, le=500)
     scalar_results: dict[str, float] = Field(default_factory=dict)
-    priors: list[Prior] = Field(default_factory=list)
-    anomalies: list[Anomaly] = Field(default_factory=list)
+    # Capped to match ValidateRequest.priors (validate/models.py:57) — same
+    # field, same upstream shape, same reasoning.
+    priors: list[Prior] = Field(default_factory=list, max_length=64)
+    # 2026-08-17 adversarial-review finding: this had no cap at all, unlike
+    # every sibling list field in this API family (ValidateRequest.priors
+    # above, batch_evidence's candidates cap from the same review round).
+    # Only one check type exists today (Anomaly.check: Literal["ood"]), so
+    # a real caller submits at most a handful of these — but nothing
+    # server-side computes this list, it's raw client input straight into
+    # render_pdf()'s Markdown->HTML->PDF pipeline. Confirmed live: 8,000
+    # anomalies (a few-MB JSON body, trivial to construct) produced a 2MB
+    # Markdown document and took >10s of CPU in xhtml2pdf per render — and
+    # GET /sciencerag/reports/{stem}/pdf re-renders from scratch on every
+    # call (see router.py's docstring), so one such report, generated
+    # once, lets any caller repeatedly trigger that cost for free. 200
+    # keeps real multi-anomaly runs unconstrained in practice while
+    # bounding the render cost of a single request.
+    anomalies: list[Anomaly] = Field(default_factory=list, max_length=200)
     evaluation: Evaluation
     update_package: UpdatePackage
 

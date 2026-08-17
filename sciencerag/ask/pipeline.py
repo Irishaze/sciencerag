@@ -179,8 +179,9 @@ def answer_question(question: str, max_hits: int = 10) -> dict:
     # result can legitimately have low text-relevance (its subject/
     # conditions may share few keywords with the query) while still being
     # exactly the entity the ranking asked for — text-overlap and
-    # "is this the right answer" are different questions once an explicit
-    # superlative word is present (see detect_ranking_direction).
+    # "is this the right answer" are different questions once the query is
+    # classified as a ranking/comparison question (see
+    # sciencerag.priors.kg._classify_ranking_query).
     ranking = rank_kg_entities(question)
 
     if strong_groups or ranking:

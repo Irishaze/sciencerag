@@ -50,7 +50,11 @@ class ValidateRequest(BaseModel):
     prior_ids: list[str] = Field(default_factory=list)
     # The actual Prior objects used in planning this run, passed in-band
     # since validate has no priors store to resolve prior_ids against.
-    priors: list[Prior] = Field(default_factory=list)
+    # max_length is a DoS/log-size guard, not a physics limit — /sciencerag/
+    # priors caps max_priors at 12 by default (its own real-usage ceiling,
+    # see PriorsRequest.max_priors), so 64 is already generous headroom for
+    # a caller combining several priors calls' worth of results into one run.
+    priors: list[Prior] = Field(default_factory=list, max_length=64)
 
     _validate_latent_state = field_validator("latent_state")(reject_non_finite_list)
 

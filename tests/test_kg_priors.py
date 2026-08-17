@@ -19,6 +19,37 @@ def _isolated_graph(tmp_path, monkeypatch):
     monkeypatch.setattr(kg, "GRAPH_PATH", tmp_path / "graph.json")
 
 
+# rank_kg_entities' ranking direction/field selection moved from pure
+# keyword matching to an LLM classification call (2026-08-17, kg.py's
+# _classify_ranking_query) — real classifier behavior is covered by
+# tests/test_kg_graph.py. These tests are about _kg_priors_for_query's
+# grouping/collapsing of KG hits into priors, not about the classifier
+# itself, so stub it with the same superlative-word logic the old
+# keyword-only detect_ranking_direction used: every test query below
+# either has zero or exactly one candidate relation, so field selection
+# never has to disambiguate between two real candidates.
+_TEST_SUPERLATIVE_MAX_WORDS = {"最优", "最好", "最高", "最大", "最强", "最佳"}
+_TEST_SUPERLATIVE_MIN_WORDS = {"最低", "最小", "最少", "最弱"}
+
+
+@pytest.fixture(autouse=True)
+def _stub_ranking_classifier(monkeypatch):
+    def fake_classify(query, candidates):
+        if not candidates:
+            return None
+        terms = kg._tokenize(query)
+        if terms & _TEST_SUPERLATIVE_MIN_WORDS:
+            direction = "min"
+        elif terms & _TEST_SUPERLATIVE_MAX_WORDS:
+            direction = "max"
+        else:
+            return None
+        relation, _ = max(candidates, key=lambda pair: len(terms & kg._tokenize(pair[1])))
+        return kg._RankingClassification(is_ranking=True, direction=direction, relation=relation)
+
+    monkeypatch.setattr(kg, "_classify_ranking_query", fake_classify)
+
+
 def _seed_design(*, subject="Bi2Te3 single-stage TEC", conditions, achieves, run_id="run_x"):
     """Writes one achieves_<field> triple per (field, value) pair in
     `achieves`, all sharing the same conditions -> same entity_id, the way
@@ -92,6 +123,28 @@ def test_literature_seeded_triple_becomes_parameter_range_prior():
     assert prior.value.typical == 2.75
     assert prior.value.unit == "mm"
     assert prior.sources[0].type == "kg_triple"
+
+
+def test_conflicting_literature_seeds_are_both_annotated_with_a_conflict_note():
+    # Regression for a real gap found 2026-08-17: kg.py's add_triple already
+    # detects disagreeing literature_range_* values for the same field and
+    # marks them via KGTriple.conflicts_with (spec §4.4) — but this function
+    # silently dropped that flag when building Priors, so two contradicting
+    # leg_length values (confirmed live: 7.0mm vs 2.75mm, from data/kg/
+    # graph.json) came back as two ordinary-looking parameter_range priors
+    # with nothing hinting they're a known disagreement, not independent
+    # corroboration.
+    _seed_literature_range("leg_length", typical=7.0, unit="mm", doi=None)
+    _seed_literature_range("leg_length", typical=2.75, unit="mm", doi="10.1/other")
+
+    priors = retrieval._kg_priors_for_query("leg_length range")
+
+    assert len(priors) == 2
+    by_value = {p.value.typical: p for p in priors}
+    assert "2.75mm" in by_value[7.0].notes
+    assert "冲突" in by_value[7.0].notes
+    assert "7.0mm" in by_value[2.75].notes
+    assert "冲突" in by_value[2.75].notes
 
 
 def test_literature_seeded_triple_without_unit_is_skipped():
@@ -182,9 +235,9 @@ def test_ranking_notes_survive_the_full_build_priors_response_pipeline(monkeypat
     # before ranking annotation existed. Once ranking was added to
     # _kg_priors_for_query, the inlined copy silently never got it — unit
     # tests calling _kg_priors_for_query directly (see
-    # test_ranking_signal_reorders_and_annotates_kg_priors below) kept
-    # passing, but a real request through build_priors_response (the actual
-    # production entry point) returned KG priors with no rank in `notes` at
+    # test_ranking_signal_collapses_kg_priors_into_one_ranked_set below)
+    # kept passing, but a real request through build_priors_response (the
+    # actual production entry point) returned KG priors with no rank at
     # all. Must be exercised through the real entry point, not just the
     # helper function, to actually catch this class of drift.
     _seed_design(
@@ -210,17 +263,29 @@ def test_ranking_notes_survive_the_full_build_priors_response_pipeline(monkeypat
 
     response, _ = retrieval.build_priors_response("Bi2Te3单级热电制冷器的最优电流是多少")
 
-    assert len(response.priors) == 2
-    assert all(p.notes and "排序" in p.notes for p in response.priors), [p.notes for p in response.priors]
+    # 2 ranked designs collapse into 1 ranked_candidate_set prior (2026-08-17
+    # design change — see _kg_priors_for_query's docstring): rank info now
+    # lives in value.candidates, not in a per-prior `notes` string.
+    assert len(response.priors) == 1
+    prior = response.priors[0]
+    assert prior.kind == "ranked_candidate_set"
+    assert prior.notes and "排序" in prior.notes
+    assert [c.rank for c in prior.value.candidates] == [1, 2]
 
 
-def test_ranking_signal_reorders_and_annotates_kg_priors():
+def test_ranking_signal_collapses_kg_priors_into_one_ranked_set():
     # Regression for the 2026-08-14 finding: a superlative word ("最优")
     # used to be treated as a plain keyword here — every matching design
     # scored similar relevance and came back in an arbitrary order with no
     # indication of which one was actually "the" answer. Real repro:
     # "Bi2Te3单级热电制冷器的最优电流是多少" against 5 designs returned 5
     # different optimal_current_A values with nothing distinguishing them.
+    #
+    # 2026-08-17: those N separately-ranked candidate_config priors are now
+    # collapsed into ONE ranked_candidate_set prior instead (5 candidates
+    # answering the same question are one finding, not five — see
+    # _kg_priors_for_query's docstring) — this test now covers that
+    # collapsed shape rather than N annotated siblings.
     _seed_design(
         conditions={"leg_length": 0.5, "pitch": 0.2}, achieves={"optimal_current_A": 8.91}, run_id="r1"
     )
@@ -233,12 +298,18 @@ def test_ranking_signal_reorders_and_annotates_kg_priors():
 
     priors = retrieval._kg_priors_for_query("Bi2Te3单级热电制冷器的最优电流是多少")
 
-    assert len(priors) == 3
-    values = [p.value.reported_performance["optimal_current_A"] for p in priors]
+    assert len(priors) == 1
+    prior = priors[0]
+    assert prior.kind == "ranked_candidate_set"
+    assert prior.value.relation == "achieves_optimal_current_A"
+    assert prior.value.direction == "max"
+    assert prior.value.total_candidates == 3
+    values = [c.reported_performance["optimal_current_A"] for c in prior.value.candidates]
     assert values == [8.91, 6.48, 4.51]  # highest first, "最优/最高" -> max direction
-    assert "第1名，共3个候选" in priors[0].notes
-    assert "第2名，共3个候选" in priors[1].notes
-    assert "第3名，共3个候选" in priors[2].notes
+    assert [c.rank for c in prior.value.candidates] == [1, 2, 3]
+    assert set(prior.related_fields) == {"leg_length", "pitch"}
+    assert len(prior.sources) == 3
+    assert "共3个候选" in prior.notes
 
 
 def test_no_ranking_signal_leaves_kg_priors_unannotated():

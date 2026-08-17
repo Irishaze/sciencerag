@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 import jsonschema
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -434,6 +435,65 @@ def test_non_finite_latent_state_is_rejected() -> None:
         assert response.status_code == 422, f"latent_state containing {bad} should be rejected"
 
 
+def test_prior_with_infinite_bounds_is_rejected() -> None:
+    """Adversarial test, confirmed live before the fix: a parameter_range
+    prior's min/max weren't covered by reject_non_finite_values/_list (those
+    only guard ValidateRequest's own dict/list fields) even though priors
+    are passed in-band by the caller, not resolved from a trusted store.
+    min=-inf/max=inf made evaluation.py's `actual < min`/`actual > max`
+    always False, so a wildly out-of-range design_parameters value (e.g.
+    leg_length=99999.0 against real leg lengths of ~0.02-0.2mm) came back
+    verdict="within_range", evaluation.verdict="consistent", HTTP 200 — a
+    forged clean bill of health with no deviation ever raised."""
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        payload = {
+            "run_id": "run_infinite_prior_bounds",
+            "design_parameters": {"leg_length": 99999.0},
+            "n_pairs": 1,
+            "priors": [
+                {
+                    "prior_id": "pr_evil",
+                    "kind": "parameter_range",
+                    "field": "leg_length",
+                    "value": {"field_name": "leg_length", "min": bad, "unit": "mm"},
+                    "confidence": 0.9,
+                    "sources": [{"type": "paper", "doi": "10.1234/fake"}],
+                }
+            ],
+        }
+        response = client.post(
+            "/sciencerag/validate",
+            content=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 422, f"prior min={bad} should be rejected"
+
+
+def test_unrecognized_scalar_result_field_produces_no_kg_candidate() -> None:
+    """Adversarial test, confirmed live before the fix: scalar_results has no
+    fixed vocabulary at the schema level. extract_kg_candidates() iterated
+    every key in request.scalar_results with no check against
+    tec_bridge.SCALAR_NAMES, so an arbitrary caller-chosen field name became
+    a real "achieves_<field>" KGCandidate — auto-classified and auto-queued
+    to the human-approval pending directory — even though evaluation.py's
+    own benchmark comparison silently skips exactly these unrecognized
+    fields (`if field not in scalar_names: continue`). Fixed to match that
+    existing precedent instead of fabricating a candidate."""
+    response = client.post(
+        "/sciencerag/validate",
+        json={
+            "run_id": "run_fake_scalar_field",
+            "design_parameters": {},
+            "n_pairs": 1,
+            "priors": [],
+            "scalar_results": {"totally_made_up_field_xyz": 42.0},
+        },
+    )
+    assert response.status_code == 200
+    relations = {c["relation"] for c in response.json()["update_package"]["kg_candidates"]}
+    assert not any(r.startswith("achieves_") for r in relations)
+
+
 def test_kg_candidate_queue_write_failure_does_not_sink_the_response(monkeypatch) -> None:
     """Adversarial test, confirmed live before the fix: store_pending_
     candidates is a best-effort side-storage convenience (spec §6.3's
@@ -462,6 +522,42 @@ def test_kg_candidate_queue_write_failure_does_not_sink_the_response(monkeypatch
     assert response.status_code == 200
     payload = response.json()
     assert payload["update_package"]["blocked"] is False
+
+
+def test_kg_relation_classification_failure_does_not_sink_the_response(monkeypatch) -> None:
+    """Adversarial test, confirmed live before the fix: classify_relation/
+    describe_relation are real synchronous litellm.completion calls
+    (timeout=90s, longer alone than this endpoint's own 60s
+    LATENCY_TARGET_SECONDS) whenever a relation isn't already cached —
+    reachable in production the moment data/kg/ontology.json exists, per
+    this file's own autouse fixture monkeypatching load_ontology to None
+    specifically to avoid triggering them in every other test here. Before
+    the fix, a network failure from either call was uncaught, propagated
+    through post_validate's blanket except, and turned an otherwise fully-
+    computed, correct anomalies/evaluation result into a 502 — the same
+    "best-effort side-effect must not sink the main response" failure
+    already fixed for store_pending_candidates just below this function's
+    own call site."""
+    monkeypatch.setattr(kg_candidates_module, "load_ontology", lambda: object())
+
+    def _boom(relation: str, ontology) -> str:
+        raise TimeoutError("simulated LLM network timeout")
+
+    monkeypatch.setattr(kg_candidates_module, "classify_relation", _boom)
+    response = client.post(
+        "/sciencerag/validate",
+        json={
+            "run_id": "run_llm_classification_fails",
+            "design_parameters": {},
+            "n_pairs": 1,
+            "scalar_results": {"delta_T_max_K": 50.0},
+            "priors": [],
+        },
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    candidates = payload["update_package"]["kg_candidates"]
+    assert any(c["relation"] == "achieves_delta_T_max_K" for c in candidates)
 
 
 def test_ood_blocking_uses_margin_over_historical_max_not_bare_percentile() -> None:
@@ -514,3 +610,128 @@ def test_ood_blocking_uses_margin_over_historical_max_not_bare_percentile() -> N
     just_above, _ = severity_at(threshold + 0.5, "run_just_above_threshold")
     assert just_below != "blocking"
     assert just_above == "blocking"
+
+
+def test_ood_warning_uses_the_data_own_gap_not_a_historical_point_or_rank() -> None:
+    """Regression test for the OOD warning-threshold redesign (2026-08-17,
+    same first-principles pass that dropped BLOCKING_MARGIN to 1.0 — see
+    that constant's docstring in checks.py), revised a second time the same
+    day: an earlier version of this fix anchored warning directly to the
+    2nd-highest historical score's own value (~4.49) — better than
+    percentile>=90-by-rank (which landed inside the smooth, structureless
+    part of the distribution), but still the same shape of mistake
+    BLOCKING_MARGIN's docstring already describes: it put the boundary
+    exactly on a single real historical point again, so a near-duplicate of
+    that one training design would sit right on the edge. warning now fires
+    past the *midpoint* of the data's own largest gap (excluding the top
+    point, which blocking owns) instead — anywhere strictly inside that gap
+    classifies the training data identically, so the midpoint is the
+    natural, symmetric choice rather than sitting on top of either
+    endpoint. This test locks in that exact boundary."""
+    training_z = tec_bridge.load_training_latent()
+    mean = training_z.mean(axis=0)
+    std = training_z.std(axis=0, ddof=1)
+
+    def latent_at_distance(distance: float) -> list[float]:
+        z = mean.copy()
+        z[0] += distance * std[0]
+        return z.tolist()
+
+    def severity_at(distance: float, run_id: str) -> tuple[str, dict]:
+        response = client.post(
+            "/sciencerag/validate",
+            json={
+                "run_id": run_id,
+                "design_parameters": {},
+                "n_pairs": 1,
+                "latent_state": latent_at_distance(distance),
+                "priors": [],
+            },
+        )
+        anomaly = response.json()["anomalies"][0]
+        return anomaly["severity"], anomaly["evidence"]
+
+    _, evidence = severity_at(0.0, "run_warning_boundary_probe")
+    threshold = evidence["warning_threshold"]
+    assert threshold == pytest.approx(4.16, abs=0.02)
+
+    just_below, _ = severity_at(threshold - 0.2, "run_just_below_warning_threshold")
+    just_above, _ = severity_at(threshold + 0.2, "run_just_above_warning_threshold")
+    assert just_below == "info"
+    assert just_above == "warning"
+
+
+def test_ood_threshold_values_are_pinned_to_todays_training_data() -> None:
+    """Snapshot/pin test, not a formula-correctness test (see the test just
+    above for that) — this one is meant to FAIL the moment the 31-sample
+    training set changes, on purpose.
+
+    checks.py/BLOCKING_MARGIN's own docstring already says the OOD threshold
+    is provisional at n=31 and should be revisited once training data grows
+    past ~100-150 samples. The risk isn't that nobody knows that — it's that
+    "revisit later" living only in a docstring/delivery-doc sentence depends
+    on a human remembering to go re-read it *at the moment the training set
+    actually changes*, months from now, by someone who may not be the person
+    who wrote that sentence.
+
+    History (2026-08-17, same day, three revisions): this test originally
+    pinned the *original* formula's output (BLOCKING_MARGIN=1.5 ->
+    blocking≈19.98, percentile>=90-by-rank -> warning≈3.44). A first-
+    principles re-check of those two specific numbers, not just of "formula
+    vs. hardcoded", found real problems with both: BLOCKING_MARGIN's
+    ">1.0 headroom" never actually protected against "one n=1 sample
+    defines the boundary" the way its own docstring claimed, and extending
+    trust 50% past the worst point ever validated cuts against what an OOD
+    gate is for. And percentile>=90's 28th-of-31-by-rank cutoff (~3.44)
+    turned out to land inside the smooth, structureless part of the real
+    sorted score distribution — not at any gap the data itself shows.
+    checks.py was changed to BLOCKING_MARGIN=1.0 (blocking = training_max,
+    no margin) and warning = "> the 2nd-highest historical score" (~4.49).
+
+    That warning fix was itself revised once more the same day: anchoring
+    directly to the 2nd-highest score's *value* repeated the same mistake
+    BLOCKING_MARGIN's docstring describes — it put the boundary exactly on
+    top of one real historical point again. warning now fires past the
+    *midpoint* of the data's own largest gap (excluding the top point,
+    which blocking owns) — ~4.16, inside the real ~0.68 gap between the
+    3rd- and 2nd-highest scores, not sitting on either endpoint. This
+    test's pinned numbers were updated to match each revision — see
+    checks.py's own comments for the full reasoning, this docstring is the
+    abridged version.
+
+    Pinning today's actual derived numbers here means a retrain that changes
+    them fails this test loudly, forcing a deliberate look at the new
+    values before they ship — rather than either silently drifting forever
+    (pure formula, no test) or silently going stale (a hardcoded number with
+    only a documentation comment asking someone to remember to update it).
+    When this test fails after a real retrain: that is the intended
+    checkpoint firing, not a bug -- update the pinned numbers here (and in
+    DELIVERY_REPORT.md's "known limitations" section) to the new formula
+    output after confirming the new values make sense, don't just bump them
+    to whatever silences the assertion."""
+    training_z = tec_bridge.load_training_latent()
+    n = len(training_z)
+    loo_scores = []
+    for index in range(n):
+        rest = np.delete(training_z, index, axis=0)
+        rest_mean = rest.mean(axis=0)
+        rest_std = rest.std(axis=0, ddof=1)
+        rest_std = np.where(rest_std > 1e-8, rest_std, 1.0)
+        score = np.sqrt(np.sum(((training_z[index] - rest_mean) / rest_std) ** 2))
+        loo_scores.append(float(score))
+    loo_scores.sort()
+
+    assert n == 31, "sample count changed -- re-derive and update the pinned values below"
+    training_max = loo_scores[-1]
+    assert training_max == pytest.approx(13.32, abs=0.01)
+    assert training_max * BLOCKING_MARGIN == pytest.approx(13.32, abs=0.01)
+    # 2nd-highest historical score -- kept as a landmark even though it's no
+    # longer the warning cutoff itself (see docstring above).
+    assert loo_scores[-2] == pytest.approx(4.49, abs=0.01)
+    # warning cutoff: midpoint of the largest gap among all-but-the-top
+    # score -- inside the real gap, not sitting on either endpoint.
+    sub_scores = loo_scores[:-1]
+    gaps = [sub_scores[i + 1] - sub_scores[i] for i in range(len(sub_scores) - 1)]
+    gap_index = int(np.argmax(gaps))
+    warning_threshold = (sub_scores[gap_index] + sub_scores[gap_index + 1]) / 2
+    assert warning_threshold == pytest.approx(4.16, abs=0.02)

@@ -201,6 +201,36 @@ def test_cap_priors_truncates_lowest_confidence_first():
     assert [p.confidence for p in truncated] == [0.6, 0.55]
 
 
+def test_cap_priors_guarantees_a_slot_per_field_even_when_confidence_would_exclude_it():
+    # Regression for the reason _cap_priors stopped being a pure confidence
+    # sort (2026-08-17): a plain sort would keep both leg_length priors
+    # (0.9, 0.85) and drop fin_thickness's only candidate (0.3) entirely,
+    # even though fin_thickness would then have ZERO coverage — not because
+    # it's genuinely un-evidenced, but because an unrelated field happened
+    # to have two candidates competing for the same confidence scale.
+    leg_a = _prior(0.9, field="leg_length")
+    leg_b = _prior(0.85, field="leg_length")
+    fin = _prior(0.3, field="fin_thickness")
+    returned, truncated = _cap_priors([leg_a, leg_b, fin], max_priors=2)
+    assert {p.field for p in returned} == {"leg_length", "fin_thickness"}
+    assert leg_b in truncated
+    assert fin not in truncated
+
+
+def test_cap_priors_multi_field_prior_satisfies_quota_for_all_its_fields_at_once():
+    # A prior spanning multiple fields (candidate_config/ranked_candidate_set
+    # in production) only costs one slot no matter how many fields it
+    # covers — here it single-handedly satisfies leg_length AND pitch, so a
+    # 3rd, weaker, single-field prior for pitch alone correctly loses its
+    # slot to a completely different field (width) instead.
+    multi = _prior(0.5, field=None, related_fields=["leg_length", "pitch"])
+    width = _prior(0.9, field="width")
+    pitch_only = _prior(0.3, field="pitch")
+    returned, truncated = _cap_priors([multi, width, pitch_only], max_priors=2)
+    assert len(returned) == 2 and multi in returned and width in returned
+    assert truncated == [pitch_only]
+
+
 # -- max_priors cap gaps ---------
 
 

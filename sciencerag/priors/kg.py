@@ -32,10 +32,19 @@ from typing import Any, Iterator, Literal
 import uuid
 
 import jieba
+import litellm
 
 from pydantic import BaseModel, Field, model_validator
 
+from sciencerag.common.config import get_llm_model
+from sciencerag.priors.contract import GEOMETRY_FREE_PARAMS
+
 GRAPH_PATH = Path("data/kg/graph.json")
+
+# Matches sciencerag/priors/extract.py's REQUEST_TIMEOUT_SECONDS convention
+# (kg.py stays otherwise dependency-free of the rest of sciencerag.priors,
+# so this is a local constant rather than an import).
+REQUEST_TIMEOUT_SECONDS = 90
 
 # spec §3.8's numeric-groundedness tolerance (±2%, "容忍 LLM 抄证据时的四舍
 # 五入") reused here for the same reason: two triples for the same
@@ -291,6 +300,23 @@ def add_triple(
                 # entries forever — one real triple had 3 unique run_ids
                 # but 5 source entries, 2 of them dead-weight duplicates.
                 existing.sources.extend(s for s in sources if s not in existing.sources)
+                # confidence/evidence_detail were otherwise frozen at
+                # whatever the *first* run happened to produce, forever —
+                # a triple that first landed via kg_candidates.py's flat
+                # fallback (no matching benchmark case that day) stayed at
+                # that flat value even after a later run re-evaluated the
+                # same fact with a real per-field deviation behind it. Only
+                # upgrade, never downgrade: this makes the stored value
+                # track the strongest evidence seen so far, without
+                # inventing a "confirmed N times" bonus — the codebase
+                # already tried and rejected fitting a formula like that
+                # for _INSUFFICIENT_BENCHMARK_CONFIDENCE (see its own
+                # docstring) for the same reason: no real data to ground it
+                # in yet. confidence and evidence_detail move together
+                # since the latter exists only to explain the former.
+                if confidence > existing.confidence:
+                    existing.confidence = confidence
+                    existing.evidence_detail = evidence_detail
                 _save_triples(triples)
                 return existing, "merged"
 
@@ -342,20 +368,41 @@ def add_triple(
         return new_triple, "added"
 
 
+# sim_params.json's `desc` field (contract.py's GEOMETRY_FREE_PARAMS) is
+# the canonical Chinese name for each of the 12 geometry_free parameters
+# (e.g. "leg_length" -> "臂截面长") — already existed for a different
+# purpose (documenting the contract) and was never wired into KG text
+# rendering. Real gap this closes (2026-08-17): relation_description covers
+# a triple's RELATION (e.g. "achieves_optimal_current_A" -> "最优电流", a
+# performance OUTPUT), but every triple's `conditions` dict — the geometry
+# INPUT parameters like leg_length/pitch — carried only their English
+# contract key, with no Chinese anywhere. So a pure-Chinese query with no
+# embedded English term (e.g. "腿长", "热电臂长度") scored 0 against the
+# ENTIRE graph, real designs included, not just literature-seeded triples:
+# confirmed live, query_kg_entities("腿长") returned 0 groups against a
+# graph where query_kg_entities("leg length") returned 6 for the identical
+# state. This is the same failure mode _CJK_RE/relation_description were
+# added to fix, just for the other half of a triple's content.
+_GEOMETRY_FIELD_ZH: dict[str, str] = {p["name"]: p["desc"] for p in GEOMETRY_FREE_PARAMS}
+
+
 def _render_text(triple: KGTriple) -> str:
-    conditions = ", ".join(f"{k}={v}" for k, v in sorted(triple.conditions.items()))
+    conditions = ", ".join(
+        f"{k}({_GEOMETRY_FIELD_ZH[k]})={v}" if k in _GEOMETRY_FIELD_ZH else f"{k}={v}"
+        for k, v in sorted(triple.conditions.items())
+    )
     if triple.object_value is not None:
         unit = triple.object_unit or ""
         obj = f"{triple.object_value}{unit}"
     else:
         obj = triple.object_entity_label or triple.object_entity_id or ""
     # relation_description (e.g. "最优电流") is the only Chinese-language
-    # content anywhere on a triple — relation/subject/conditions are all
-    # English contract identifiers. Without it here, a Chinese natural-
-    # language query has nothing Chinese to overlap with on this side no
-    # matter how well the query itself gets tokenized (confirmed via a real
-    # repro: "最优电流是什么" scored 0 against every triple even after CJK
-    # tokenization was added, until this was included).
+    # content a RELATION carries — relation/subject are English contract
+    # identifiers. Without it here, a Chinese natural-language query has
+    # nothing Chinese to overlap with on this side no matter how well the
+    # query itself gets tokenized (confirmed via a real repro: "最优电流是
+    # 什么" scored 0 against every triple even after CJK tokenization was
+    # added, until this was included).
     description = f" {triple.relation_description}" if triple.relation_description else ""
     return f"{triple.subject} {triple.relation}{description} {obj} ({conditions})"
 
@@ -500,33 +547,115 @@ def query_kg_entities(query: str, max_entities: int = 10) -> KGEntityQueryResult
     )
 
 
-# A superlative word in a query ("最优电流" / "最高温差") answers "which
-# FIELD to show", not "which RECORD wins" — query_kg_entities' keyword
-# overlap already handles field selection correctly (see its docstring).
-# What it never did is comparison: asking "哪个设计温差最高" used to just
-# return every matching design at similar text-relevance, with the LLM
-# left to guess which one's "best" from an unordered dump — no ranking
-# ever actually ran. These two word sets are the trigger for the separate
-# aggregation path (rank_kg_entities) that actually sorts by value instead
-# of by keyword overlap. Deliberately excluded from _CJK_STOPWORDS: they
-# ARE real content when they show up inside a relation_description like
-# "最优电流" (must still contribute to field-matching overlap there).
-_SUPERLATIVE_MAX_WORDS = {"最优", "最好", "最高", "最大", "最强", "最佳"}
-_SUPERLATIVE_MIN_WORDS = {"最低", "最小", "最少", "最弱"}
+# Ranking used to be triggered by a fixed Chinese superlative word list
+# (最优/最高/... vs 最低/最小/...) with field selection done separately via
+# _score_triples' keyword overlap. That missed English superlatives
+# ("which design has the highest..."), comparatives ("哪个更好"), and
+# silently guessed "max" whenever both word sets appeared in one query
+# (e.g. comparing two different fields) instead of actually resolving the
+# ambiguity. Replaced by a single LLM classification (below) that decides
+# BOTH "is this a ranking/comparison question" and "which quantity" in one
+# call — one call, not two, since rank_kg_entities runs on every single
+# priors/ask request regardless of ranking intent, and both questions need
+# the same understanding of the query anyway.
+_RANKING_SYSTEM_PROMPT = """You classify whether a user's question is asking to \
+RANK or COMPARE a set of designs by one specific numeric quantity (for example: \
+"which design has the highest X", "哪个温差最高", "compare these designs, which \
+wins on efficiency", "what's the lowest Y"). This includes superlatives, \
+comparatives, and explicit compare/rank requests, in any language.
+
+You will be given a list of candidate quantities, each with an id and a short \
+description. Pick the ONE quantity (by id, verbatim) the question is actually \
+asking to rank by. If the question is not a ranking/comparison question at all, \
+or none of the candidates match what it is asking about, say so.
+
+Respond with ONLY a JSON object, no prose, no code fences, in exactly this shape:
+{"is_ranking": true or false, "direction": "max" or "min" or null, "relation": "<id from the candidate list>" or null}
+
+direction is "max" for highest/best/most/greatest-type requests, "min" for \
+lowest/least/worst/smallest-type requests. If the question's wording is \
+genuinely ambiguous between max and min (e.g. it names two different \
+quantities pulling in opposite directions), use your best judgment about \
+which quantity and direction the question is actually asking for."""
 
 
-def detect_ranking_direction(query: str) -> Literal["max", "min"] | None:
-    """None means the query has no superlative signal — caller should fall
-    back to plain (non-ranked) lookup. A query containing both max- and
-    min-signal words (rare, e.g. comparing two different fields) resolves
-    to "max" — same ambiguity a human reader would have to guess at, not
-    something this function can resolve without real NL understanding."""
-    terms = _tokenize(query)
-    if terms & _SUPERLATIVE_MIN_WORDS:
-        return "min"
-    if terms & _SUPERLATIVE_MAX_WORDS:
-        return "max"
-    return None
+class _RankingClassification(BaseModel):
+    is_ranking: bool
+    direction: Literal["max", "min"] | None = None
+    relation: str | None = None
+
+
+def _strip_code_fences(raw: str) -> str:
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        if cleaned.lower().startswith("json"):
+            cleaned = cleaned[4:]
+    return cleaned.strip()
+
+
+def _ranking_candidates(triples: list[KGTriple]) -> list[tuple[str, str]]:
+    """Distinct (relation, description) pairs among numeric-valued triples,
+    in first-seen order — the fixed, closed set of quantities the
+    classifier is allowed to pick from, so a hallucinated relation name
+    can never make it into rank_kg_entities' output."""
+    seen: dict[str, str] = {}
+    for triple in triples:
+        if triple.object_value is None or triple.relation in seen:
+            continue
+        seen[triple.relation] = triple.relation_description or triple.relation
+    return list(seen.items())
+
+
+def _classify_ranking_query(
+    query: str, candidates: list[tuple[str, str]]
+) -> _RankingClassification | None:
+    """None means either "not a ranking question" or "classification
+    failed" — callers can't distinguish the two and shouldn't need to:
+    both mean fall back to the plain (non-ranked) lookup, same contract
+    the old keyword-only detect_ranking_direction had. Best-effort by
+    design (timeout, malformed JSON, model refusal, or a relation name
+    that isn't actually in `candidates` all degrade to None) — a
+    classification hiccup must never break the whole request, same
+    "explanatory/supporting call, never a hard gate" pattern as
+    sciencerag/priors/retrieval.py's _translate_for_literature_search."""
+    if not candidates:
+        return None
+    candidate_block = "\n".join(f"- id={rel!r}, description={desc!r}" for rel, desc in candidates)
+    messages = [
+        {"role": "system", "content": _RANKING_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Question: {query}\n\nCandidate quantities:\n{candidate_block}",
+        },
+    ]
+    try:
+        model = get_llm_model()
+        try:
+            response = litellm.completion(
+                model=model, messages=messages, temperature=0, timeout=REQUEST_TIMEOUT_SECONDS
+            )
+        except litellm.BadRequestError as e:
+            # Some models (OpenAI's o-series, the gpt-5.6 family) reject a
+            # custom temperature outright — fall back to the model's
+            # default rather than treating that as a real failure.
+            if "temperature" not in str(e):
+                raise
+            response = litellm.completion(
+                model=model, messages=messages, timeout=REQUEST_TIMEOUT_SECONDS
+            )
+        raw = (response.choices[0].message.content or "").strip()
+        data = json.loads(_strip_code_fences(raw))
+        classification = _RankingClassification.model_validate(data)
+    except Exception:  # noqa: BLE001 - best-effort, see docstring
+        return None
+
+    valid_relations = {rel for rel, _ in candidates}
+    if not classification.is_ranking or classification.relation not in valid_relations:
+        return None
+    if classification.direction not in ("max", "min"):
+        return None
+    return classification
 
 
 class KGRankedEntity(BaseModel):
@@ -548,48 +677,46 @@ class KGRankingResult(BaseModel):
 
 
 def rank_kg_entities(query: str, top_k: int = 3) -> KGRankingResult | None:
-    """Real aggregation, not keyword matching: when the query contains a
-    superlative word, figure out which numeric field is being asked about
-    (via the same _score_triples overlap query_kg_entities already trusts
-    for field selection) and actually sort every entity's value for that
-    field, rather than returning an unordered pile of "matching" triples
-    and letting the LLM guess which one's best. Returns None when there's
-    no ranking signal (detect_ranking_direction), no graph data, or no
-    triple with a value for whatever field the query seems to be about —
-    callers fall back to the plain query_kg_entities path in all of those
-    cases, unchanged from before this existed."""
-    direction = detect_ranking_direction(query)
-    if direction is None:
-        return None
+    """Real aggregation, not keyword matching: an LLM call (see
+    _classify_ranking_query) decides both whether the query is asking to
+    rank/compare designs at all and which numeric quantity it means, then
+    every entity's value for that quantity is actually sorted — rather
+    than either (a) returning an unordered pile of "matching" triples and
+    letting the LLM guess which one's best, or (b) picking the field via
+    keyword overlap the way the rest of this module still does for
+    non-ranking queries. Returns None when there's no ranking signal, no
+    graph data, or classification comes back empty/unusable — callers
+    fall back to the plain query_kg_entities path in all of those cases,
+    unchanged from before this existed."""
     triples = _load_triples()
     if not triples:
         return None
-    scored = _score_triples(query, triples)
-    numeric_scored = [(t, s) for t, s in scored if t.object_value is not None]
-    if not numeric_scored:
+    candidates = _ranking_candidates(triples)
+    if not candidates:
+        return None
+    classification = _classify_ranking_query(query, candidates)
+    if classification is None:
         return None
 
-    # The single best-scoring numeric triple names the field being asked
-    # about (e.g. query "哪个设计温差最高" best-overlaps an
-    # achieves_delta_T_max_K triple via the shared token "温差") — then we
-    # gather EVERY triple in the graph for that exact relation, not just
-    # the ones _score_triples happened to score, so ranking is over the
-    # true full candidate set rather than an incidental keyword-matched
-    # subset.
-    best_triple, _ = max(numeric_scored, key=lambda pair: pair[1])
-    relation = best_triple.relation
-    candidates = [t for t in triples if t.relation == relation and t.object_value is not None]
-    candidates.sort(key=lambda t: t.object_value, reverse=(direction == "max"))
+    relation = classification.relation
+    direction = classification.direction
+    matched = [t for t in triples if t.relation == relation and t.object_value is not None]
+    if not matched:
+        return None
+    matched.sort(key=lambda t: t.object_value, reverse=(direction == "max"))
+    relation_description = next(
+        (t.relation_description for t in matched if t.relation_description), None
+    )
 
     return KGRankingResult(
         relation=relation,
-        relation_description=best_triple.relation_description,
+        relation_description=relation_description,
         direction=direction,
         ranked=[
             KGRankedEntity(entity_id=t.entity_id, value=t.object_value, unit=t.object_unit, triple=t)
-            for t in candidates[:top_k]
+            for t in matched[:top_k]
         ],
-        total_candidates=len(candidates),
+        total_candidates=len(matched),
     )
 
 
@@ -665,6 +792,8 @@ def subgraph_from_triples(triples: list[KGTriple]) -> dict:
                 "triple_id": triple.triple_id,
                 "confidence": triple.confidence,
                 "conflicts_with": triple.conflicts_with,
+                "conditions": triple.conditions,
+                "evidence_detail": triple.evidence_detail,
             }
         )
     return {"nodes": list(nodes.values()), "edges": edges}

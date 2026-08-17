@@ -36,14 +36,17 @@ from sciencerag.priors.external_retrieval import (
     download_new_papers,
     search_semantic_scholar,
 )
-from sciencerag.priors.kg import KGEntityGroup, query_kg_entities, rank_kg_entities
+from sciencerag.priors.kg import KGEntityGroup, KGRankingResult, KGTriple, query_kg_entities, rank_kg_entities
 from sciencerag.priors.models import (
     CandidateConfigValue,
     Coverage,
     ParameterRangeValue,
     Prior,
     PriorsResponse,
+    RankedCandidateEntry,
+    RankedCandidateSetValue,
     SourceKGTriple,
+    SourcePaper,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -235,17 +238,71 @@ def _build_evidence_table(
 
 
 def _cap_priors(priors: list[Prior], max_priors: int) -> tuple[list[Prior], list[Prior]]:
-    """Split into (returned, truncated) by max_priors, keeping the
-    highest-confidence ones — a cap always trims the lowest-ranked priors,
-    never an arbitrary prefix of extraction order.
+    """Split into (returned, truncated) by max_priors.
 
-    `priors` here is everything that already passed extract.py's numeric +
-    semantic checks (2026-08-05: confidence stopped gating what counts as a
-    valid prior — see extract.py's module docstring for why. There is no
-    more "weak, excluded" tier at this stage; every prior here is
-    approved, confidence is purely the ranking key for this cap)."""
+    Used to be a pure confidence sort-and-slice. Changed (2026-08-17)
+    because KG- and literature-sourced priors' confidence values aren't on
+    a shared, calibrated scale — KG confidence can sit at a flat constant
+    (kg_candidates.py's no-matching-benchmark fallback) while literature
+    confidence is a real function of paper count/relevance, and a plain
+    global sort lets the flat KG number outrank a well-evidenced literature
+    prior for a completely different, otherwise-uncovered field. That
+    literature prior then gets reported as "excluded by max_priors" in
+    coverage.gaps — technically accurate, but misleading: it wasn't a fair
+    contest between two calibrated numbers, it was two different rulers.
+
+    Now: every contract field touched by at least one prior gets first
+    claim on one slot — the highest-confidence prior covering that field is
+    picked, fields ordered by their own best available confidence (so if
+    max_priors is smaller than the number of distinct fields, the
+    strongest-evidenced fields keep their guarantee first, not an
+    alphabetical or arbitrary one). Only once every field has its guaranteed
+    slot (or slots run out) do remaining slots get filled by plain global
+    confidence, same as before. A prior touching multiple fields at once
+    (candidate_config/ranked_candidate_set) satisfies the guarantee for all
+    of them simultaneously, not just one — it only costs one slot either
+    way."""
     ranked = sorted(priors, key=lambda p: p.confidence, reverse=True)
-    return ranked[:max_priors], ranked[max_priors:]
+    if len(ranked) <= max_priors:
+        return ranked, []
+
+    field_best_confidence: dict[str, float] = {}
+    for p in priors:
+        for field in _prior_geometry_fields(p):
+            field_best_confidence[field] = max(field_best_confidence.get(field, 0.0), p.confidence)
+    fields_by_strength = sorted(field_best_confidence, key=lambda f: field_best_confidence[f], reverse=True)
+
+    # Dedup key is object identity, not prior_id: prior_id uniqueness is a
+    # production convention (extract.py/kg.py both generate real unique
+    # ids), not something this function should assume — nothing here needs
+    # ids to be distinct, and id() is free and always correct regardless.
+    selected: list[Prior] = []
+    selected_object_ids: set[int] = set()
+    covered: set[str] = set()
+    for field in fields_by_strength:
+        if len(selected) >= max_priors:
+            break
+        if field in covered:
+            continue
+        for p in ranked:
+            if id(p) in selected_object_ids:
+                continue
+            if field in _prior_geometry_fields(p):
+                selected.append(p)
+                selected_object_ids.add(id(p))
+                covered |= _prior_geometry_fields(p)
+                break
+
+    for p in ranked:
+        if len(selected) >= max_priors:
+            break
+        if id(p) not in selected_object_ids:
+            selected.append(p)
+            selected_object_ids.add(id(p))
+
+    selected.sort(key=lambda p: p.confidence, reverse=True)
+    truncated = [p for p in ranked if id(p) not in selected_object_ids]
+    return selected, truncated
 
 
 def _prior_geometry_fields(prior: Prior) -> set[str]:
@@ -261,6 +318,90 @@ def _covered_params(strong_priors: list[Prior]) -> set[str]:
 
 def _drafted_params(all_priors: list[Prior]) -> set[str]:
     return {f for p in all_priors for f in _prior_geometry_fields(p)}
+
+
+# Same tolerance kg.py's add_triple uses to decide "same finding, rounding
+# noise" vs "genuine disagreement" (DUPLICATE_VALUE_RELATIVE_TOLERANCE) —
+# kept as a local constant rather than importing kg.py's private one, so
+# this stays decoupled from that module's own write-path tuning.
+_SAME_CITATION_RELATIVE_TOLERANCE = 0.02
+
+
+def _numeric_value(value: ParameterRangeValue) -> float | None:
+    if value.typical is not None:
+        return value.typical
+    if value.min is not None and value.max is not None:
+        return (value.min + value.max) / 2
+    return value.min if value.min is not None else value.max
+
+
+def _doi_of(prior: Prior) -> str | None:
+    for source in prior.sources:
+        if isinstance(source, SourcePaper) and source.doi:
+            return source.doi
+    return None
+
+
+def _reconcile_kg_literature_duplicates(kg_priors: list[Prior], fresh_priors: list[Prior]) -> list[Prior]:
+    """Literature can reach the response two independent ways that never
+    check each other: a value seeded into the KG from a PAST extraction run
+    (scripts/seed_kg_from_corpus.py), and a value THIS query's live
+    literature search just drafted fresh (extract.py). When they happen to
+    report a similar number, a reader has no way to tell "same paper, two
+    citations of the same fact" from "two different papers that
+    coincidentally round to a similar value" — real example, 2026-08-17: a
+    7.0mm KG-seeded leg_length value and a 7.0mm fresh draft turned out to
+    share nothing verifiable but the number, since the seed's own source
+    carries no DOI at all (see kg_approval.py's _evidence_detail_for).
+
+    Only collapses the two when there's a REAL, comparable DOI on both
+    sides that actually matches — the one case where "same citation" is
+    verified, not guessed from a matching number. Everything else (DOI
+    missing on either side, or DOIs that differ) is left as two separate
+    priors, unchanged — deliberately not attempting a value-proximity guess
+    instead, for the same reason kg_candidates.py rejected a distance-fitted
+    confidence formula (see its own docstring): no real basis to grade
+    "probably the same" by, only "definitely the same" via a matching DOI.
+
+    When collapsed: the fresh draft is dropped from the returned list (it
+    adds no field coverage the KG prior doesn't already have — both
+    describe the same fact), the KG prior's confidence is upgraded if the
+    fresh one's is higher (same only-upgrade-never-downgrade policy as
+    kg.py add_triple's merge path), and a note records the reconfirmation.
+    A same-DOI pair whose VALUES disagree is left alone rather than
+    resolved either way — that's a real anomaly (e.g. a mis-extraction on
+    one side) worth surfacing, not hiding."""
+    kg_lit_by_field_doi: dict[tuple[str, str], Prior] = {}
+    for p in kg_priors:
+        if p.kind == "parameter_range" and p.field:
+            doi = _doi_of(p)
+            if doi:
+                kg_lit_by_field_doi[(p.field, doi)] = p
+
+    remaining: list[Prior] = []
+    for p in fresh_priors:
+        if p.kind != "parameter_range" or not p.field:
+            remaining.append(p)
+            continue
+        doi = _doi_of(p)
+        match = kg_lit_by_field_doi.get((p.field, doi)) if doi else None
+        if match is None:
+            remaining.append(p)
+            continue
+        fresh_value = _numeric_value(p.value)
+        kg_value = _numeric_value(match.value)
+        if fresh_value is None or kg_value is None:
+            remaining.append(p)
+            continue
+        tolerance = _SAME_CITATION_RELATIVE_TOLERANCE * max(abs(kg_value), 1e-9)
+        if abs(fresh_value - kg_value) > tolerance:
+            remaining.append(p)
+            continue
+        if p.confidence > match.confidence:
+            match.confidence = p.confidence
+        note = f"本次查询独立重新确认（同一 DOI: {doi}）"
+        match.notes = f"{match.notes} · {note}" if match.notes else note
+    return remaining
 
 
 def _kg_priors_from_group(group: KGEntityGroup) -> list[Prior]:
@@ -282,8 +423,39 @@ def _kg_priors_from_group(group: KGEntityGroup) -> list[Prior]:
       extraction — literally the reverse of this function) become a
       parameter_range Prior each. Skipped if the field isn't a real
       contract name or object_unit is missing — no guessing a unit.
+
+    kg.py's add_triple already detects disagreeing literature_range_*
+    values for the same field and marks them via KGTriple.conflicts_with
+    (spec §4.4: "存在但数值冲突 → 标记冲突，双方来源并列呈现，不自动覆盖") —
+    but until 2026-08-17 that flag was write-side only: sciencerag.ask's
+    response model surfaces it, this one silently dropped it, so two
+    contradicting leg_length values (e.g. 7.0mm vs 2.75mm) could come back
+    as two ordinary-looking parameter_range priors with nothing hinting
+    they're already a known disagreement rather than independent
+    corroboration. _conflict_note below reattaches that signal as `notes`.
     """
     priors: list[Prior] = []
+    triples_by_id = {t.triple_id: t for t in group.triples}
+    conflicts_against: dict[str, list[str]] = {}
+    for t in group.triples:
+        if t.conflicts_with:
+            conflicts_against.setdefault(t.conflicts_with, []).append(t.triple_id)
+
+    def _conflict_note(triple: KGTriple) -> str | None:
+        def _describe(tid: str) -> str:
+            other = triples_by_id.get(tid)
+            if other is not None and other.object_value is not None:
+                return f"{other.object_value}{other.object_unit or ''}（triple_id={tid}）"
+            return f"triple_id={tid}"
+
+        partner_ids: list[str] = []
+        if triple.conflicts_with:
+            partner_ids.append(triple.conflicts_with)
+        partner_ids.extend(conflicts_against.get(triple.triple_id, []))
+        if not partner_ids:
+            return None
+        described = "；".join(_describe(tid) for tid in partner_ids)
+        return f"与 KG 中 {len(partner_ids)} 条记录数值冲突（{described}），两者均保留，未自动判定谁更可信，请对照来源自行判断"
 
     achieves = [t for t in group.triples if t.relation.startswith("achieves_") and t.object_value is not None]
     if achieves:
@@ -326,6 +498,7 @@ def _kg_priors_from_group(group: KGEntityGroup) -> list[Prior]:
                 ),
                 confidence=triple.confidence,
                 sources=[SourceKGTriple(triple_id=triple.triple_id)],
+                notes=_conflict_note(triple),
                 provenance="internal",
             )
         )
@@ -358,22 +531,26 @@ def _kg_priors_for_query(query: str) -> list[Prior]:
     every triple of a matched entity together.
 
     When the query carries an explicit superlative signal ("最优"/"最高"/
-    "最低"...), the returned candidate_config priors are additionally
-    reordered (best match first) and annotated in `notes` with their real
-    rank — confirmed via a real repro (2026-08-14): asking "Bi2Te3单级热电
-    制冷器的最优电流是多少" against a graph with 6 different TEC designs
-    returned 5 different optimal_current_A values with no indication of
-    which one was actually "the" answer, because this step never ran any
-    real comparison — it's the same problem rank_kg_entities was built to
-    fix for sciencerag.ask a day earlier, just never wired in here too.
+    "最低"...) and matches 2+ candidate_config priors, those are collapsed
+    into ONE ranked_candidate_set Prior (_collapse_ranked_candidates) rather
+    than returned as N separately-ranked candidate_config priors — 5
+    simulated designs answering "which one has the highest current" are one
+    finding, not five (2026-08-17 design discussion): they used to each
+    carry their own confidence and compete individually for max_priors'
+    budget, which both wasted the budget on near-duplicate answers to the
+    same question and let internal KG confidence (frozen, often a flat
+    constant — see kg.py's add_triple) outcompete unrelated, better-
+    evidenced literature priors for other fields entirely by sheer count.
+    Confirmed via a real repro (2026-08-14, preserved in the collapsed
+    form's own notes): asking "Bi2Te3单级热电制冷器的最优电流是多少" against
+    a graph with several TEC designs used to return that many separate
+    optimal_current_A values with nothing distinguishing them — now it
+    returns one prior whose value.candidates lists all of them, in rank
+    order, with no ambiguity about which is "the" answer.
 
-    The reordering is local to this function's own return value only:
-    _build_priors_response's later _cap_priors() re-sorts everything by
-    confidence when merging with literature priors (spec principle:
-    confidence, not value ranking, decides what survives max_priors) —
-    the `notes` annotation is what actually survives that step, not list
-    position, so it's the part a caller (Hermes, or a human reading the
-    response) can actually rely on."""
+    A ranking signal matching only 0-1 candidate_config priors doesn't
+    collapse (nothing to rank) and falls through unchanged — a lone match
+    doesn't need a ranked_candidate_set wrapper."""
     result = query_kg_entities(query)
     priors: list[Prior] = []
     for group in result.groups:
@@ -393,17 +570,69 @@ def _kg_priors_for_query(query: str) -> list[Prior]:
         # rather than mismatched against the wrong thing.
         return prior.prior_id.removeprefix("pr_kg_")
 
-    priors.sort(key=lambda p: rank_by_entity_id.get(_entity_id_of(p), len(rank_by_entity_id) + 1))
+    ranked_priors = [p for p in priors if _entity_id_of(p) in rank_by_entity_id]
+    other_priors = [p for p in priors if _entity_id_of(p) not in rank_by_entity_id]
+
+    if len(ranked_priors) < 2:
+        return priors
+
+    ranked_priors.sort(key=lambda p: rank_by_entity_id[_entity_id_of(p)])
+    collapsed = _collapse_ranked_candidates(ranked_priors, ranking, rank_by_entity_id, _entity_id_of)
+    return [collapsed, *other_priors]
+
+
+def _collapse_ranked_candidates(
+    ranked_priors: list[Prior],
+    ranking: KGRankingResult,
+    rank_by_entity_id: dict[str, int],
+    entity_id_of,
+) -> Prior:
+    """Folds N ranked candidate_config priors into one ranked_candidate_set
+    Prior — see _kg_priors_for_query's docstring for why. `confidence` is
+    the max across the family (kg.py's add_triple upgrade policy: reflect
+    the strongest evidence seen, not an average diluted by weaker sibling
+    designs) — deliberately NOT a "confirmed by N points" bonus, since a
+    2026-08-17 leave-one-out probe found no real correlation between a
+    design's distance from known-good cases and its actual surrogate error
+    on this project's 31-sample benchmark set, so there's no validated
+    signal yet to build a corroboration bonus on."""
+    entries: list[RankedCandidateEntry] = []
+    all_fields: set[str] = set()
+    triple_ids: list[str] = []
+    for prior in ranked_priors:
+        assert isinstance(prior.value, CandidateConfigValue)
+        prior_triple_ids = [s.triple_id for s in prior.sources if isinstance(s, SourceKGTriple)]
+        entries.append(
+            RankedCandidateEntry(
+                rank=rank_by_entity_id[entity_id_of(prior)],
+                parameters=prior.value.parameters,
+                reported_performance=prior.value.reported_performance,
+                triple_ids=prior_triple_ids,
+            )
+        )
+        all_fields |= set(prior.related_fields)
+        triple_ids.extend(prior_triple_ids)
 
     label = ranking.relation_description or ranking.relation
     direction_word = "从高到低" if ranking.direction == "max" else "从低到高"
-    for prior in priors:
-        rank = rank_by_entity_id.get(_entity_id_of(prior))
-        if rank is None:
-            continue
-        note = f"按{label}排序（{direction_word}）：第{rank}名，共{ranking.total_candidates}个候选"
-        prior.notes = f"{prior.notes} · {note}" if prior.notes else note
-    return priors
+    notes = f"内部仿真：共{ranking.total_candidates}个候选，按{label}排序（{direction_word}），见 candidates 列表"
+
+    return Prior(
+        prior_id=f"pr_kg_ranked_{ranking.relation}",
+        kind="ranked_candidate_set",
+        related_fields=sorted(all_fields),
+        value=RankedCandidateSetValue(
+            relation=ranking.relation,
+            relation_description=ranking.relation_description,
+            direction=ranking.direction,
+            total_candidates=ranking.total_candidates,
+            candidates=entries,
+        ),
+        confidence=max(p.confidence for p in ranked_priors),
+        sources=[SourceKGTriple(triple_id=tid) for tid in dict.fromkeys(triple_ids)],
+        notes=notes,
+        provenance="internal",
+    )
 
 
 # Fallback only (see _match_params_to_evidence's docstring for the primary,
@@ -785,7 +1014,7 @@ def _build_priors_response(
     query: str,
     trace: PipelineTrace | None = None,
     allow_external: bool = False,
-    max_priors: int = 5,
+    max_priors: int = 12,
 ) -> tuple[PriorsResponse, int]:
     """Run a real PaperQA2 query, then LLM-extract structured priors from
     the evidence contexts (see extract.py). On extraction failure, return
@@ -921,6 +1150,8 @@ def _build_priors_response(
             0,
         )
 
+    kept_priors = _reconcile_kg_literature_duplicates(kg_priors, kept_priors)
+
     returned_priors, truncated_priors = _cap_priors(kg_priors + kept_priors, max_priors)
     all_kept_priors = kg_priors + kept_priors + [rp.prior for rp in review_priors]
 
@@ -949,7 +1180,7 @@ def _build_priors_response(
 
 
 def build_priors_response(
-    query: str, allow_external: bool = False, max_priors: int = 5
+    query: str, allow_external: bool = False, max_priors: int = 12
 ) -> tuple[PriorsResponse, int]:
     """Returns (response, filtered_material_count) — see
     _build_priors_response's docstring for why the count travels alongside
@@ -958,7 +1189,7 @@ def build_priors_response(
 
 
 def build_priors_response_with_trace(
-    query: str, allow_external: bool = False, max_priors: int = 5
+    query: str, allow_external: bool = False, max_priors: int = 12
 ) -> tuple[PriorsResponse, PipelineTrace]:
     """Same as build_priors_response, but also returns a PipelineTrace
     capturing every intermediate stage — powers the demo's pipeline view
